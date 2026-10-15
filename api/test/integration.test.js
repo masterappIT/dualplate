@@ -244,6 +244,121 @@ describe('第一階段 API 整合測試', { concurrency:false }, () => {
     assert.equal((await state.request('/rules','GET',undefined,token)).body.length,defaultRules.length)
     assert.deepEqual((await state.request('/customers','GET',undefined,token)).body,[])
   })
+
+  const importHeaders = '客戶,路線,內地車牌,港澳車牌,批文卡號,批文到期,CRP／通行證到期,香港／澳門公司,內地公司'
+  const importRow = (customer, card, route = '粵港') => `${customer},${route},粵Z1111港,AB111,${card},2027-01-01,2027-02-01,,`
+  const preview = csv => state.request('/import/plates?dryRun=1', 'POST', { csv }, state.adminA)
+  const confirm = (csv, previewKey) => state.request('/import/plates', 'POST', { csv, previewKey, confirm: true }, state.adminA)
+
+  test('CSV 預覽不寫入且顯示新增內容', async () => {
+    const csv = `${importHeaders}\n${importRow(`客戶${state.customerA}`, 'CSV-NEW')}`
+    const result = await preview(csv)
+    assert.equal(result.status, 200)
+    assert.equal(result.body.summary.create, 1)
+    assert.equal(result.body.rows[0].values['批文卡號'], 'CSV-NEW')
+    assert.equal(state.db.prepare('SELECT id FROM plate_assets WHERE card_number=?').get('CSV-NEW'), undefined)
+  })
+
+  test('CSV 確認新增牌照及到期項目', async () => {
+    const csv = `${importHeaders}\n${importRow(`客戶${state.customerA}`, 'CSV-NEW')}`
+    const result = await confirm(csv, (await preview(csv)).body.previewKey)
+    assert.equal(result.status, 200)
+    const plate = state.db.prepare('SELECT id FROM plate_assets WHERE card_number=?').get('CSV-NEW')
+    assert.ok(plate)
+    assert.equal(state.db.prepare('SELECT expires_on FROM tracked_items WHERE owner_id=? AND code=?').get(plate.id, 'hk_crp').expires_on, '2027-02-01')
+  })
+
+  test('CSV 再匯入同一身份更新而不重建，並保留卡面欄位', async () => {
+    const plate = state.db.prepare('SELECT id FROM plate_assets WHERE card_number=?').get('CSV-NEW')
+    state.db.prepare('UPDATE plate_assets SET card_data=? WHERE id=?').run(JSON.stringify({ cardNumber: 'CSV-NEW', driver1: '司機甲', company: '原商號' }), plate.id)
+    const csv = `${importHeaders}\n${importRow(`客戶${state.customerA}`, 'CSV-NEW').replace('2027-01-01', '2028-01-01')}`
+    assert.equal((await preview(csv)).body.summary.update, 1)
+    assert.equal((await confirm(csv, (await preview(csv)).body.previewKey)).status, 200)
+    assert.equal(state.db.prepare('SELECT COUNT(*) count FROM plate_assets WHERE card_number=?').get('CSV-NEW').count, 1)
+    assert.equal(JSON.parse(state.db.prepare('SELECT card_data FROM plate_assets WHERE id=?').get(plate.id).card_data).driver1, '司機甲')
+  })
+
+  test('CSV 錯誤列阻止整批寫入', async () => {
+    const csv = `${importHeaders}\n${importRow(`客戶${state.customerA}`, 'CSV-ERROR')}\n${importRow(`客戶${state.customerA}`, 'CSV-INVALID').replace('2027-01-01', '2027-02-30')}`
+    const result = await preview(csv)
+    assert.equal(result.body.summary.error, 1)
+    assert.equal((await confirm(csv, result.body.previewKey)).status, 400)
+    assert.equal(state.db.prepare('SELECT id FROM plate_assets WHERE card_number=?').get('CSV-ERROR'), undefined)
+  })
+
+  test('CSV 跨租戶同名客戶不匹配', async () => {
+    const csv = `${importHeaders}\n${importRow(`客戶${state.customerB}`, 'CSV-OTHER')}`
+    assert.equal((await preview(csv)).body.summary.error, 1)
+    assert.equal(state.db.prepare('SELECT id FROM plate_assets WHERE card_number=?').get('CSV-OTHER'), undefined)
+  })
+
+  test('CSV 同一檔案重複牌照列顯示錯誤', async () => {
+    const row = importRow(`客戶${state.customerA}`, 'CSV-DUP')
+    assert.equal((await preview(`${importHeaders}\n${row}\n${row}`)).body.rows[1].errors[0], '同一檔案重複的牌照')
+  })
+
+  test('CSV 未預覽或預覽內容不同不能確認', async () => {
+    const csv = `${importHeaders}\n${importRow(`客戶${state.customerA}`, 'CSV-NOT-PREVIEWED')}`
+    assert.equal((await confirm(csv, null)).status, 400)
+    assert.equal((await confirm(csv + '\n', (await preview(csv)).body.previewKey)).status, 400)
+  })
+
+  test('CSV 空值、陣列、錯誤類型及客戶帳號均遭拒', async () => {
+    for (const csv of [null, [], {}, 1, '']) assert.equal((await state.request('/import/plates?dryRun=1', 'POST', { csv }, state.adminA)).status, 400)
+    for (const body of [null, []]) assert.equal((await state.request('/import/plates?dryRun=1', 'POST', body, state.adminA)).status, 400)
+    assert.equal((await state.request('/import/plates?dryRun=1', 'POST', { csv: importHeaders }, state.client)).status, 403)
+  })
+
+  test('批量填日期一次更新適用的牌照', async () => {
+    const result = await state.request('/tracked-items/bulk', 'PUT', { plateIds: [state.plateA], code: 'hk_crp', expiresOn: '2028-01-01' }, state.adminA)
+    assert.equal(result.status, 200)
+    assert.equal(result.body.updated, 1)
+    assert.equal(state.db.prepare('SELECT expires_on FROM tracked_items WHERE owner_id=? AND code=?').get(state.plateA, 'hk_crp').expires_on, '2028-01-01')
+  })
+
+  test('批量日期重複提交覆寫而非新增', async () => {
+    assert.equal((await state.request('/tracked-items/bulk', 'PUT', { plateIds: [state.plateA], code: 'hk_crp', expiresOn: '2028-01-01' }, state.adminA)).status, 200)
+    assert.equal(state.db.prepare('SELECT COUNT(*) count FROM tracked_items WHERE owner_id=? AND code=?').get(state.plateA, 'hk_crp').count, 1)
+  })
+
+  test('批量日期有跨租戶或不存在牌照時全批不寫入', async () => {
+    for (const plateId of [state.plateB, randomUUID()]) assert.equal((await state.request('/tracked-items/bulk', 'PUT', { plateIds: [state.plateA, plateId], code: 'hk_crp', expiresOn: '2029-01-01' }, state.adminA)).status, 400)
+    assert.equal(state.db.prepare('SELECT expires_on FROM tracked_items WHERE owner_id=? AND code=?').get(state.plateA, 'hk_crp').expires_on, '2028-01-01')
+  })
+
+  test('批量日期空值、錯誤類型、重複 ID 及不適用規則遭拒', async () => {
+    for (const body of [null, [], {}, { plateIds: [], code: 'hk_crp', expiresOn: '2028-01-01' }, { plateIds: [state.plateA, state.plateA], code: 'hk_crp', expiresOn: '2028-01-01' }, { plateIds: [state.plateA], code: 'mo_permit', expiresOn: '2028-01-01' }, { plateIds: [state.plateA], code: 'approval', expiresOn: '2028-01-01' }, { plateIds: [state.plateA], code: 'hk_crp', expiresOn: null }, { plateIds: [state.plateA], code: 'hk_crp', expiresOn: '2028-02-30' }]) assert.equal((await state.request('/tracked-items/bulk', 'PUT', body, state.adminA)).status, 400)
+    assert.equal((await state.request('/tracked-items/bulk', 'PUT', { plateIds: [state.plateA], code: 'hk_crp', expiresOn: '2028-01-01' }, state.client)).status, 403)
+  })
+
+  test('香港及澳門公司忽略納稅人類型，香港保存 CR 編號', async () => {
+    const result = await state.request('/companies', 'POST', { customerId: state.customerA, jurisdiction: '香港', name: '新香港公司', taxpayerType: '一般納稅人', companyNumber: 'CR123' }, state.adminA)
+    assert.equal(result.status, 201)
+    assert.equal(result.body.taxpayer_type, '')
+    assert.equal(result.body.company_number, 'CR123')
+    const changed = await state.request(`/companies/${result.body.id}`, 'PATCH', { jurisdiction: '澳門', taxpayerType: '小規模納稅人' }, state.adminA)
+    assert.equal(changed.body.taxpayer_type, '')
+    assert.equal(changed.body.company_number, '')
+  })
+
+  test('內地公司納稅人類型僅接受兩個選項', async () => {
+    assert.equal((await state.request(`/companies/${state.mainlandCompany}`, 'PATCH', { taxpayerType: '錯誤' }, state.adminA)).status, 400)
+    assert.equal((await state.request(`/companies/${state.mainlandCompany}`, 'PATCH', { taxpayerType: '小規模納稅人' }, state.adminA)).body.taxpayer_type, '小規模納稅人')
+  })
+
+  test('新建工單保留對象並帶入續期、驗車和其他業務類型', async () => {
+    for (const serviceCode of ['renewal', 'inspection', 'other']) {
+      const result = await state.request('/requests', 'POST', { customerId: state.customerA, route: '粵港', plateAssetId: state.plateA, vehicleId: state.vehicleA, serviceCode, title: `${serviceCode}代辦` }, state.adminA)
+      assert.equal(result.status, 201)
+      assert.equal(result.body.service_code, serviceCode)
+      assert.equal(result.body.plate_asset_id, state.plateA)
+    }
+  })
+
+  test('舊牌證 API 不可新增或更新', async () => {
+    assert.equal((await state.request('/credentials', 'POST', { vehicleId: state.vehicleA, name: '舊證' }, state.adminA)).status, 405)
+    assert.equal((await state.request(`/credentials/${randomUUID()}`, 'PATCH', { status: '已核對' }, state.adminA)).status, 404)
+  })
 })
 
 state.request = async (path, method='GET', body, token='') => { const response = await fetch(`http://127.0.0.1:${state.port}/api${path}`,{method,headers:{'content-type':'application/json',authorization:token ? `Bearer ${token}` : ''},body:body === undefined ? undefined : JSON.stringify(body)}); return {status:response.status,body:await response.json()} }

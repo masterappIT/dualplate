@@ -20,7 +20,7 @@ const decoded = row => ({ ...row, match: JSON.parse(row.match_json), params: JSO
 export async function phase1Routes(req, res, url, user, h) {
   const { json, fail, parseBody, canAccessCustomer, vehicleFor, plateFor, query, one, clean } = h
   const path = url.pathname, method = req.method, tenant = user.tenant_id
-  if (!(/^\/api\/(company-groups|companies|tracked-items|rules|rule-completions|overview)(\/[^/]+)?$/.test(path) || /^\/api\/companies\/[^/]+\/hk-lookup$/.test(path))) return false
+  if (!(/^\/api\/(company-groups|companies|tracked-items|rules|rule-completions|overview)(\/[^/]+)?$/.test(path) || path === '/api/tracked-items/bulk' || /^\/api\/companies\/[^/]+\/hk-lookup$/.test(path))) return false
   if (user.role !== 'admin') { fail(res, 403, '無權限'); return true }
   const send = (status, value) => { json(res, status, value); return true }
   const error = (status, message) => { fail(res, status, message); return true }
@@ -37,6 +37,14 @@ export async function phase1Routes(req, res, url, user, h) {
   const statusWarnings = companies => [...new Set(companies.filter(item => item.jurisdiction === '內地' && ['已註銷', '註銷中'].includes(item.status)).map(item => item.status === '已註銷' ? '內承單位已註銷' : '內承單位註銷中'))]
   const companyStatusInfo = (groupId, customerId) => query('SELECT id,jurisdiction,name,status,status_changed_on FROM companies WHERE tenant_id=? AND group_id=? AND customer_id=? ORDER BY jurisdiction,name', tenant, groupId, customerId)
   const rules = () => query('SELECT * FROM rules WHERE tenant_id=? ORDER BY sort,name', tenant).map(decoded)
+  const companySummary = item => {
+    if (item.jurisdiction !== '香港') return item
+    const br = one('SELECT expires_on FROM tracked_items WHERE tenant_id=? AND owner_type=? AND owner_id=? AND code=?', tenant, 'company', item.id, 'hk_br')
+    const nar1Rule = rules().find(rule => rule.code === 'hk_nar1' && rule.active)
+    const completions = new Set(query('SELECT code,owner_id,period FROM rule_completions WHERE tenant_id=? AND code=? AND owner_id=?', tenant, 'hk_nar1', item.id).map(entry => `${entry.code}:${entry.owner_id}:${entry.period}`))
+    const nar1 = nar1Rule && computeDeadlines({ rules: [nar1Rule], owners: [{ ownerType: 'company', ownerId: item.id, label: item.name, customerId: item.customer_id, facts: facts('company', item) }], tracked: new Map(), completions, windowDays: 365 }).find(entry => entry.ruleCode === 'hk_nar1')
+    return { ...item, brExpiresOn: br?.expires_on || null, nar1DueOn: nar1?.dueOn || null }
+  }
   const customerId = url.searchParams.get('customerId')
 
   if (path === '/api/company-groups' && method === 'GET') {
@@ -44,7 +52,7 @@ export async function phase1Routes(req, res, url, user, h) {
     const groups = customerId ? query('SELECT * FROM company_groups WHERE tenant_id=? AND customer_id=? ORDER BY created_at DESC', tenant, customerId) : query('SELECT * FROM company_groups WHERE tenant_id=? ORDER BY created_at DESC', tenant)
     return send(200, groups.map(item => {
       const companies = companyStatusInfo(item.id, item.customer_id), warnings = statusWarnings(companies)
-      return { ...item, companies: query('SELECT * FROM companies WHERE tenant_id=? AND group_id=? AND customer_id=? ORDER BY name', tenant, item.id, item.customer_id), warnings, plates: query('SELECT id,route,mainland_plate,local_plate,indicator_category,port,usage_status FROM plate_assets WHERE group_id=? AND customer_id=?', item.id, item.customer_id).map(plate => ({ ...plate, companyStatuses: companies, warnings })) }
+      return { ...item, companies: query('SELECT * FROM companies WHERE tenant_id=? AND group_id=? AND customer_id=? ORDER BY name', tenant, item.id, item.customer_id).map(companySummary), warnings, plates: query('SELECT id,route,mainland_plate,local_plate,indicator_category,port,usage_status FROM plate_assets WHERE group_id=? AND customer_id=?', item.id, item.customer_id).map(plate => ({ ...plate, companyStatuses: companies, warnings })) }
     }))
   }
   if (path === '/api/company-groups' && method === 'POST') {
@@ -65,16 +73,20 @@ export async function phase1Routes(req, res, url, user, h) {
   }
   if (path === '/api/companies' && method === 'GET') {
     if (customerId && !customer(customerId)) return error(404, '客戶不存在')
-    return send(200, customerId ? query('SELECT * FROM companies WHERE tenant_id=? AND customer_id=? ORDER BY name', tenant, customerId) : query('SELECT * FROM companies WHERE tenant_id=? ORDER BY name', tenant))
+    return send(200, (customerId ? query('SELECT * FROM companies WHERE tenant_id=? AND customer_id=? ORDER BY name', tenant, customerId) : query('SELECT * FROM companies WHERE tenant_id=? ORDER BY name', tenant)).map(companySummary))
   }
   if (path === '/api/companies' && method === 'POST' || /^\/api\/companies\/[^/]+$/.test(path) && method === 'PATCH') {
     const old = method === 'PATCH' ? company(path.split('/').pop()) : null
     if (method === 'PATCH' && !old) return error(404, '公司不存在')
     const body = await parseBody(req), targetCustomer = body.customerId ?? old?.customer_id
+    if (body.customerId === null || body.name === null || body.jurisdiction === null) return error(400, '公司必填欄位不可為空')
     if (old && body.customerId !== undefined && body.customerId !== old.customer_id) return error(400, '公司不可搬到其他客戶')
+    if (typeof targetCustomer !== 'string' || !targetCustomer.trim()) return error(400, '客戶 ID 無效')
     if (!customer(targetCustomer)) return error(404, '客戶不存在')
+    if (body.name !== undefined && typeof body.name !== 'string' || body.jurisdiction !== undefined && typeof body.jurisdiction !== 'string' || body.registrationNo !== undefined && body.registrationNo !== null && typeof body.registrationNo !== 'string' || body.groupId !== undefined && body.groupId !== null && typeof body.groupId !== 'string') return error(400, '公司欄位類型無效')
     const jurisdiction = body.jurisdiction ?? old?.jurisdiction, name = body.name ?? old?.name
     if (!['香港', '澳門', '內地'].includes(jurisdiction) || !clean(name)) return error(400, '公司名稱或司法區無效')
+    if (jurisdiction === '內地' && body.taxpayerType !== undefined && body.taxpayerType !== null && typeof body.taxpayerType !== 'string') return error(400, '納稅人類型無效')
     if (body.incorporatedOn !== undefined && body.incorporatedOn !== '' && body.incorporatedOn !== null && !date(body.incorporatedOn)) return error(400, '成立日期無效')
     const statuses = ['存續', '經營異常', '註銷中', '已註銷']
     const status = body.status === undefined ? old?.status ?? '存續' : body.status
@@ -82,13 +94,17 @@ export async function phase1Routes(req, res, url, user, h) {
     if (body.statusChangedOn !== undefined && body.statusChangedOn !== '' && body.statusChangedOn !== null && !date(body.statusChangedOn)) return error(400, '狀態變更日期無效')
     const groupId = body.groupId === undefined ? old?.group_id : body.groupId || null
     if (groupId) { const parent = group(groupId); if (!parent) return error(404, '公司組不存在'); if (parent.customer_id !== targetCustomer) return error(400, '公司組與客戶不符') }
-    const values = [tenant, targetCustomer, groupId || null, jurisdiction, clean(name, 160), clean(body.registrationNo ?? old?.registration_no, 100), body.incorporatedOn === undefined ? old?.incorporated_on || null : body.incorporatedOn || null, clean(body.taxpayerType ?? old?.taxpayer_type, 100), clean(body.notes ?? old?.notes, 1000), status, body.statusChangedOn === undefined ? old?.status_changed_on || null : body.statusChangedOn || null]
+    const taxpayerType = jurisdiction === '內地' ? body.taxpayerType ?? (old?.jurisdiction === '內地' ? old.taxpayer_type : '') : ''
+    if (jurisdiction === '內地' && taxpayerType && !['小規模納稅人', '一般納稅人'].includes(taxpayerType)) return error(400, '納稅人類型無效')
+    if (body.companyNumber !== undefined && body.companyNumber !== null && typeof body.companyNumber !== 'string') return error(400, '公司編號無效')
+    const companyNumber = jurisdiction === '香港' ? clean(body.companyNumber ?? (old?.jurisdiction === '香港' ? old.company_number : ''), 100) : ''
+    const values = [tenant, targetCustomer, groupId || null, jurisdiction, clean(name, 160), clean(body.registrationNo ?? old?.registration_no, 100), body.incorporatedOn === undefined ? old?.incorporated_on || null : body.incorporatedOn || null, clean(taxpayerType, 100), clean(body.notes ?? old?.notes, 1000), status, body.statusChangedOn === undefined ? old?.status_changed_on || null : body.statusChangedOn || null, companyNumber]
     if (old) {
-      db.prepare('UPDATE companies SET tenant_id=?,customer_id=?,group_id=?,jurisdiction=?,name=?,registration_no=?,incorporated_on=?,taxpayer_type=?,notes=?,status=?,status_changed_on=?,updated_at=? WHERE id=? AND tenant_id=?').run(...values, now(), old.id, tenant)
+      db.prepare('UPDATE companies SET tenant_id=?,customer_id=?,group_id=?,jurisdiction=?,name=?,registration_no=?,incorporated_on=?,taxpayer_type=?,notes=?,status=?,status_changed_on=?,company_number=?,updated_at=? WHERE id=? AND tenant_id=?').run(...values, now(), old.id, tenant)
       return send(200, company(old.id))
     }
     const companyId = id()
-    db.prepare('INSERT INTO companies(id,tenant_id,customer_id,group_id,jurisdiction,name,registration_no,incorporated_on,taxpayer_type,notes,status,status_changed_on,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(companyId, ...values, now(), now())
+    db.prepare('INSERT INTO companies(id,tenant_id,customer_id,group_id,jurisdiction,name,registration_no,incorporated_on,taxpayer_type,notes,status,status_changed_on,company_number,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(companyId, ...values, now(), now())
     return send(201, company(companyId))
   }
   const hkLookupMatch = path.match(/^\/api\/companies\/([^/]+)\/hk-lookup$/)
@@ -160,6 +176,21 @@ export async function phase1Routes(req, res, url, user, h) {
     if (body.expiresOn !== '' && !date(body.expiresOn)) return error(400, '到期日期無效')
     db.prepare('INSERT INTO tracked_items(tenant_id,owner_type,owner_id,code,expires_on,notes,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(owner_type,owner_id,code) DO UPDATE SET expires_on=excluded.expires_on,notes=excluded.notes,updated_by=excluded.updated_by,updated_at=excluded.updated_at').run(tenant, body.ownerType, body.ownerId, body.code, body.expiresOn || null, clean(body.notes, 1000), user.id, now())
     return send(200, one('SELECT * FROM tracked_items WHERE tenant_id=? AND owner_type=? AND owner_id=? AND code=?', tenant, body.ownerType, body.ownerId, body.code))
+  }
+  if (path === '/api/tracked-items/bulk' && method === 'PUT') {
+    const body = await parseBody(req)
+    if (!Array.isArray(body.plateIds) || !body.plateIds.length || body.plateIds.length > 500 || new Set(body.plateIds).size !== body.plateIds.length || body.plateIds.some(plateId => typeof plateId !== 'string' || !plateId.trim()) || typeof body.code !== 'string' || !body.code.trim() || typeof body.expiresOn !== 'string' || !date(body.expiresOn)) return error(400, '牌照或到期日期無效')
+    const rule = one('SELECT * FROM rules WHERE tenant_id=? AND code=? AND scope=? AND method=? AND active=1', tenant, body.code, 'plate', 'expiry')
+    if (!rule || JSON.parse(rule.params_json).field === 'cardExpiresOn') return error(400, '到期規則不適用')
+    const plates = body.plateIds.map(plateId => plateFor(user, plateId))
+    if (plates.some(plate => !plate || !ruleMatches(decoded(rule), facts('plate', plate)))) return error(400, '牌照不存在或規則不適用')
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      const statement = db.prepare('INSERT INTO tracked_items(tenant_id,owner_type,owner_id,code,expires_on,notes,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(owner_type,owner_id,code) DO UPDATE SET expires_on=excluded.expires_on,updated_by=excluded.updated_by,updated_at=excluded.updated_at')
+      for (const plateId of body.plateIds) statement.run(tenant, 'plate', plateId, body.code, body.expiresOn, '', user.id, now())
+      db.exec('COMMIT')
+    } catch (failure) { db.exec('ROLLBACK'); throw failure }
+    return send(200, { updated: body.plateIds.length })
   }
   if (path === '/api/rule-completions' && ['POST','DELETE'].includes(method)) {
     const body = await parseBody(req), rule = one('SELECT * FROM rules WHERE tenant_id=? AND code=? AND method<>?', tenant, body.ruleCode, 'expiry')

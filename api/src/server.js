@@ -1,10 +1,12 @@
 import http from 'node:http'
-import { randomBytes } from 'node:crypto'
+import { randomBytes, createHash } from 'node:crypto'
 import { db, id, now, hashPassword, verifyPassword } from './db.js'
 import { services, sources, inspectionGuidance, planFor } from './catalog.js'
 import { cardData, cleanCard, recognizeCard } from './card.js'
 import { phase1Routes } from './phase1-routes.js'
 import { customerRoutes } from './customer-routes.js'
+import { parseCsv, requiredHeaders } from './plate-import.js'
+import { computeDeadlines } from './rules.js'
 
 const port = Number(process.env.PORT || 4100)
 const allowedOrigins = new Set((process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174').split(','))
@@ -16,6 +18,26 @@ const clean = (value, max = 500) => String(value ?? '').trim().slice(0, max)
 const query = (sql, ...params) => db.prepare(sql).all(...params)
 const validDate = value => { const text = String(value || ''); return /^\d{4}-\d{2}-\d{2}$/.test(text) && !Number.isNaN(Date.parse(text + 'T00:00:00Z')) && new Date(text + 'T00:00:00Z').toISOString().slice(0, 10) === text ? text : null }
 const one = (sql, ...params) => db.prepare(sql).get(...params)
+const normalizeImportDate = value => {
+  const text = String(value ?? '').trim()
+  if (!text) return ''
+  const match = text.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/)
+  if (!match) return null
+  const normalized = `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`
+  return validDate(normalized)
+}
+const importCompanyGroup = (customerId, route, hongKongOrMacau, mainland) => {
+  const groups = query('SELECT * FROM company_groups WHERE customer_id=? ORDER BY created_at', customerId)
+  for (const group of groups) {
+    const companies = query('SELECT * FROM companies WHERE group_id=? AND customer_id=?', group.id, customerId)
+    const jurisdiction = route === '粵港' ? '香港' : '澳門'
+    const hasForeign = !hongKongOrMacau || companies.some(item => item.jurisdiction === jurisdiction && item.name === hongKongOrMacau)
+    const hasMainland = !mainland || companies.some(item => item.jurisdiction === '內地' && item.name === mainland)
+    if (hasForeign && hasMainland && (hongKongOrMacau || mainland)) return group
+  }
+  return hongKongOrMacau || mainland ? null : undefined
+}
+const importPreviews = new Map()
 
 function auth(req) {
   const token = (req.headers.authorization || '').replace(/^Bearer /, '')
@@ -49,6 +71,17 @@ function plateDetail(user, plateId) {
   const warnings = companyStatuses.filter(company => company.jurisdiction === '內地' && ['已註銷', '註銷中'].includes(company.status)).map(company => company.status === '已註銷' ? '內承單位已註銷' : '內承單位註銷中')
   return { ...item, cardData: cardData(item.card_data), rentals: query('SELECT * FROM plate_rentals WHERE plate_asset_id=? ORDER BY created_at DESC', item.id), cardImages: Object.fromEntries(images.map(x => [x.side, imageValue(x)])), platePhotos: Object.fromEntries(photos.map(x => [x.kind, imageValue(x)])), companyStatuses, warnings: [...new Set(warnings)] }
 }
+function plateSummary(item, tenantId) {
+  const tracked = query('SELECT code,expires_on FROM tracked_items WHERE tenant_id=? AND owner_type=? AND owner_id=? AND code IN (?,?) ORDER BY code', tenantId, 'plate', item.id, 'hk_crp', 'mo_permit')
+  const groupCompanies = item.group_id ? query('SELECT jurisdiction,name FROM companies WHERE tenant_id=? AND group_id=? AND customer_id=? ORDER BY jurisdiction,name', tenantId, item.group_id, item.customer_id) : []
+  const approval = item.card_expires_on
+  const permit = tracked.find(entry => entry.code === (item.route === '粵港' ? 'hk_crp' : 'mo_permit'))?.expires_on || null
+  const rules = query("SELECT * FROM rules WHERE tenant_id=? AND scope='plate'", tenantId).map(rule => ({ ...rule, match: JSON.parse(rule.match_json), params: JSON.parse(rule.params_json), remindDays: rule.remind_days }))
+  const trackedItems = new Map(query("SELECT * FROM tracked_items WHERE tenant_id=? AND owner_type='plate' AND owner_id=?", tenantId, item.id).map(entry => [`plate:${item.id}:${entry.code}`, entry]))
+  const levels = computeDeadlines({ rules, owners: [{ ownerType: 'plate', ownerId: item.id, customerId: item.customer_id, label: item.card_number, facts: { route: item.route, indicatorCategory: item.indicator_category, port: item.port, cardExpiresOn: approval } }], tracked: trackedItems, completions: new Set(), windowDays: 365 }).map(entry => entry.level)
+  const healthStatus = levels.includes('overdue') ? 'overdue' : levels.includes('due') ? 'due' : levels.includes('missing') || !levels.length ? 'missing' : 'ok'
+  return { ...item, card_data: cardData(item.card_data), holder_company: groupCompanies.find(company => company.jurisdiction !== '內地')?.name || null, mainland_company: groupCompanies.find(company => company.jurisdiction === '內地')?.name || null, permit_expires_on: permit, health_status: healthStatus }
+}
 function pushActivity(requestId, actorId, kind, detail) { db.prepare('INSERT INTO activities VALUES (?,?,?,?,?,?)').run(id(), requestId, actorId, kind, detail, now()) }
 function addTasks(requestId, service, route) {
   const plan = planFor(service, route)
@@ -59,7 +92,7 @@ function addTasks(requestId, service, route) {
   }
 }
 
-const server = http.createServer(async (req, res) => {
+export const server = http.createServer(async (req, res) => {
   const origin = req.headers.origin
   if (origin && allowedOrigins.has(origin)) res.setHeader('access-control-allow-origin', origin)
   res.setHeader('access-control-allow-headers', 'authorization,content-type')
@@ -96,6 +129,111 @@ const server = http.createServer(async (req, res) => {
     if (path === '/api/catalog' && req.method === 'GET') return json(res, 200, { services, sources, routePlans: Object.fromEntries(services.map(s => [s.code, Object.fromEntries(s.routes.map(route => [route, planFor(s, route)]))])) })
     if (await phase1Routes(req, res, url, user, { json, fail, parseBody, canAccessCustomer, vehicleFor, plateFor, query, one, clean })) return
     if (await customerRoutes(req, res, url, user, { json, fail, query, one, plateFor })) return
+    if (path === '/api/import/plates' && req.method === 'POST') {
+      if (user.role !== 'admin') return fail(res, 403, '無權限')
+      const body = await parseBody(req)
+      if (typeof body.csv !== 'string' || !body.csv.trim() || body.csv.length > 3000000) return fail(res, 400, '請上傳 UTF-8 CSV 內容')
+      let parsed
+      try { parsed = parseCsv(body.csv) } catch (failure) { return fail(res, 400, failure.message) }
+      if (parsed.errors.length) return fail(res, 400, parsed.errors.join('；'))
+      if (!parsed.rows.length) return fail(res, 400, 'CSV 沒有資料列')
+      const seen = new Map()
+      const rows = parsed.rows.map(row => {
+        const inputValue = row.values
+        const value = { ...inputValue }
+        const errors = row.columnError ? [row.columnError] : []
+        if (Object.values(value).some(entry => entry.length > 1000)) errors.push('欄位內容過長')
+        const customerMatches = value['客戶'] ? query('SELECT id,name FROM customers WHERE tenant_id=? AND name=?', user.tenant_id, value['客戶']) : []
+        const customer = customerMatches.length === 1 ? customerMatches[0] : null
+        if (!value['客戶']) errors.push('客戶不可為空')
+        else if (!customerMatches.length) errors.push('找不到同一租戶的客戶')
+        else if (customerMatches.length > 1) errors.push('客戶名稱不唯一，請先整理客戶資料')
+        if (!['粵港', '粵澳'].includes(value['路線'])) errors.push('路線必須是粵港或粵澳')
+        if (!value['批文卡號']) errors.push('批文卡號不可為空')
+        for (const header of ['批文到期', 'CRP／通行證到期']) {
+          const normalized = normalizeImportDate(value[header])
+          if (normalized === null) errors.push(`${header}格式錯誤，請使用 YYYY-MM-DD，例如 2026-11-20`)
+          else value[header] = normalized
+        }
+        const key = customer && ['粵港', '粵澳'].includes(value['路線']) && value['批文卡號'] ? `${customer.id}:${value['路線']}:${value['批文卡號']}` : null
+        const existing = key ? one('SELECT * FROM plate_assets WHERE customer_id=? AND route=? AND card_number=?', customer.id, value['路線'], value['批文卡號']) : null
+        const existingGroup = existing?.group_id ? one('SELECT * FROM company_groups WHERE id=? AND customer_id=?', existing.group_id, customer.id) : null
+        const existingCompanies = existingGroup ? query('SELECT jurisdiction,name FROM companies WHERE group_id=? AND customer_id=?', existingGroup.id, customer.id) : []
+        const foreignJurisdiction = value['路線'] === '粵港' ? '香港' : '澳門'
+        const incomingCompanies = [[value['香港／澳門公司'], foreignJurisdiction], [value['內地公司'], '內地']].filter(([name]) => name)
+        if (existingGroup && incomingCompanies.some(([name, jurisdiction]) => !existingCompanies.some(company => company.jurisdiction === jurisdiction && company.name === name))) {
+          errors.push(`公司名稱與現有公司組（${existingGroup.name}）不符；如需更換公司組請在牌照詳情處理`)
+        }
+        const group = existingGroup || customer && importCompanyGroup(customer.id, value['路線'], value['香港／澳門公司'], value['內地公司'])
+        const groupAction = !existingGroup && (value['香港／澳門公司'] || value['內地公司']) && !group ? '新增公司組' : null
+        const duplicate = key && seen.has(key)
+        if (duplicate) errors.push('同一檔案重複的牌照')
+        if (key) seen.set(key, true)
+        return {
+          rowNumber: row.rowNumber,
+          action: existing || duplicate ? '更新' : '新增',
+          key,
+          customerId: customer?.id || null,
+          groupId: group?.id || null,
+          groupAction,
+          existingId: existing?.id || null,
+          values: value,
+          errors,
+        }
+      })
+      const summary = {
+        create: rows.filter(row => row.action === '新增' && !row.errors.length).length,
+        update: rows.filter(row => row.action === '更新' && !row.errors.length).length,
+        error: rows.filter(row => row.errors.length).length,
+      }
+      const dryRun = url.searchParams.get('dryRun') === '1'
+      const previewKey = createHash('sha256').update(`${user.tenant_id}:${body.csv}`).digest('hex')
+      const previewId = `${user.id}:${previewKey}`
+      if (dryRun) {
+        for (const [key, expiry] of importPreviews) if (expiry < Date.now()) importPreviews.delete(key)
+        if (!summary.error) importPreviews.set(previewId, Date.now() + 15 * 60000)
+      }
+      if (!dryRun && (body.confirm !== true || body.previewKey !== previewKey || (importPreviews.get(previewId) || 0) < Date.now())) return fail(res, 400, '請先預覽並確認相同的 CSV')
+      if (!dryRun && summary.error) return fail(res, 400, 'CSV 含有錯誤列，修正後才可寫入')
+      if (!dryRun) {
+        db.exec('BEGIN IMMEDIATE')
+        try {
+          const importedGroups = new Map()
+          for (const row of rows) {
+            const value = row.values
+            let groupId = row.groupId
+            const current = row.existingId ? one('SELECT * FROM plate_assets WHERE id=?', row.existingId) : one('SELECT * FROM plate_assets WHERE customer_id=? AND route=? AND card_number=?', row.customerId, value['路線'], value['批文卡號'])
+            if (row.groupAction) {
+              const groupKey = JSON.stringify([row.customerId, value['香港／澳門公司'], value['內地公司'], value['路線']])
+              groupId = importedGroups.get(groupKey)
+              if (!groupId) {
+                groupId = id()
+                importedGroups.set(groupKey, groupId)
+                db.prepare('INSERT INTO company_groups(id,tenant_id,customer_id,name,notes,created_at) VALUES (?,?,?,?,?,?)').run(groupId, user.tenant_id, row.customerId, [value['香港／澳門公司'], value['內地公司']].filter(Boolean).join(' · '), 'CSV 匯入', now())
+                for (const [name, jurisdiction] of [[value['香港／澳門公司'], value['路線'] === '粵港' ? '香港' : '澳門'], [value['內地公司'], '內地']]) if (name) db.prepare('INSERT INTO companies(id,tenant_id,customer_id,group_id,jurisdiction,name,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)').run(id(), user.tenant_id, row.customerId, groupId, jurisdiction, name, now(), now())
+              }
+            }
+            const incomingCard = { cardNumber: value['批文卡號'], mainlandPlate: value['內地車牌'], localPlate: value['港澳車牌'], validTo: value['批文到期'], company: value['香港／澳門公司'], contractor: value['內地公司'] }
+            const oldCard = current ? cardData(current.card_data) : {}
+            const importedCard = cleanCard({ ...oldCard, ...Object.fromEntries(Object.entries(incomingCard).filter(([, entry]) => entry)) })
+            const plateId = current?.id || id()
+            if (current) {
+              db.prepare('UPDATE plate_assets SET mainland_plate=?,local_plate=?,card_expires_on=?,group_id=?,card_data=?,updated_at=? WHERE id=?').run(value['內地車牌'] || current.mainland_plate, value['港澳車牌'] || current.local_plate, value['批文到期'] || current.card_expires_on, groupId || current.group_id, JSON.stringify(importedCard), now(), plateId)
+            } else {
+              db.prepare('INSERT INTO plate_assets(id,customer_id,route,mainland_plate,local_plate,card_number,card_expires_on,group_id,usage_status,installation_status,notes,created_at,updated_at,card_data,card_status,card_updated_by,card_updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(plateId, row.customerId, value['路線'], value['內地車牌'] || null, value['港澳車牌'] || null, value['批文卡號'], value['批文到期'] || null, groupId || null, '待核對', '待核對', '', now(), now(), JSON.stringify(importedCard), '待核對', user.name, now())
+            }
+            const code = value['路線'] === '粵港' ? 'hk_crp' : 'mo_permit'
+            if (value['CRP／通行證到期']) db.prepare('INSERT INTO tracked_items(tenant_id,owner_type,owner_id,code,expires_on,notes,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(owner_type,owner_id,code) DO UPDATE SET expires_on=excluded.expires_on,notes=excluded.notes,updated_by=excluded.updated_by,updated_at=excluded.updated_at').run(user.tenant_id, 'plate', plateId, code, value['CRP／通行證到期'], 'CSV 匯入', user.id, now())
+          }
+          db.exec('COMMIT')
+        } catch (error) {
+          db.exec('ROLLBACK')
+          throw error
+        }
+        importPreviews.delete(previewId)
+      }
+      return json(res, 200, { dryRun, previewKey, headers: requiredHeaders, rows: rows.map(({ key, ...row }) => row), summary })
+    }
     if (path === '/api/card-recognize' && req.method === 'POST') {
       const body = await parseBody(req)
       if (!['front','back'].includes(body.side)) return fail(res,400,'請選擇批文卡正面或背面')
@@ -112,7 +250,10 @@ const server = http.createServer(async (req, res) => {
     if (path === '/api/plate-assets' && req.method === 'GET') {
       const customerId = url.searchParams.get('customerId')
       const condition = "card_number IS NOT NULL AND TRIM(card_number)<>''"
-      if (user.role === 'admin') return json(res, 200, customerId ? (canAccessCustomer(user, customerId) ? query('SELECT * FROM plate_assets WHERE customer_id=? ORDER BY created_at DESC', customerId) : []) : query('SELECT p.* FROM plate_assets p JOIN customers c ON c.id=p.customer_id WHERE c.tenant_id=? ORDER BY p.created_at DESC', user.tenant_id))
+      if (user.role === 'admin') {
+        const items = customerId ? (canAccessCustomer(user, customerId) ? query('SELECT * FROM plate_assets WHERE customer_id=? ORDER BY created_at DESC', customerId) : []) : query('SELECT p.* FROM plate_assets p JOIN customers c ON c.id=p.customer_id WHERE c.tenant_id=? ORDER BY p.created_at DESC', user.tenant_id)
+        return json(res, 200, items.map(item => plateSummary(item, user.tenant_id)))
+      }
       return json(res, 200, query(`SELECT * FROM plate_assets WHERE customer_id=? AND ${condition} ORDER BY created_at DESC`, user.customer_id))
     }
     if (path === '/api/plate-assets' && req.method === 'POST') {
@@ -320,25 +461,28 @@ const server = http.createServer(async (req, res) => {
       db.prepare('UPDATE vehicles SET plate=?,brand=?,model=?,vin=?,notes=?,first_registered_on=?,origin=?,manufactured_year=? WHERE id=?').run(next.plate, next.brand, next.model, next.vin, next.notes, next.firstRegisteredOn, next.origin, next.manufacturedYear, old.id)
       return json(res, 200, one('SELECT * FROM vehicles WHERE id=?', old.id))
     }
+    if (path === '/api/credentials' && req.method === 'GET') {
+      if (user.role !== 'admin') return fail(res, 403, '無權限')
+      const vehicleId = url.searchParams.get('vehicleId')
+      if (vehicleId && !vehicleFor(user, vehicleId)) return fail(res, 404, '車輛不存在')
+      return json(res, 200, vehicleId ? query('SELECT * FROM credentials WHERE vehicle_id=? ORDER BY expires_on', vehicleId) : query('SELECT cr.* FROM credentials cr JOIN vehicles v ON v.id=cr.vehicle_id JOIN customers c ON c.id=v.customer_id WHERE c.tenant_id=? ORDER BY cr.expires_on', user.tenant_id))
+    }
     if (path === '/api/credentials' && req.method === 'POST') {
       if (user.role !== 'admin') return fail(res, 403, '無權限')
-      const b = await parseBody(req)
-      if (!required(b, ['vehicleId', 'name'])) return fail(res, 400, '證件資料不完整')
-      if (!vehicleFor(user, b.vehicleId)) return fail(res, 404, '車輛不存在')
-      if (b.sourceId && !sources.some(s => s.id === b.sourceId)) return fail(res, 400, '官方來源不存在')
-      const credentialId = id()
-      db.prepare('INSERT INTO credentials VALUES (?,?,?,?,?,?,?,?)').run(credentialId, b.vehicleId, clean(b.name, 100), clean(b.issuer, 100), clean(b.number, 100), clean(b.expiresOn, 20) || null, '待核對', clean(b.sourceId, 60) || null)
-      return json(res, 201, one('SELECT * FROM credentials WHERE id=?', credentialId))
+      return fail(res, 405, '舊牌證資料只供查詢，請使用牌照到期項目')
     }
     const credentialMatch = path.match(/^\/api\/credentials\/([^/]+)$/)
+    if (credentialMatch && req.method === 'GET') {
+      if (user.role !== 'admin') return fail(res, 403, '無權限')
+      const credential = one('SELECT * FROM credentials WHERE id=?', credentialMatch[1])
+      if (!credential || !vehicleFor(user, credential.vehicle_id)) return fail(res, 404, '牌證不存在')
+      return json(res, 200, credential)
+    }
     if (credentialMatch && req.method === 'PATCH') {
       if (user.role !== 'admin') return fail(res, 403, '無權限')
-      const existing = one('SELECT * FROM credentials WHERE id=?', credentialMatch[1]); if (!existing || !vehicleFor(user, existing.vehicle_id)) return fail(res, 404, '牌證不存在')
-      const b = await parseBody(req)
-      const allowed = ['待核對', '已核對', '待續期', '已失效']
-      if (b.status && !allowed.includes(b.status)) return fail(res, 400, '牌證狀態無效')
-      db.prepare('UPDATE credentials SET status=?,expires_on=?,number=? WHERE id=?').run(b.status || existing.status, clean(b.expiresOn, 20) || existing.expires_on, clean(b.number, 100) || existing.number, existing.id)
-      return json(res, 200, one('SELECT * FROM credentials WHERE id=?', existing.id))
+      const credential = one('SELECT vehicle_id FROM credentials WHERE id=?', credentialMatch[1])
+      if (!credential || !vehicleFor(user, credential.vehicle_id)) return fail(res, 404, '牌證不存在')
+      return fail(res, 405, '舊牌證資料只供查詢，請使用牌照到期項目')
     }
     if (path === '/api/requests' && req.method === 'GET') {
       const customerId = url.searchParams.get('customerId')
@@ -432,4 +576,4 @@ const server = http.createServer(async (req, res) => {
     return fail(res, 500, '伺服器處理失敗')
   }
 })
-server.listen(port, () => console.log(`API listening on http://localhost:${port}`))
+if (process.env.API_NO_LISTEN !== '1') server.listen(port, () => console.log(`API listening on http://localhost:${port}`))

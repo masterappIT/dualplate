@@ -88,6 +88,16 @@ addColumn('plate_assets', 'port', 'TEXT')
 addColumn('vehicles', 'first_registered_on', 'TEXT')
 addColumn('companies', 'status', "TEXT NOT NULL DEFAULT '存續'")
 addColumn('companies', 'status_changed_on', 'TEXT')
+addColumn('companies', 'company_number', 'TEXT')
+const companyJurisdictionMigration = 'company-jurisdiction-fields-v1'
+if (!db.prepare('SELECT name FROM schema_migrations WHERE name=?').get(companyJurisdictionMigration)) {
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    db.exec("UPDATE companies SET taxpayer_type='' WHERE jurisdiction<>'內地' AND COALESCE(taxpayer_type,'')<>''")
+    db.prepare('INSERT INTO schema_migrations(name,applied_at) VALUES (?,?)').run(companyJurisdictionMigration, new Date().toISOString())
+    db.exec('COMMIT')
+  } catch (error) { db.exec('ROLLBACK'); throw error }
+}
 addColumn('rules', 'customer_visible', 'INTEGER NOT NULL DEFAULT 1')
 const companyStatusMigration = 'company-status-fields'
 if (!db.prepare('SELECT name FROM schema_migrations WHERE name=?').get(companyStatusMigration)) {
@@ -137,6 +147,34 @@ if (!db.prepare('SELECT name FROM schema_migrations WHERE name=?').get(approvalR
   }
 }
 
+const credentialMigration = 'credentials-to-expiry-v1'
+function migrateCredentials() {
+  if (db.prepare('SELECT name FROM schema_migrations WHERE name=?').get(credentialMigration)) return
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    const valid = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value
+    const credentials = db.prepare('SELECT c.*,v.customer_id FROM credentials c JOIN vehicles v ON v.id=c.vehicle_id ORDER BY c.id').all()
+    for (const credential of credentials) {
+      const name = String(credential.name || '')
+      const code = name.includes('封閉道路通行許可證') ? 'hk_crp' : name.includes('澳門') && name.includes('通行證') ? 'mo_permit' : null
+      if (name.includes('批文')) continue
+      const route = code === 'hk_crp' ? '粵港' : '粵澳'
+      const plates = code ? db.prepare('SELECT id FROM plate_assets WHERE vehicle_id=? AND customer_id=? AND route=?').all(credential.vehicle_id, credential.customer_id, route) : []
+      if (code && plates.length === 1 && valid(credential.expires_on)) {
+        const tenant = db.prepare('SELECT tenant_id FROM customers WHERE id=?').get(credential.customer_id)?.tenant_id
+        if (tenant && db.prepare('INSERT OR IGNORE INTO tracked_items(tenant_id,owner_type,owner_id,code,expires_on,notes,updated_at) VALUES (?,?,?,?,?,?,?)').run(tenant, 'plate', plates[0].id, code, credential.expires_on, `舊資料遷移：${name}`, new Date().toISOString()).changes) continue
+      }
+      const note = `舊牌證資料：${name}${credential.issuer ? `；簽發機關：${credential.issuer}` : ''}${credential.number ? `；編號：${credential.number}` : ''}${credential.expires_on ? `；有效期：${credential.expires_on}` : ''}`
+      db.prepare("UPDATE vehicles SET notes=COALESCE(NULLIF(notes,''),'') || CASE WHEN COALESCE(notes,'')='' THEN '' ELSE CHAR(10) END || ? WHERE id=?").run(note, credential.vehicle_id)
+    }
+    db.prepare('INSERT INTO schema_migrations(name,applied_at) VALUES (?,?)').run(credentialMigration, new Date().toISOString())
+    db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
+  }
+}
+
 export const id = () => randomUUID()
 export const now = () => new Date().toISOString()
 export function hashPassword(password) { const salt = randomUUID(); return `${salt}:${scryptSync(password, salt, 64).toString('hex')}` }
@@ -161,3 +199,4 @@ if (process.env.DEMO_SEED === '1' && db.prepare('SELECT COUNT(*) count FROM user
     ['相關備案核對', '通用', null]
   ]) db.prepare('INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?)').run(id(), requestId, title, jurisdiction, '待辦', sourceId, null, null)
 }
+migrateCredentials()
