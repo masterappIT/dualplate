@@ -1,30 +1,70 @@
 <template>
-  <view class="page home-page">
-    <view class="topline"><view class="brand"><view class="brand-mark">跨</view><text>車牌管家</text></view><text class="account" @click="logout">{{ user?.name || '登入' }} · 帳戶</text></view>
-    <view class="welcome"><text class="eyebrow">我的跨境車務</text><text class="page-title">你好，{{ user?.name || '歡迎' }}</text><text class="subtle">車輛與代辦的最新狀態，一眼掌握。</text></view>
-    <view class="overview-card"><view class="overview-top"><view><text class="overview-label">正在辦理</text><view class="overview-count">{{ pendingCount }}<text> 項案件</text></view></view><view class="overview-glow"></view><view class="overview-monogram">跨</view></view><view class="overview-divider"></view><view class="overview-foot"><view><text>{{ plates.length }}</text><text> 個兩地牌</text></view><view class="vertical-line"></view><view><text>{{ alerts.length }}</text><text> 項牌證提醒</text></view><text class="overview-link" @click="goVehicles">管理資料 ›</text></view></view>
-    <view class="quick-actions"><view class="quick-action" @click="goRequests"><view class="quick-icon">申</view><view><text class="quick-title">提出代辦要求</text><text class="quick-detail">新申請、換車、續期等</text></view><text class="quick-arrow">›</text></view><view class="quick-action" @click="goVehicles"><view class="quick-icon light">證</view><view><text class="quick-title">查看車輛牌證</text><text class="quick-detail">有效期與驗車安排</text></view><text class="quick-arrow">›</text></view></view>
-    <view class="row section-row"><text class="section-title">牌證提醒</text><text class="section-link" @click="goVehicles">查看全部 ›</text></view>
-    <view v-if="alerts.length"><view class="card alert" v-for="item in alerts" :key="item.id" @click="goVehicles"><view class="alert-marker"></view><view class="grow"><text class="alert-title">{{ item.name }}</text><text class="alert-meta">{{ item.plate }} · {{ friendlyDate(item.expires_on) }}</text></view><text class="pill amber">{{ item.days < 0 ? '已到期' : item.days + ' 天' }}</text></view></view>
-    <view v-else class="card calm-state"><view class="calm-icon">✓</view><view><text class="calm-title">目前沒有臨期牌證</text><text class="calm-copy">專員核對過的牌證若於 120 天內到期，會在此提示。</text></view></view>
-    <view class="row section-row"><text class="section-title">最近案件</text><text class="section-link" @click="goRequests">查看全部 ›</text></view>
-    <view v-if="requests.length"><view class="card case-card" v-for="item in visibleRequests" :key="item.id" @click="openRequest(item.id)"><view class="row case-top"><text class="case-title">{{ item.title }}</text><text class="pill" :class="item.status==='已完成'?'gray':''">{{ item.status }}</text></view><text class="case-meta">{{ item.route }} · {{ item.plate || '未指定車輛' }}</text><view class="case-progress"><view class="progress-dot"></view><text>目前：{{ item.stage }}</text><text class="case-chevron">›</text></view></view></view>
-    <view v-else class="card empty">尚未有代辦案件。可以先提出服務要求。</view>
-    <text class="footnote">進度由服務團隊更新；通關及牌證效力以主管部門的正式結果為準。</text>
+  <view class="page home">
+    <view class="top"><view class="brand"><view class="brand-mark">跨</view><text>車牌管家</text></view><text class="link" @click="goMe">{{ user?.name || '登入' }}</text></view>
+    <text class="eyebrow">我的跨境車務</text>
+    <text class="page-title">{{ data.customerName || user?.name || '歡迎' }}</text>
+    <text class="subtle">名下 {{ data.plates.length }} 個牌照的狀況，以及需要你處理的事。</text>
+
+    <view class="status-grid">
+      <view class="status-tile" @click="goPlates('ok')"><text class="status-num">{{ data.counts.ok }}</text><text class="status-label note-green">正常</text></view>
+      <view class="status-tile" @click="goPlates('due')"><text class="status-num">{{ data.counts.due }}</text><text class="status-label note-amber">快到期</text></view>
+      <view class="status-tile" @click="goPlates('overdue')"><text class="status-num">{{ data.counts.overdue }}</text><text class="status-label note-red">已逾期</text></view>
+    </view>
+    <text v-if="data.counts.pending" class="pending-note">另有 {{ data.counts.pending }} 個牌照資料整理中</text>
+
+    <view class="section-head"><text class="section-title">需要你處理 · {{ data.todos.length }}</text></view>
+    <view v-if="data.todos.length">
+      <view v-for="(item,index) in data.todos" :key="index" class="list-card warn-card" @click="openRequest(item.requestId)">
+        <view class="row"><text class="list-title">{{ item.title }}</text><text class="pill amber">待你配合</text></view>
+        <text class="list-sub">{{ item.subtitle }}</text>
+      </view>
+    </view>
+    <view v-else class="list-card calm"><text class="list-title">目前沒有需要你處理的事</text><text class="list-sub">需要你提供資料或確認時，會在這裡通知你。</text></view>
+
+    <view class="section-head"><text class="section-title">即將到期</text><text class="link" @click="goDeadlines">全部 ›</text></view>
+    <view v-if="data.deadlines.length">
+      <view v-for="(item,index) in data.deadlines.slice(0,3)" :key="index" class="list-card row" @click="openDeadline(item)">
+        <view class="grow"><text class="list-title">{{ item.name }}</text><text class="list-sub">{{ item.ownerLabel }}{{ item.detail ? ' · '+item.detail : '' }}</text></view>
+        <text class="pill" :class="levelTone[item.level]">{{ daysText(item) }}</text>
+      </view>
+    </view>
+    <view v-else class="list-card calm"><text class="list-title">半年內沒有到期項目</text><text class="list-sub">我們會在到期前提醒你，並安排辦理。</text></view>
+
+    <view v-if="data.activeRequests.length">
+      <view class="section-head"><text class="section-title">辦理中</text><text class="link" @click="goMe">全部 ›</text></view>
+      <view v-for="item in data.activeRequests.slice(0,3)" :key="item.id" class="list-card" @click="openRequest(item.id)">
+        <view class="row"><text class="list-title">{{ item.title }}</text><text class="pill" :class="item.status==='待客戶配合'?'amber':''">{{ item.status }}</text></view>
+        <text class="list-sub">{{ item.plate || '未指定牌照' }} · 目前：{{ item.stage==='待內部受理' ? '等待顧問受理' : item.stage }}</text>
+      </view>
+    </view>
+
+    <view class="quick">
+      <view class="quick-item" @click="goPlates('')"><text class="quick-mark">牌</text><text>我的牌照</text></view>
+      <view class="quick-item" @click="goCompanies"><text class="quick-mark">司</text><text>我的公司</text></view>
+      <view class="quick-item" @click="newRequest"><text class="quick-mark">辦</text><text>申請辦理</text></view>
+    </view>
   </view>
 </template>
 <script setup>
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { api, getUser, clearSession, friendlyDate, daysLeft } from '../../lib/api'
-const user=ref(getUser()),vehicles=ref([]),plates=ref([]),requests=ref([]),credentials=ref([])
-const pendingCount=computed(()=>requests.value.filter(x=>x.status!=='已完成').length)
-const visibleRequests=computed(()=>[...requests.value].sort((a,b)=>Number(a.status==='已完成')-Number(b.status==='已完成')||String(b.updated_at).localeCompare(String(a.updated_at))).slice(0,3))
-const alerts=computed(()=>credentials.value.filter(c=>c.status==='已核對').map(c=>({...c,days:daysLeft(c.expires_on)})).filter(c=>c.days!==null&&c.days<=120).sort((a,b)=>a.days-b.days))
-async function load(){user.value=getUser();if(!user.value){uni.navigateTo({url:'/pages/login/login'});return}try{const[v,p,r]=await Promise.all([api('/vehicles'),api('/plate-assets'),api('/requests')]);vehicles.value=v;plates.value=p;requests.value=r;const details=await Promise.all(v.map(item=>api('/vehicles/'+item.id)));credentials.value=details.flatMap(item=>item.credentials.map(c=>({...c,plate:item.plate})))}catch(e){uni.showToast({title:e.message,icon:'none'})}}
-function goVehicles(){uni.switchTab({url:'/pages/vehicles/vehicles'})}function goRequests(){uni.switchTab({url:'/pages/requests/requests'})}function openRequest(id){uni.navigateTo({url:'/pages/request-detail/request-detail?id='+id})}function logout(){uni.showActionSheet({itemList:['退出登入'],success:()=>{clearSession();uni.navigateTo({url:'/pages/login/login'})}})}
+import { api, getUser, levelTone, daysText, openPlate, startRequest } from '../../lib/api'
+const user=ref(getUser())
+const data=ref({customerName:'',counts:{pending:0,ok:0,due:0,overdue:0},plates:[],deadlines:[],todos:[],activeRequests:[]})
+async function load(){user.value=getUser();if(!user.value)return uni.navigateTo({url:'/pages/login/login'});try{data.value=await api('/my/overview')}catch(e){uni.showToast({title:e.message,icon:'none'})}}
+function goPlates(filter){uni.setStorageSync('plateFilter',filter||'');uni.switchTab({url:'/pages/vehicles/vehicles'})}
+function goCompanies(){uni.switchTab({url:'/pages/companies/companies'})}
+function goMe(){uni.switchTab({url:'/pages/me/me'})}
+function goDeadlines(){uni.navigateTo({url:'/pages/deadlines/deadlines'})}
+function openRequest(id){uni.navigateTo({url:'/pages/request-detail/request-detail?id='+id})}
+function newRequest(){startRequest('')}
+// Company items open the company list; plate and vehicle items open their plate.
+function openDeadline(item){if(item.ownerType==='company')goCompanies();else if(item.plateId)openPlate(item.plateId);else goDeadlines()}
 onShow(load)
 </script>
 <style scoped>
-.home-page{padding-top:23rpx}.topline,.brand{display:flex;align-items:center;justify-content:space-between}.brand{gap:11rpx;color:#254d3d;font-size:24rpx;font-weight:800}.brand-mark{width:41rpx;height:41rpx;border-radius:11rpx;background:#1b6c54;color:#fff;display:flex;align-items:center;justify-content:center;font-size:23rpx}.account{font-size:22rpx;color:#607c6c;font-weight:700}.welcome{margin-top:34rpx}.welcome .page-title{margin-top:10rpx}.overview-card{overflow:hidden;background:#1b4d3e;border-radius:24rpx;color:#fff;padding:27rpx 29rpx 22rpx;margin-top:29rpx;box-shadow:0 12rpx 26rpx rgba(27,77,62,.15)}.overview-top{height:112rpx;position:relative}.overview-label{font-size:22rpx;color:#c9e1d2}.overview-count{font-size:49rpx;font-weight:800;margin-top:3rpx;line-height:1.2}.overview-count text{font-size:24rpx;font-weight:600;color:#d5e9dc}.overview-glow{position:absolute;right:-42rpx;top:-95rpx;width:250rpx;height:250rpx;border-radius:50%;background:radial-gradient(circle,#3b876c88,transparent 70%)}.overview-monogram{position:absolute;right:16rpx;top:-14rpx;font-size:110rpx;font-weight:900;color:#ffffff12;transform:rotate(-13deg)}.overview-divider{height:1rpx;background:#5c917c;margin:5rpx 0 19rpx}.overview-foot{display:flex;align-items:center;gap:16rpx;font-size:20rpx;color:#c6ded0}.overview-foot view text:first-child{font-weight:800;color:#fff;font-size:22rpx}.vertical-line{width:1rpx;height:22rpx;background:#6c9c85}.overview-link{margin-left:auto;color:#e7f6e9;font-weight:750;white-space:nowrap}.quick-actions{display:grid;grid-template-columns:1fr 1fr;gap:15rpx;margin-top:17rpx}.quick-action{background:#fff;border:1rpx solid #e6ece7;border-radius:19rpx;padding:19rpx 17rpx;min-height:142rpx;position:relative;box-shadow:0 5rpx 16rpx rgba(28,64,43,.03)}.quick-icon{width:40rpx;height:40rpx;border-radius:11rpx;background:#e4f0e8;color:#287a59;display:flex;align-items:center;justify-content:center;font-size:21rpx;font-weight:800;margin-bottom:11rpx}.quick-icon.light{background:#f5eddb;color:#9b6e2b}.quick-title{display:block;font-size:22rpx;font-weight:800;line-height:1.3}.quick-detail{display:block;font-size:18rpx;color:#83968a;margin-top:4rpx;line-height:1.3}.quick-arrow{position:absolute;right:16rpx;top:17rpx;color:#8eaa98;font-size:33rpx;line-height:1}.section-row{margin-top:4rpx}.section-row .section-title{margin-bottom:17rpx}.section-link{color:#277b5e;font-weight:750;font-size:21rpx}.calm-state{display:flex;align-items:center;gap:18rpx;padding:23rpx}.calm-icon{width:48rpx;height:48rpx;display:flex;align-items:center;justify-content:center;flex:none;border-radius:50%;background:#e6f3e9;color:#218160;font-size:25rpx;font-weight:800}.calm-title{display:block;font-size:23rpx;font-weight:800}.calm-copy{display:block;font-size:19rpx;color:#7f9184;line-height:1.5;margin-top:4rpx}.alert{display:flex;align-items:center;gap:16rpx}.alert-marker{width:6rpx;height:47rpx;border-radius:6rpx;background:#d5973f}.grow{flex:1;min-width:0}.alert-title{display:block;font-size:23rpx;font-weight:750}.alert-meta{display:block;color:#718579;font-size:20rpx;margin-top:5rpx}.case-card{padding:23rpx 25rpx}.case-top{align-items:flex-start}.case-title{font-size:25rpx;font-weight:800;flex:1;line-height:1.4}.case-meta{display:block;color:#788b7e;font-size:20rpx;margin:6rpx 0 17rpx}.case-progress{display:flex;align-items:center;gap:9rpx;border-top:1rpx solid #edf2ee;padding-top:16rpx;color:#4f6e5b;font-size:21rpx}.progress-dot{width:9rpx;height:9rpx;border-radius:50%;background:#46a778;flex:none}.case-chevron{margin-left:auto;font-size:31rpx;color:#78a18a;line-height:1}.footnote{display:block;text-align:center;color:#8a9b8f;font-size:19rpx;line-height:1.5;margin:26rpx 22rpx 0}
+.home{padding-top:28rpx}.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:38rpx}.brand{display:flex;align-items:center;gap:13rpx;font-size:27rpx;font-weight:800}.brand-mark{width:52rpx;height:52rpx;border-radius:14rpx;background:#1b4d3e;color:#fff;display:flex;align-items:center;justify-content:center;font-size:26rpx}
+.status-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14rpx;margin-top:30rpx}.status-tile{background:#fff;border:1rpx solid #e5ece6;border-radius:20rpx;padding:22rpx 0;text-align:center}.status-num{display:block;font-size:44rpx;font-weight:800}.status-label{display:block;font-size:22rpx;font-weight:750;margin-top:2rpx}
+.grow{flex:1;min-width:0}.pending-note{display:block;margin-top:12rpx;color:#71857a;font-size:22rpx;text-align:center}.calm .list-title{font-size:25rpx}
+.quick{display:grid;grid-template-columns:repeat(3,1fr);gap:14rpx;margin-top:34rpx}.quick-item{display:flex;flex-direction:column;align-items:center;gap:10rpx;background:#fff;border:1rpx solid #e5ece6;border-radius:20rpx;padding:24rpx 0;font-size:23rpx;font-weight:750;color:#2c4a3c}.quick-mark{width:56rpx;height:56rpx;border-radius:16rpx;background:#e8f2eb;color:#176f59;display:flex;align-items:center;justify-content:center;font-weight:800}
 </style>
