@@ -1,120 +1,183 @@
 <template>
-  <div v-if="!account" class="login-screen"><div class="login-card"><div class="brand-icon">跨</div><div class="eyebrow">CROSS BORDER · OPERATIONS</div><h1>跨境車牌代辦管理</h1><p>以官方流程為依據，管理客戶、車輛與每一項代辦。</p><label for="admin-username">管理員帳號</label><input id="admin-username" v-model.trim="loginForm.username" name="username" autocomplete="username" placeholder="輸入管理員帳號" @keyup.enter="login"/><label for="admin-password">密碼</label><input id="admin-password" v-model="loginForm.password" name="password" type="password" autocomplete="current-password" placeholder="輸入密碼" @keyup.enter="login"/><button class="button primary full" :disabled="loggingIn" @click="login">{{ loggingIn ? '登入中…' : '登入管理端' }}</button><div v-if="error" class="error" role="alert">{{ error }}</div></div></div>
+  <div v-if="!account" class="login-screen">
+    <div class="login-card">
+      <div class="brand-icon">跨</div>
+      <div class="eyebrow">CROSS BORDER · OPERATIONS</div>
+      <h1>跨境車牌代辦管理</h1>
+      <p>以官方流程為依據，管理客戶、車輛與每一項代辦。</p>
+      <label for="admin-username">管理員帳號</label>
+      <input
+        id="admin-username"
+        v-model.trim="loginForm.username"
+        name="username"
+        autocomplete="username"
+        placeholder="輸入管理員帳號"
+        @keyup.enter="login"
+      />
+      <label for="admin-password">密碼</label>
+      <input
+        id="admin-password"
+        v-model="loginForm.password"
+        name="password"
+        type="password"
+        autocomplete="current-password"
+        placeholder="輸入密碼"
+        @keyup.enter="login"
+      />
+      <button class="button primary full" :disabled="loggingIn" @click="login">
+        {{ loggingIn ? "登入中…" : "登入管理端" }}
+      </button>
+      <div v-if="error" class="error" role="alert">{{ error }}</div>
+    </div>
+  </div>
   <div v-else class="app-shell">
-    <aside class="sidebar"><div class="brand"><div class="brand-icon">跨</div><div><strong>跨境車牌代辦</strong><small>OPERATIONS HUB</small></div></div><div class="nav-group-title">工作空間</div><button v-for="nav in navigation" :key="nav.id" class="nav-item" :class="{active:view===nav.id}" :title="nav.name" @click="navigate(nav.id)"><component :is="nav.icon" class="nav-symbol" :size="19" :stroke-width="1.8"/><span>{{ nav.name }}</span><span v-if="nav.id==='requests'&&newCount" class="nav-count">{{ newCount }}</span></button><div class="sidebar-bottom"><div class="source-mini"><ShieldCheck :size="17"/> 業務資訊依官方來源核對</div><button class="profile" @click="logout"><span class="avatar">{{ account.name.slice(0,1) }}</span><span>{{ account.name }}<small>管理員 · 退出登入</small></span><LogOut :size="16" class="logout-icon"/></button></div></aside>
-    <main class="content"><header class="topbar"><div class="breadcrumbs">工作空間 <span>/</span> {{ navigation.find(n=>n.id===view)?.name || '詳細資料' }}</div><div class="top-actions"><span class="today">{{ todayLabel }}</span><span class="topbar-divider"></span><span class="avatar small">{{ account.name.slice(0,1) }}</span><button class="mobile-logout" type="button" aria-label="退出管理端登入" @click="logout"><LogOut :size="17"/></button></div></header>
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">跨</div>
+        <div><strong>跨境車牌代辦</strong><small>OPERATIONS HUB</small></div>
+      </div>
+      <div class="nav-group-title">工作空間</div>
+      <button
+        v-for="nav in navigation"
+        :key="nav.id"
+        class="nav-item"
+        :class="{ active: view === nav.id }"
+        :title="nav.name"
+        @click="navigate(nav.id)"
+      >
+        <component
+          :is="nav.icon"
+          class="nav-symbol"
+          :size="19"
+          :stroke-width="1.8"
+        /><span>{{ nav.name }}</span
+        ><span v-if="nav.id === 'requests' && newCount" class="nav-count">{{
+          newCount
+        }}</span>
+      </button>
+      <div class="sidebar-bottom">
+        <div class="source-mini">
+          <ShieldCheck :size="17" /> 業務資訊依官方來源核對
+        </div>
+        <button class="profile" @click="logout">
+          <span class="avatar">{{ account.name.slice(0, 1) }}</span
+          ><span>{{ account.name }}<small>管理員 · 退出登入</small></span
+          ><LogOut :size="16" class="logout-icon" />
+        </button>
+      </div>
+    </aside>
+    <main class="content">
+      <header class="topbar">
+        <div class="breadcrumbs">
+          工作空間 <span>/</span>
+          {{ navigation.find((n) => n.id === view)?.name || "詳細資料" }}
+        </div>
+        <div class="top-actions">
+          <span class="today">{{ todayLabel }}</span
+          ><span class="topbar-divider"></span
+          ><span class="avatar small">{{ account.name.slice(0, 1) }}</span
+          ><button
+            class="mobile-logout"
+            type="button"
+            aria-label="退出管理端登入"
+            @click="logout"
+          >
+            <LogOut :size="17" />
+          </button>
+        </div>
+      </header>
       <div class="workspace">
-        <div v-if="error" class="error workspace-message" role="alert">{{ error }} <button type="button" @click="error=''" aria-label="關閉錯誤提示">×</button></div>
-        <div v-if="notice" class="success workspace-message" role="status">{{ notice }} <button type="button" @click="notice=''" aria-label="關閉成功提示">×</button></div>
-        <Overview v-if="view==='overview'" @open="openDeadline" @error="showError"/>
-        <Companies v-else-if="view==='companies'" :customers="customers" :initial-customer="companyCustomer" @plate="openPlateById" @saved="showSuccess" @error="showError"/>
-        <Rules v-else-if="view==='rules'" @saved="showSuccess" @error="showError"/>
-        <template v-if="view==='dashboard'">
-          <div class="page-heading dashboard-heading">
-            <div><div class="eyebrow">OPERATIONS / 工作台</div><h1>案件工作台</h1><p>先處理客戶要求，再跟進案件節點與牌證日期。</p></div>
-            <button class="button primary heading-cta" @click="view='new-request'"><FilePlus2 :size="17"/> 建立案件</button>
-          </div>
-          <div class="dashboard-intro">
-            <div class="dashboard-intro-main"><span class="intro-kicker"><span class="live-dot"></span> 今日工作焦點</span><h2>{{ focusTitle }}</h2><p>{{ focusDescription }}</p><div class="intro-actions"><button class="button intro-primary" @click="view='requests'">查看案件 <ArrowUpRight :size="16"/></button><button class="button intro-secondary" @click="view='vehicles'">車輛與牌證</button></div></div>
-            <div class="dashboard-intro-side"><span class="side-caption">工作隊列</span><div><strong>{{ newCount }}</strong><span>待受理要求</span></div><div><strong>{{ activeCount }}</strong><span>辦理中案件</span></div><div><strong>{{ dueCredentials.length }}</strong><span>120 天內到期牌證</span></div></div>
-          </div>
-          <div class="metrics"><button class="metric metric-action" @click="goFilteredRequests('新要求')"><span class="metric-top"><span class="metric-label">待受理要求</span><BellRing :size="18"/></span><strong>{{ newCount }}</strong><small>查看客戶新提交的需求 <ArrowUpRight :size="14"/></small></button><button class="metric metric-action" @click="goFilteredRequests('')"><span class="metric-top"><span class="metric-label">辦理中案件</span><Clock3 :size="18"/></span><strong>{{ activeCount }}</strong><small>按進度跟進辦理節點 <ArrowUpRight :size="14"/></small></button><button class="metric metric-action" @click="view='customers'"><span class="metric-top"><span class="metric-label">客戶檔案</span><UsersRound :size="18"/></span><strong>{{ customers.length }}</strong><small>查看聯絡與名下案件 <ArrowUpRight :size="14"/></small></button><button class="metric metric-action" @click="view='vehicles'"><span class="metric-top"><span class="metric-label">管理車輛</span><CarFront :size="18"/></span><strong>{{ vehicles.length }}</strong><small>查看牌證及驗車紀錄 <ArrowUpRight :size="14"/></small></button></div>
-          <div class="dashboard-columns">
-            <section class="panel queue-panel"><div class="panel-head"><div><span class="section-kicker">CASE QUEUE</span><h2>案件工作隊列</h2><p>依待受理與最新更新排序</p></div><button class="text-button" @click="view='requests'">全部案件 <ArrowUpRight :size="15"/></button></div><div class="queue-head"><span>案件 / 客戶</span><span>目前階段</span><span>狀態</span></div><div v-if="!priorityRequests.length" class="empty">目前沒有案件</div><button v-for="r in priorityRequests" :key="r.id" class="queue-row" @click="openRequest(r)"><span class="queue-identity"><span class="service-icon"><component :is="serviceIcon(r.service_code)" :size="18" :stroke-width="1.8"/></span><span><strong>{{ r.title }}</strong><small>{{ r.customer_name }} · {{ r.route }} · {{ r.plate||'未指定車輛' }}</small></span></span><span class="queue-stage">{{ r.stage }}</span><span class="badge" :class="statusTone(r.status)">{{ r.status }}</span></button></section>
-            <div class="dashboard-aside"><section class="panel due-panel"><div class="panel-head"><div><span class="section-kicker">REMINDERS</span><h2>牌證日期提醒</h2><p>依檔案記錄；實際日期須再核對證件</p></div></div><div v-if="!dueCredentials.length" class="clear-state"><span class="clear-state-icon"><ShieldCheck :size="20"/></span><strong>目前沒有臨期牌證</strong><small>已核對且 120 天內到期的牌證會顯示於此。</small></div><button v-for="c in dueCredentials.slice(0,4)" :key="c.id" class="due-row" @click="openVehicleById(c.vehicleId)"><span class="due-icon"><FileText :size="17"/></span><span><strong>{{ c.name }}</strong><small>{{ c.plate }} · {{ c.expires_on }}</small></span><span class="badge amber">{{ c.days < 0 ? '已到期' : `${c.days} 天` }}</span></button></section><section class="panel source-note"><span class="source-note-icon"><BookOpenCheck :size="18"/></span><div><strong>官方依據索引</strong><p>案件節點的適用條件由專員按主管部門原始資料核對。</p><button class="text-button" @click="view='sources'">查看來源 <ArrowUpRight :size="14"/></button></div></section></div>
-          </div>
-        </template>
-        <template v-else-if="view==='requests'"><div class="page-heading"><div><div class="eyebrow">CASE MANAGEMENT</div><h1>代辦案件</h1><p>管理新申請、續期、換車、驗車與兩地備案。</p></div><button class="button primary" @click="view='new-request'">＋ 建立案件</button></div><section class="panel table-panel"><div class="table-toolbar"><input v-model="search" placeholder="搜尋客戶、車牌或案件"/><select v-model="statusFilter"><option value="">全部狀態</option><option>新要求</option><option value="active">辦理中案件</option><option>待資格核實</option><option>待報價／授權</option><option>待收件</option><option>辦理中</option><option>待客戶配合</option><option>待交付</option><option>已完成</option><option>暫停</option></select></div><div class="table-wrap"><table><thead><tr><th>案件</th><th>客戶／車輛</th><th>路線</th><th>目前階段</th><th>狀態</th><th>更新</th></tr></thead><tbody><tr v-for="r in filteredRequests" :key="r.id" @click="openRequest(r)"><td><strong>{{ r.title }}</strong><small>{{ serviceName(r.service_code) }}</small></td><td>{{ r.customer_name }}<small>{{ r.plate || '未指定車輛' }}</small></td><td><span class="route-tag">{{ r.route }}</span></td><td>{{ r.stage }}</td><td><span class="badge" :class="r.status==='新要求'?'amber':''">{{ r.status }}</span></td><td>{{ date(r.updated_at) }}</td></tr></tbody></table><div v-if="!filteredRequests.length" class="empty">沒有符合條件的案件</div></div></section></template>
-        <template v-else-if="view==='request-detail'&&selected"><div class="page-heading"><div><button class="back" @click="view='requests'">← 返回案件</button><div class="eyebrow">CASE DETAIL</div><h1>{{ selected.title }}</h1><p>{{ selected.route }} · {{ customerName(selected.customer_id) }} · {{ selected.vehicle?.plate || '未指定車輛' }}</p></div><span class="badge large" :class="selected.status==='新要求'?'amber':''">{{ selected.status }}</span></div><div class="detail-grid"><div><section class="panel"><div class="panel-head"><div><h2>受理與進度</h2><p>官方結果須按實際回執或證件更新</p></div></div><div class="form-grid"><div><label>案件狀態</label><select v-model="editRequest.status"><option>新要求</option><option>待資格核實</option><option>待報價／授權</option><option>待收件</option><option>辦理中</option><option>待客戶配合</option><option>待交付</option><option>已完成</option><option>暫停</option></select></div><div><label>目前階段</label><select v-model="editRequest.stage"><option>待內部受理</option><option v-for="stage in selected.plan?.stages" :key="stage">{{ stage }}</option></select></div></div><label>更新說明</label><textarea v-model="editRequest.note" placeholder="記錄客戶配合、官方回覆或下一步安排"></textarea><button class="button primary" @click="saveRequest">儲存進度</button></section><section class="panel"><div class="panel-head"><div><h2>辦理節點</h2><p>分別核對內地、香港／澳門的步驟</p></div></div><div v-for="task in selected.tasks" :key="task.id" class="task-row"><span class="task-number" :class="task.status==='已完成'?'done':''">{{ task.status==='已完成'?'✓':'○' }}</span><div class="task-main"><strong>{{ task.title }}</strong><small>{{ task.jurisdiction }} · {{ task.source_id||'待確認官方來源' }}</small></div><select :value="task.status" @change="updateTask(task,$event.target.value)"><option>待辦</option><option>待官方核實</option><option>辦理中</option><option>待客戶配合</option><option>已完成</option><option>不適用</option></select></div></section><section class="panel"><div class="panel-head"><div><h2>更新紀錄</h2><p>客戶可看到與其案件相關的進度</p></div></div><div v-for="a in selected.activities" :key="a.id" class="activity-row"><span class="activity-dot"></span><div><strong>{{ a.detail }}</strong><small>{{ a.actor_name || '系統' }} · {{ date(a.created_at) }}</small></div></div></section></div><div><section class="panel"><div class="panel-head"><div><h2>關聯兩地牌</h2><p>案件與現有兩地牌分開管理</p></div></div><button v-if="selected.plateAsset" class="button outline full" @click="openPlate(selected.plateAsset)">查看批文卡 {{ selected.plateAsset.card_number }} →</button><template v-else-if="selected.service_code==='new_application'"><p class="description">取得正式批文卡後，從此案件建立兩地牌檔案。</p><button class="button primary full" @click="openPlateFromRequest">批文卡已取得 · 建立檔案</button></template><p v-else class="description">此案件尚未關聯兩地牌檔案。</p></section><section class="panel"><div class="panel-head"><div><h2>客戶需求</h2><p>提交內容</p></div></div><p class="description">{{ selected.description || '未填寫說明' }}</p></section><section class="panel"><div class="panel-head"><div><h2>官方依據</h2><p>僅列此服務線適用的官方來源</p></div></div><a v-for="source in selectedSources" :key="source.id" class="source-link" :href="source.url" target="_blank" rel="noopener"><strong>{{ source.title }}</strong><small>{{ source.agency }} · 核對 {{ source.checkedAt }}</small><span>↗</span></a><div v-if="!selectedSources.length" class="empty">此類要求需先人工確認官方指引</div></section><section v-if="selected.vehicle" class="panel"><div class="panel-head"><div><h2>驗車提示</h2><p>須按車輛類型和業務核對</p></div></div><div v-for="g in selectedGuidance" :key="g.label" class="guidance"><span class="badge" :class="g.state==='required'?'amber':''">{{ g.state==='required'?'須辦':g.state==='review'?'待核實':'條件式' }}</span><span>{{ g.label }} <a v-if="g.sourceId" :href="sources.find(s=>s.id===g.sourceId)?.url" target="_blank" rel="noopener">官方依據 ↗</a></span></div><button class="button outline full" @click="openInspectionForm">＋ 建立驗車任務</button></section></div></div></template>
-        <template v-else-if="view==='customers'"><div class="page-heading"><div><div class="eyebrow">CUSTOMER RELATIONSHIP</div><h1>客戶管理</h1><p>個人和公司客戶、聯絡資料及名下車輛。</p></div><button class="button primary" @click="modal='customer'">＋ 新增客戶</button></div><div class="customer-grid"><button v-for="c in customers" :key="c.id" class="panel customer-card" @click="openCustomer(c)"><div class="row"><span class="customer-avatar">{{ c.name.slice(0,1) }}</span><span class="badge">{{ c.kind }}</span></div><h2>{{ c.name }}</h2><p>{{ c.phone||'未填聯絡電話' }}</p><div class="customer-foot">{{ vehicles.filter(v=>v.customer_id===c.id).length }} 輛車 · {{ requests.filter(r=>r.customer_id===c.id).length }} 個案件 <span>查看 →</span></div></button></div></template>
-        <template v-else-if="view==='customer-detail'&&selectedCustomer"><div class="page-heading"><div><button class="back" @click="view='customers'">← 返回客戶</button><div class="eyebrow">CUSTOMER PROFILE</div><h1>{{ selectedCustomer.name }}</h1><p>{{ selectedCustomer.kind }} · {{ selectedCustomer.phone||'未填電話' }}</p></div><div class="heading-actions"><button class="button outline" @click="modal='customer-user'">開通客戶登入</button><button class="button outline" @click="modal='vehicle'">＋ 登記車輛</button><button class="button primary" @click="modal='plate'">＋ 登記兩地牌</button></div></div><div class="grid-two"><section class="panel"><div class="panel-head"><div><h2>名下兩地牌</h2><p>每個牌的上牌與使用狀態獨立管理</p></div></div><button v-for="p in customerPlates" :key="p.id" class="list-row" @click="openPlate(p)"><span class="list-icon">▰</span><span class="list-main"><strong>{{ p.mainland_plate||'內地號牌待補充' }} · {{ p.local_plate||'港／澳號牌待補充' }}</strong><small>{{ p.route }} · {{ p.installation_status }} · {{ p.usage_status }}</small></span><span>→</span></button><div v-if="!customerPlates.length" class="empty">尚未登記兩地牌</div></section><section class="panel"><div class="panel-head"><div><h2>名下車輛</h2><p>牌證和驗車由車輛檔案管理</p></div></div><button v-for="v in customerVehicles" :key="v.id" class="list-row" @click="openVehicle(v)"><span class="list-icon">▰</span><span class="list-main"><strong>{{ v.plate }}</strong><small>{{ v.route }} · {{ v.origin }} · {{ v.type }}</small></span><span>→</span></button><div v-if="!customerVehicles.length" class="empty">尚未登記車輛</div></section></div><section class="panel"><div class="panel-head"><div><h2>代辦案件</h2><p>包含客戶端提交的要求</p></div></div><button v-for="r in customerRequests" :key="r.id" class="list-row" @click="openRequest(r)"><span class="list-icon">{{ iconFor(r.service_code) }}</span><span class="list-main"><strong>{{ r.title }}</strong><small>{{ r.stage }}</small></span><span class="badge">{{ r.status }}</span></button><div v-if="!customerRequests.length" class="empty">尚無案件</div></section></template>
-        <template v-else-if="view==='vehicles'"><div class="page-heading"><div><div class="eyebrow">PLATE & VEHICLE RECORDS</div><h1>兩地牌、車輛與牌證</h1><p>每個牌可獨立記錄上牌、出租、批文卡正反面。</p></div><div class="heading-actions"><button class="button outline" @click="modal='vehicle'">＋ 登記車輛</button><button class="button primary" @click="modal='plate'">＋ 登記兩地牌</button></div></div><section class="panel table-panel"><div class="panel-head plate-panel-head"><div><h2>兩地牌台帳</h2><p>未上牌的牌也可獨立保存</p></div></div><div class="table-wrap"><table><thead><tr><th>內地號牌</th><th>港／澳號牌</th><th>客戶</th><th>路線</th><th>上牌</th><th>使用</th><th></th></tr></thead><tbody><tr v-for="p in plates" :key="p.id" @click="openPlate(p)"><td><strong>{{ p.mainland_plate||'待補充' }}</strong></td><td>{{ p.local_plate||'待補充' }}</td><td>{{ customerName(p.customer_id) }}</td><td><span class="route-tag">{{ p.route }}</span></td><td>{{ p.installation_status }}</td><td>{{ p.usage_status }}</td><td>→</td></tr></tbody></table><div v-if="!plates.length" class="empty">尚未登記兩地牌</div></div></section><section class="panel table-panel"><div class="panel-head plate-panel-head"><div><h2>車輛檔案</h2><p>可綁定至相關兩地牌</p></div></div><div class="table-wrap"><table><thead><tr><th>車輛</th><th>客戶</th><th>路線</th><th>來源地</th><th>製造年份</th><th></th></tr></thead><tbody><tr v-for="v in vehicles" :key="v.id" @click="openVehicle(v)"><td><strong>{{ v.plate }}</strong><small>{{ [v.brand,v.model].filter(Boolean).join(' ')||v.type }}</small></td><td>{{ customerName(v.customer_id) }}</td><td><span class="route-tag">{{ v.route }}</span></td><td>{{ v.origin }}</td><td>{{ v.manufactured_year||'待核對' }}</td><td>→</td></tr></tbody></table><div v-if="!vehicles.length" class="empty">尚未登記車輛</div></div></section></template>
-        <template v-else-if="view==='plate-detail'&&selectedPlate"><div class="page-heading"><div><button class="back" @click="view='vehicles'">← 返回兩地牌</button><div class="eyebrow">PLATE RECORD</div><h1>{{ selectedPlate.mainland_plate||'內地號牌待補充' }} · {{ selectedPlate.local_plate||'港／澳號牌待補充' }}</h1><p>{{ selectedPlate.route }} · {{ customerName(selectedPlate.customer_id) }}</p></div><button class="button primary" @click="modal='rental'">＋ 登記出租</button></div><div class="grid-two"><section class="panel"><div class="panel-head"><div><h2>牌照使用狀態</h2><p>上牌與出租分開記錄</p></div></div><div class="form-grid"><div><label>內地車牌</label><input v-model="plateForm.mainlandPlate"/></div><div><label>港／澳車牌</label><input v-model="plateForm.localPlate"/></div><div><label>上牌狀態</label><select v-model="plateForm.installationStatus"><option>待核對</option><option>未上牌</option><option>已上牌</option></select></div><div><label>使用狀態</label><select v-model="plateForm.usageStatus"><option>待核對</option><option>自用</option><option disabled>出租中（由出租記錄更新）</option><option>暫停使用</option></select></div><div><label>綁定車輛</label><select v-model="plateForm.vehicleId"><option value="">未綁定</option><option v-for="v in vehicles.filter(v=>v.customer_id===selectedPlate.customer_id&&v.route===selectedPlate.route)" :key="v.id" :value="v.id">{{ v.plate }} · {{ v.brand }} {{ v.model }}</option></select></div><div><label>批文卡號</label><input v-model="plateForm.cardNumber"/></div><div><label>批文卡有效期</label><input v-model="plateForm.cardExpiresOn" type="date"/></div></div><label>備註</label><textarea v-model="plateForm.notes"></textarea><button class="button primary" @click="savePlate">儲存兩地牌</button></section><section class="panel"><div class="panel-head"><div><h2>出租記錄</h2><p>內部業務記錄，不代表官方轉讓批准</p></div></div><div v-for="r in selectedPlate.rentals" :key="r.id" class="record-row"><div><strong>{{ r.renter_name }}</strong><small>{{ r.renter_vehicle_plate||'承租車牌待補充' }} · {{ r.starts_on||'開始待補充' }} 至 {{ r.ends_on||'未定' }}</small></div><div class="record-right"><strong>{{ r.status }}</strong><button v-if="r.status==='出租中'" class="text-button" @click="endRental(r)">結束出租</button></div></div><div v-if="!selectedPlate.rentals?.length" class="empty">尚無出租記錄</div></section></div><section class="panel"><div class="panel-head"><div><h2>公司組與指標</h2><p>管理指標所屬公司組、類別與口岸。</p></div></div><div v-if="selectedPlate.warnings?.length" class="status-warnings"><span v-for="warning in selectedPlate.warnings" :key="warning" class="warning">{{ warning }}</span></div><div v-if="selectedPlate.companyStatuses?.length" class="company-status-list"><span v-for="company in selectedPlate.companyStatuses" :key="company.id">{{ company.jurisdiction }} · {{ company.name }}：{{ company.status }}</span></div><div class="form-grid"><label>公司組<select v-model="plateForm.groupId"><option value="">未分組</option><option v-for="group in plateGroups" :key="group.id" :value="group.id">{{ group.name }}</option></select></label><label>指標類別<select v-model="plateForm.indicatorCategory"><option value="">未設定</option><option v-for="category in ['投資類','資格類','人才類','投資高新企業類','捐贈類','其他']" :key="category">{{ category }}</option></select></label><label>口岸<select v-model="plateForm.port"><option value="">未設定</option><option v-for="port in ['深圳灣','港珠澳大橋','蓮塘／香園圍','落馬洲','皇崗','文錦渡','沙頭角','拱北','橫琴','其他']" :key="port">{{ port }}</option></select></label></div><button class="button primary" @click="savePlate">儲存指標資料</button></section><ExpiryPanel owner-type="plate" :owner-id="selectedPlate.id" @saved="showSuccess" @error="showError"/><section class="panel"><div class="panel-head"><div><h2>實體車牌照片</h2><p>上傳實拍原圖後，客戶端可一比一查看；未上傳時只顯示號碼示意</p></div></div><div class="card-upload-grid"><div v-for="kind in ['mainland','local']" :key="kind"><strong>{{ kind==='mainland'?'內地號牌':'香港／澳門號牌' }}</strong><img v-if="selectedPlate.platePhotos?.[kind]" :src="selectedPlate.platePhotos[kind]" class="card-image"/><div v-else class="card-placeholder">尚未上傳</div><input type="file" accept="image/png,image/jpeg" @change="uploadPlatePhoto(kind,$event)"/></div></div></section><section class="panel"><div class="panel-head"><div><h2>批文卡 · 模擬卡預覽</h2><p>客戶端同步顯示以下內容 · {{ selectedPlate.card_status || '待核對' }} · {{ selectedPlate.card_updated_by || '尚未更新' }}</p></div><button class="button primary" @click="saveCard">儲存並核對</button></div><div class="approval-admin-grid"><div><ApprovalCard :key="selectedPlate.id" :data="cardDraft"/><p class="preview-note">模板按提供的批文卡原件重繪；文字由欄位資料即時生成。上傳後請逐欄核對。</p></div><div><div class="form-grid card-form-grid"><div v-for="field in cardFields" :key="field.key"><label>{{ field.label }}</label><input v-model="cardDraft[field.key]" /></div></div><button class="button primary" @click="saveCard">儲存並核對</button></div></div><details class="scan-details"><summary>原件掃描與重新上傳（供核對）</summary><div class="card-upload-grid"><div v-for="side in ['front','back']" :key="side"><strong>{{ side==='front'?'正面':'背面' }}</strong><img v-if="selectedPlate.cardImages?.[side]" :src="selectedPlate.cardImages[side]" class="card-image"/><div v-else class="card-placeholder">尚未上傳</div><input type="file" accept="image/png,image/jpeg" @change="uploadCard(side,$event)"/></div></div></details></section></template>
-        <template v-else-if="view==='vehicle-detail'&&selectedVehicle"><div class="page-heading"><div><button class="back" @click="view='vehicles'">← 返回車輛</button><div class="eyebrow">VEHICLE PROFILE</div><h1>{{ selectedVehicle.plate }}</h1><p>{{ selectedVehicle.route }} · {{ selectedVehicle.origin }} · {{ selectedVehicle.type }} · {{ customerName(selectedVehicle.customer_id) }}</p></div><div class="heading-actions"><button class="button outline" @click="modal='inspection'">＋ 驗車</button><button class="button primary" @click="modal='credential'">＋ 新增牌證</button></div></div><section class="panel vehicle-data-panel"><div class="panel-head"><div><h2>車輛資料</h2><p>維護驗車推算所需的港澳首次註冊日期。</p></div></div><div class="form-grid"><label>港澳首次註冊日期<input v-model="vehicleForm.firstRegisteredOn" type="date"/></label><label>來源地<select v-model="vehicleForm.origin"><option v-for="area in ['香港','澳門','內地']" :key="area">{{ area }}</option></select></label><label>車牌<input v-model="vehicleForm.plate"/></label><label>廠牌<input v-model="vehicleForm.brand"/></label><label>型號<input v-model="vehicleForm.model"/></label><label>車架號<input v-model="vehicleForm.vin"/></label><label>製造年份<input v-model.number="vehicleForm.manufacturedYear" type="number"/></label><label>備註<input v-model="vehicleForm.notes"/></label></div><button class="button primary" @click="saveVehicle">儲存車輛</button></section><ExpiryPanel owner-type="vehicle" :owner-id="selectedVehicle.id" @saved="showSuccess" @error="showError"/><div class="grid-two"><section class="panel"><div class="panel-head"><div><h2>牌證台帳</h2><p>每張證件獨立記錄有效期</p></div></div><div v-for="c in selectedVehicle.credentials" :key="c.id" class="record-row"><div><strong>{{ c.name }}</strong><small>{{ c.issuer||'待核對簽發機關' }} · {{ c.number||'未填號碼' }}</small></div><div class="record-right"><strong>{{ c.expires_on||'待核對' }}</strong><select :value="c.status" @change="updateCredential(c,$event.target.value)"><option>待核對</option><option>已核對</option><option>待續期</option><option>已失效</option></select></div></div><div v-if="!selectedVehicle.credentials?.length" class="empty">尚無牌證紀錄</div></section><section class="panel"><div class="panel-head"><div><h2>驗車與官方核對</h2><p>不適用的要求由專員確認</p></div></div><div v-for="i in selectedVehicle.inspections" :key="i.id" class="record-row"><div><strong>{{ i.title }}</strong><small>預約：{{ i.appointment_on||'待安排' }} · 來源：{{ i.source_id||'待核對' }}</small></div><select :value="i.status" @change="updateInspection(i,$event.target.value)"><option>待預約</option><option>已預約</option><option>檢驗中</option><option>合格</option><option>不合格</option><option>不適用</option></select></div><div v-if="!selectedVehicle.inspections?.length" class="empty">尚無驗車任務</div><div v-for="g in selectedVehicle.inspectionGuidance" :key="g.label" class="guidance"><span class="badge" :class="g.state==='required'?'amber':''">{{ g.state==='required'?'須辦':g.state==='review'?'待核實':'條件式' }}</span><span>{{ g.label }} <a v-if="g.sourceId" :href="sources.find(s=>s.id===g.sourceId)?.url" target="_blank" rel="noopener">官方依據 ↗</a></span></div></section></div></template>
-        <template v-else-if="view==='new-request'"><div class="page-heading"><div><button class="back" @click="view='requests'">← 返回案件</button><div class="eyebrow">CREATE CASE</div><h1>建立代辦案件</h1><p>客戶也可在小程序或 App 端自行提交要求。</p></div></div><section class="panel form-panel"><div class="form-grid"><div><label>客戶</label><select v-model="newRequest.customerId"><option value="">請選擇客戶</option><option v-for="c in customers" :value="c.id" :key="c.id">{{ c.name }}</option></select></div><div><label>服務路線</label><select v-model="newRequest.route"><option>粵港</option><option>粵澳</option></select></div><div><label>服務類型</label><select v-model="newRequest.serviceCode"><option v-for="s in services.filter(s=>s.routes.includes(newRequest.route))" :value="s.code" :key="s.code">{{ s.name }}</option></select></div><div><label>相關車輛</label><select v-model="newRequest.vehicleId"><option value="">新申請／不指定</option><option v-for="v in vehicles.filter(v=>v.customer_id===newRequest.customerId&&v.route===newRequest.route)" :value="v.id" :key="v.id">{{ v.plate }}</option></select></div><div v-if="newRequest.serviceCode!=='new_application'"><label>相關兩地牌檔案</label><select v-model="newRequest.plateAssetId"><option value="">不指定兩地牌</option><option v-for="p in plates.filter(p=>p.customer_id===newRequest.customerId&&p.route===newRequest.route&&p.card_number)" :value="p.id" :key="p.id">{{ p.card_number }} · {{ p.mainland_plate||p.local_plate||p.route }}</option></select></div></div><label>案件標題</label><input v-model="newRequest.title" placeholder="例如：粵港車牌新申請"/><label>需求說明</label><textarea v-model="newRequest.description" placeholder="記錄客戶需求和目前已有的資料"></textarea><div class="form-actions"><button class="button outline" @click="view='requests'">取消</button><button class="button primary" @click="createRequest">建立案件</button></div></section></template>
-        <template v-else-if="view==='sources'"><div class="page-heading"><div><div class="eyebrow">OFFICIAL REFERENCES</div><h1>官方來源索引</h1><p>業務規則只以主管部門原始資料為依據。</p></div></div><div class="source-grid"><a v-for="s in sources" :key="s.id" class="panel source-card" :href="s.url" target="_blank" rel="noopener"><span class="source-code">{{ s.id }}</span><h2>{{ s.title }}</h2><p>{{ s.appliesTo }}</p><div class="source-foot"><span>{{ s.agency }}</span><span>核對 {{ s.checkedAt }} ↗</span></div></a></div></template>
+        <div v-if="error" class="error workspace-message" role="alert">
+          {{ error }}
+          <button type="button" @click="error = ''" aria-label="關閉錯誤提示">
+            ×
+          </button>
+        </div>
+        <div v-if="notice" class="success workspace-message" role="status">
+          {{ notice }}
+          <button type="button" @click="notice = ''" aria-label="關閉成功提示">
+            ×
+          </button>
+        </div>
+        <Overview
+          v-if="view === 'overview'"
+          @open="openDeadline"
+          @error="showError"
+        />
+        <Companies
+          v-else-if="view === 'companies'"
+          :customers="customers"
+          :initial-customer="companyCustomer"
+          @plate="openPlateById"
+          @saved="showSuccess"
+          @error="showError"
+        />
+        <Rules
+          v-else-if="view === 'rules'"
+          @saved="showSuccess"
+          @error="showError"
+        />
+        <Dashboard v-else-if="view === 'dashboard'" />
+        <Requests v-else-if="view === 'requests'" />
+        <RequestDetail v-else-if="view === 'request-detail' && selected" />
+        <Customers v-else-if="view === 'customers'" />
+        <CustomerDetail
+          v-else-if="view === 'customer-detail' && selectedCustomer"
+        />
+        <Vehicles v-else-if="view === 'vehicles'" />
+        <PlateDetail v-else-if="view === 'plate-detail' && selectedPlate" />
+        <VehicleDetail
+          v-else-if="view === 'vehicle-detail' && selectedVehicle"
+        />
+        <NewRequest v-else-if="view === 'new-request'" />
+        <Sources v-else-if="view === 'sources'" />
       </div>
     </main>
-    <div v-if="modal" class="overlay" @click.self="modal=null"><div class="dialog"><div class="dialog-head"><div><div class="eyebrow">QUICK ACTION</div><h2>{{ modalTitle }}</h2></div><button class="close" @click="modal=null">×</button></div>
-      <template v-if="modal==='customer'"><label>客戶名稱</label><input v-model="form.name" placeholder="姓名或公司名稱"/><label>類型</label><select v-model="form.kind"><option>個人</option><option>公司</option></select><label>聯絡電話</label><input v-model="form.phone"/><button class="button primary full" @click="createCustomer">新增客戶</button></template>
-      <template v-if="modal==='customer-user'"><p class="dialog-note">為 {{ selectedCustomer?.name }} 開通客戶端登入。密碼最少 12 字元。</p><label>顯示名稱</label><input v-model="form.name"/><label>電郵</label><input v-model="form.email" type="email"/><label>初始密碼</label><input v-model="form.password" type="password"/><button class="button primary full" @click="createCustomerUser">開通登入</button></template>
-      <template v-if="modal==='vehicle'"><label>客戶</label><select v-model="form.customerId"><option value="">請選擇客戶</option><option v-for="c in customers" :value="c.id" :key="c.id">{{ c.name }}</option></select><div class="form-grid"><div><label>路線</label><select v-model="form.route"><option>粵港</option><option>粵澳</option></select></div><div><label>車輛來源地</label><select v-model="form.origin"><option>香港</option><option>內地</option><option>澳門</option></select></div></div><div class="form-grid"><div><label>車牌號碼</label><input v-model="form.plate"/></div><div><label>車輛類型</label><input v-model="form.type" placeholder="私家車"/></div></div><div class="form-grid"><div><label>品牌</label><input v-model="form.brand"/></div><div><label>型號</label><input v-model="form.model"/></div></div><label>製造年份</label><input v-model="form.manufacturedYear" type="number"/><button class="button primary full" @click="createVehicle">登記車輛</button></template>
-      <template v-if="modal==='plate'"><p v-if="form.sourceRequestId" class="dialog-note">由新申請案件建立；建檔後將自動關聯至案件。</p><p v-else class="dialog-note">已有正式批文卡才在這裡建檔。新申請請先建立代辦案件。</p><label>客戶</label><select v-model="form.customerId"><option value="">請選擇客戶</option><option v-for="c in customers" :value="c.id" :key="c.id">{{ c.name }}</option></select><label>路線</label><select v-model="form.route"><option>粵港</option><option>粵澳</option></select><label>批文卡編號 *</label><input v-model="form.cardNumber" placeholder="按現有批文卡填寫"/><label>商號</label><input v-model="form.company"/><label>內承單位</label><input v-model="form.contractor"/><label>通行口岸</label><input v-model="form.crossing"/><div class="form-grid"><div><label>內地號牌</label><input v-model="form.mainlandPlate" placeholder="可稍後補充"/></div><div><label>香港／澳門號牌</label><input v-model="form.localPlate" placeholder="可稍後補充"/></div></div><label>批文卡有效期</label><input v-model="form.cardExpiresOn" type="date"/><button class="button primary full" @click="createPlate">登記現有批文卡</button></template>
-      <template v-if="modal==='rental'"><p class="dialog-note">{{ selectedPlate?.mainland_plate||selectedPlate?.local_plate }} · 新增出租記錄</p><label>承租方名稱</label><input v-model="form.renterName"/><label>承租方使用車牌</label><input v-model="form.renterVehiclePlate"/><div class="form-grid"><div><label>開始日期</label><input v-model="form.startsOn" type="date"/></div><div><label>結束日期</label><input v-model="form.endsOn" type="date"/></div></div><label>備註</label><textarea v-model="form.notes"></textarea><button class="button primary full" @click="createRental">儲存出租記錄</button></template>
-      <template v-if="modal==='credential'"><p class="dialog-note">{{ selectedVehicle?.plate }} 的獨立牌證紀錄</p><label>證件名稱</label><input v-model="form.name" placeholder="例如：廣東批文卡"/><label>簽發機關</label><input v-model="form.issuer"/><label>證件編號</label><input v-model="form.number"/><label>有效期至</label><input v-model="form.expiresOn" type="date"/><label>官方來源</label><select v-model="form.sourceId"><option value="">待核對</option><option v-for="s in sources" :value="s.id" :key="s.id">{{ s.id }} · {{ s.title }}</option></select><button class="button primary full" @click="createCredential">新增牌證</button></template>
-      <template v-if="modal==='inspection'"><p class="dialog-note">{{ selectedVehicle?.plate }} · 驗車要求以適用官方來源核對</p><label>驗車項目</label><input v-model="form.title" placeholder="例如：新車驗車"/><label>預約日期</label><input v-model="form.appointmentOn" type="date"/><label>官方來源</label><select v-model="form.sourceId"><option value="">待核對</option><option v-for="s in sources" :value="s.id" :key="s.id">{{ s.id }} · {{ s.title }}</option></select><label>備註</label><textarea v-model="form.notes"></textarea><button class="button primary full" @click="createInspection">建立驗車任務</button></template>
-      <div v-if="error" class="error">{{ error }}</div>
-    </div></div>
+    <RecordModal />
   </div>
 </template>
 <script setup>
-import { ref,computed,onMounted,watch } from 'vue'
-import { LayoutDashboard, FolderKanban, UsersRound, CarFront, BookOpenCheck, FilePlus2, RefreshCcw, ArrowLeftRight, ClipboardCheck, FileText, ShieldCheck, LogOut, ArrowUpRight, BellRing, Clock3 } from '@lucide/vue'
-import { api,save,clear,user } from './api'
-import ApprovalCard from './components/ApprovalCard.vue'
-import Overview from './views/Overview.vue'
-import Companies from './views/Companies.vue'
-import Rules from './views/Rules.vue'
-import ExpiryPanel from './components/ExpiryPanel.vue'
-const navigation=[{id:'overview',name:'管理總覽',icon:LayoutDashboard},{id:'dashboard',name:'案件工作台',icon:LayoutDashboard},{id:'companies',name:'公司與指標',icon:UsersRound},{id:'rules',name:'規則設定',icon:ClipboardCheck},{id:'requests',name:'代辦案件',icon:FolderKanban},{id:'customers',name:'客戶管理',icon:UsersRound},{id:'vehicles',name:'車輛與牌證',icon:CarFront},{id:'sources',name:'官方來源',icon:BookOpenCheck}]
-const account=ref(user()),view=ref('overview'),companyCustomer=ref(''),error=ref(''),notice=ref(''),loginForm=ref({username:'',password:''}),loggingIn=ref(false),customers=ref([]),vehicles=ref([]),plates=ref([]),requests=ref([]),services=ref([]),sources=ref([]),search=ref(''),statusFilter=ref(''),selected=ref(null),selectedCustomer=ref(null),selectedVehicle=ref(null),selectedPlate=ref(null),plateForm=ref({}),cardDraft=ref({}),modal=ref(null),form=ref({}),editRequest=ref({}),newRequest=ref({customerId:'',route:'粵港',serviceCode:'new_application',vehicleId:'',plateAssetId:'',title:'',description:''})
-const plateGroups=ref([]),vehicleForm=ref({})
-watch(selectedPlate,async plate=>{if(!plate)return;try{plateGroups.value=await api('/company-groups?customerId='+encodeURIComponent(plate.customer_id));Object.assign(plateForm.value,{groupId:plate.group_id||'',indicatorCategory:plate.indicator_category||'',port:plate.port||''})}catch(e){showError(e)}})
-watch(selectedVehicle,vehicle=>{if(vehicle)vehicleForm.value={firstRegisteredOn:vehicle.first_registered_on||'',origin:vehicle.origin,plate:vehicle.plate,brand:vehicle.brand||'',model:vehicle.model||'',vin:vehicle.vin||'',manufacturedYear:vehicle.manufactured_year||'',notes:vehicle.notes||''}})
-async function saveVehicle(){try{await api('/vehicles/'+selectedVehicle.value.id,'PATCH',vehicleForm.value);await refresh();await openVehicle(selectedVehicle.value);showSuccess('車輛資料已儲存')}catch(e){showError(e)}}
-const cardFields=[['cardNumber','編號'],['company','商號'],['contractor','內承單位'],['crossing','通行口岸'],['serial','卡面流水號'],['mainlandPlate','內地車牌號'],['localPlate','港澳車牌號'],['driver1','駕駛人 1'],['driver2','駕駛人 2'],['driver3','駕駛人 3'],['currentApproval','現批文號'],['previousApproval','原批文號'],['color','顏色'],['seats','座位／噸位'],['purpose','請予辦理'],['validFrom','有效期開始'],['validTo','有效期結束'],['notes','備註']].map(([key,label])=>({key,label}))
-const todayLabel=new Intl.DateTimeFormat('zh-Hant',{year:'numeric',month:'long',day:'numeric',weekday:'long'}).format(new Date())
-const credentialRecords=ref([])
-const newCount=computed(()=>requests.value.filter(r=>r.status==='新要求').length),activeCount=computed(()=>requests.value.filter(r=>r.status!=='已完成'&&r.status!=='新要求').length),filteredRequests=computed(()=>requests.value.filter(r=>(!statusFilter.value||(statusFilter.value==='active'?r.status!=='已完成'&&r.status!=='新要求':r.status===statusFilter.value))&&`${r.title} ${r.customer_name} ${r.plate||''}`.toLowerCase().includes(search.value.toLowerCase()))),customerVehicles=computed(()=>vehicles.value.filter(v=>v.customer_id===selectedCustomer.value?.id)),customerPlates=computed(()=>plates.value.filter(p=>p.customer_id===selectedCustomer.value?.id)),customerRequests=computed(()=>requests.value.filter(r=>r.customer_id===selectedCustomer.value?.id)),selectedSources=computed(()=>sources.value.filter(s=>selected.value?.plan?.sourceIds?.includes(s.id))),selectedGuidance=computed(()=>selected.value?.inspectionGuidance||[]),modalTitle=computed(()=>({customer:'新增客戶','customer-user':'開通客戶登入',vehicle:'登記車輛',plate:'登記兩地牌',rental:'登記出租',credential:'新增牌證',inspection:'建立驗車任務'})[modal.value]||'操作')
-const priorityRequests=computed(()=>[...requests.value].sort((a,b)=>requestRank(a)-requestRank(b)||String(b.updated_at).localeCompare(String(a.updated_at))).slice(0,6))
-const requestRank=r=>r.status==='新要求'?0:r.status==='已完成'?2:1
-const dueCredentials=computed(()=>credentialRecords.value.filter(c=>c.status==='已核對'&&c.expires_on).map(c=>({...c,days:Math.ceil((new Date(c.expires_on+'T00:00:00')-new Date())/86400000)})).filter(c=>Number.isFinite(c.days)&&c.days<=120).sort((a,b)=>a.days-b.days))
-const focusTitle=computed(()=>newCount.value?`有 ${newCount.value} 項新要求等待受理`:activeCount.value?`有 ${activeCount.value} 個案件正在辦理`:'案件隊列已處理完成')
-const focusDescription=computed(()=>newCount.value?'請先核對客戶提交的業務類型、路線與資料，再安排下一步。':activeCount.value?'逐項更新辦理節點，讓客戶在用戶端看到準確進度。':'可查看車輛牌證日期，或為客戶建立新的代辦案件。')
-const statusTone=status=>status==='新要求'?'amber':status==='已完成'?'gray':''
-const serviceIcon=code=>({new_application:FilePlus2,renewal:RefreshCcw,vehicle_change:ArrowLeftRight,inspection:ClipboardCheck})[code]||FileText
-function goFilteredRequests(status){statusFilter.value=status||'active';view.value='requests'}
-function openVehicleById(id){const vehicle=vehicles.value.find(v=>v.id===id);if(vehicle)openVehicle(vehicle)}
-function openPlateById(id){openPlate({id})}
-function openDeadline(item){if(item.ownerType==='company'){companyCustomer.value=item.customerId;view.value='companies'}else if(item.ownerType==='plate')openPlateById(item.ownerId);else openVehicle({id:item.ownerId})}
-const date=value=>value?String(value).slice(0,10):'—',customerName=id=>customers.value.find(c=>c.id===id)?.name||'未找到客戶',serviceName=code=>services.value.find(s=>s.code===code)?.name||code,iconFor=code=>({new_application:'＋',renewal:'↻',vehicle_change:'▰',driver_change:'♧',inspection:'◇',filing:'◎'})[code]||'▤'
-async function refresh(){if(!account.value)return;try{const[c,v,p,r,cat]=await Promise.all([api('/customers'),api('/vehicles'),api('/plate-assets'),api('/requests'),api('/catalog')]);customers.value=c;vehicles.value=v;plates.value=p;requests.value=r;services.value=cat.services;sources.value=cat.sources;const details=await Promise.all(v.map(item=>api('/vehicles/'+item.id)));credentialRecords.value=details.flatMap(item=>(item.credentials||[]).map(c=>({...c,plate:item.plate,vehicleId:item.id})));error.value=''}catch(e){if(e.status===401){clear();account.value=null;error.value='登入已失效，請重新登入'}else error.value=e.message}}
-async function login(){if(loggingIn.value)return;error.value='';if(!loginForm.value.username||!loginForm.value.password){error.value='請輸入管理員帳號和密碼';return}loggingIn.value=true;try{const result=await api('/admin/login','POST',loginForm.value);if(result.user.role!=='admin')throw new Error('此帳號不是管理員');save(result);account.value=result.user;loginForm.value.password='';await refresh()}catch(e){error.value=e.message}finally{loggingIn.value=false}}
-function logout(){clear();account.value=null;view.value='overview'}
-function navigate(id){view.value=id;error.value='';notice.value=''}
-function showSuccess(message){error.value='';notice.value=message}
-function showError(e){notice.value='';error.value=e.message || '操作失敗，請稍後重試'}
-async function openRequest(r){try{selected.value=await api('/requests/'+r.id);editRequest.value={status:selected.value.status,stage:selected.value.stage,note:''};view.value='request-detail'}catch(e){showError(e)}}
-function openCustomer(c){selectedCustomer.value=c;view.value='customer-detail'}
-async function openVehicle(v){try{selectedVehicle.value=await api('/vehicles/'+v.id);view.value='vehicle-detail'}catch(e){showError(e)}}
-async function openPlate(p){try{selectedPlate.value=await api('/plate-assets/'+p.id);plateForm.value={mainlandPlate:selectedPlate.value.mainland_plate||'',localPlate:selectedPlate.value.local_plate||'',installationStatus:selectedPlate.value.installation_status,usageStatus:selectedPlate.value.usage_status,vehicleId:selectedPlate.value.vehicle_id||'',cardNumber:selectedPlate.value.card_number||'',cardExpiresOn:selectedPlate.value.card_expires_on||'',notes:selectedPlate.value.notes||''};cardDraft.value={...(selectedPlate.value.cardData||{})};view.value='plate-detail'}catch(e){showError(e)}}
-async function saveCard(){try{const p=await api('/plate-assets/'+selectedPlate.value.id,'PUT',{cardData:cardDraft.value});selectedPlate.value=p;cardDraft.value={...p.cardData};await refresh();showSuccess('模擬卡已儲存並標記為已核對')}catch(e){showError(e)}}
-async function createPlate(){try{const b=form.value;const p=await api('/plate-assets','POST',{...b,cardData:{cardNumber:b.cardNumber,company:b.company,contractor:b.contractor,crossing:b.crossing,mainlandPlate:b.mainlandPlate,localPlate:b.localPlate,validTo:b.cardExpiresOn}});modal.value=null;await refresh();await openPlate(p);showSuccess('兩地牌已登記')}catch(e){showError(e)}}
-async function savePlate(){try{const p=await api('/plate-assets/'+selectedPlate.value.id,'PATCH',plateForm.value);await refresh();await openPlate(p);showSuccess('兩地牌資料已儲存')}catch(e){showError(e)}}
-async function createRental(){try{await api('/plate-rentals','POST',{...form.value,plateAssetId:selectedPlate.value.id});modal.value=null;await refresh();await openPlate(selectedPlate.value);showSuccess('出租記錄已建立')}catch(e){showError(e)}}
-async function endRental(r){try{await api('/plate-rentals/'+r.id,'PATCH',{status:'已結束'});await refresh();await openPlate(selectedPlate.value);showSuccess('出租記錄已結束')}catch(e){showError(e)}}
-async function readImageFile(event){const file=event.target.files?.[0];if(!file)return null;if(file.size>3500000)throw new Error('圖片不可超過 3.5 MB');return await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('讀取圖片失敗'));reader.readAsDataURL(file)})}
-async function uploadCard(side,event){try{const image=await readImageFile(event);if(!image)return;await api('/plate-assets/'+selectedPlate.value.id+'/card/'+side,'POST',{image});await openPlate(selectedPlate.value);showSuccess('批文卡'+(side==='front'?'正面':'背面')+'已辨識，請核對欄位後儲存')}catch(e){showError(e)}finally{event.target.value=''}}
-async function uploadPlatePhoto(kind,event){try{const image=await readImageFile(event);if(!image)return;await api('/plate-assets/'+selectedPlate.value.id+'/photo/'+kind,'POST',{image});await openPlate(selectedPlate.value);showSuccess('實體車牌照片已上傳')}catch(e){showError(e)}finally{event.target.value=''}}
-async function saveRequest(){try{await api('/requests/'+selected.value.id,'PATCH',editRequest.value);await refresh();await openRequest(selected.value);showSuccess('案件進度已儲存')}catch(e){showError(e)}}
-async function updateTask(task,status){try{await api('/tasks/'+task.id,'PATCH',{status});await openRequest(selected.value);showSuccess('辦理節點已更新')}catch(e){showError(e);await openRequest(selected.value)}}
-async function updateInspection(item,status){try{await api('/inspections/'+item.id,'PATCH',{status});await openVehicle(selectedVehicle.value);showSuccess('驗車狀態已更新')}catch(e){showError(e);await openVehicle(selectedVehicle.value)}}
-async function createRequest(){try{const r=await api('/requests','POST',newRequest.value);newRequest.value={customerId:'',route:'粵港',serviceCode:'new_application',vehicleId:'',plateAssetId:'',title:'',description:''};await refresh();await openRequest(r);showSuccess('案件已建立')}catch(e){showError(e)}}
-function openPlateFromRequest(){if(!selected.value||selected.value.service_code!=='new_application'||selected.value.plate_asset_id)return;modal.value='plate'}
-async function createCustomer(){try{await api('/customers','POST',form.value);modal.value=null;form.value={};await refresh();showSuccess('客戶已新增')}catch(e){showError(e)}}
-async function createCustomerUser(){try{await api('/customer-users','POST',{...form.value,customerId:selectedCustomer.value.id});modal.value=null;form.value={};showSuccess('客戶登入已開通，請以安全渠道交付初始密碼')}catch(e){showError(e)}}
-async function createVehicle(){try{const v=await api('/vehicles','POST',form.value);modal.value=null;form.value={};await refresh();await openVehicle(v);showSuccess('車輛已登記')}catch(e){showError(e)}}
-async function createCredential(){try{await api('/credentials','POST',{...form.value,vehicleId:selectedVehicle.value.id});modal.value=null;form.value={};await openVehicle(selectedVehicle.value);await refresh();showSuccess('牌證已新增，待專員核對')}catch(e){showError(e)}}
-async function updateCredential(item,status){try{await api('/credentials/'+item.id,'PATCH',{status});await openVehicle(selectedVehicle.value);await refresh();showSuccess('牌證狀態已更新')}catch(e){showError(e);await openVehicle(selectedVehicle.value)}}
-async function createInspection(){try{await api('/inspections','POST',{...form.value,vehicleId:selectedVehicle.value.id,requestId:selected?.value?.vehicle_id===selectedVehicle.value.id?selected.value.id:null});modal.value=null;form.value={};await openVehicle(selectedVehicle.value);showSuccess('驗車任務已建立')}catch(e){showError(e)}}
-function openInspectionForm(){if(!selected.value?.vehicle)return;openVehicle(selected.value.vehicle).then(()=>{form.value={};modal.value='inspection'})}
-watch(modal,value=>{error.value='';if(value){form.value=value==='vehicle'?{customerId:selectedCustomer.value?.id||'',route:'粵港',origin:'香港',type:'私家車'}:value==='plate'&&view.value==='request-detail'&&selected.value?.service_code==='new_application'&&!selected.value.plate_asset_id?{customerId:selected.value.customer_id,route:selected.value.route,sourceRequestId:selected.value.id}:value==='plate'?{customerId:selectedCustomer.value?.id||'',route:'粵港'}:value==='customer'?{kind:'個人'}:{}}})
-watch(()=>newRequest.value.route,route=>{if(!services.value.some(s=>s.code===newRequest.value.serviceCode&&s.routes.includes(route)))newRequest.value.serviceCode=services.value.find(s=>s.routes.includes(route))?.code||'';newRequest.value.vehicleId='';newRequest.value.plateAssetId=''})
-watch(()=>newRequest.value.customerId,()=>{newRequest.value.vehicleId='';newRequest.value.plateAssetId=''})
-watch(()=>newRequest.value.serviceCode,()=>{newRequest.value.plateAssetId=''})
-onMounted(refresh)
+import { onMounted } from "vue";
+import { ShieldCheck, LogOut } from "@lucide/vue";
+import { useAdminStore } from "./store";
+import Overview from "./views/Overview.vue";
+import Companies from "./views/Companies.vue";
+import Rules from "./views/Rules.vue";
+import Dashboard from "./views/Dashboard.vue";
+import Requests from "./views/Requests.vue";
+import RequestDetail from "./views/RequestDetail.vue";
+import Customers from "./views/Customers.vue";
+import CustomerDetail from "./views/CustomerDetail.vue";
+import Vehicles from "./views/Vehicles.vue";
+import VehicleDetail from "./views/VehicleDetail.vue";
+import PlateDetail from "./views/PlateDetail.vue";
+import NewRequest from "./views/NewRequest.vue";
+import Sources from "./views/Sources.vue";
+import RecordModal from "./components/RecordModal.vue";
+const {
+  account,
+  view,
+  navigation,
+  error,
+  notice,
+  loginForm,
+  loggingIn,
+  login,
+  logout,
+  navigate,
+  newCount,
+  customers,
+  companyCustomer,
+  openDeadline,
+  showError,
+  openPlateById,
+  showSuccess,
+  selected,
+  selectedCustomer,
+  selectedVehicle,
+  selectedPlate,
+  todayLabel,
+  refresh,
+} = useAdminStore();
+onMounted(refresh);
 </script>
-
-<style scoped>
-.approval-admin-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(320px,1fr);gap:28px;align-items:start}.card-form-grid{max-height:800px;overflow:auto;margin-bottom:18px}.preview-note{font-size:12px;color:#66778a;margin:12px 0}.scan-details{border-top:1px solid #dce3ea;margin-top:26px;padding-top:18px}.scan-details summary{cursor:pointer;font-weight:650;margin-bottom:16px}@media(max-width:1100px){.approval-admin-grid{grid-template-columns:1fr}}
-</style>
