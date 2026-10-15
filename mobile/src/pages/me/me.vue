@@ -1,6 +1,6 @@
 <template>
   <view class="page me">
-    <text class="eyebrow">我的 / ACCOUNT</text>
+    
     <text class="page-title">{{ user?.name || '我的' }}</text>
     <text class="subtle">{{ user?.email }}</text>
     <view class="section-head"><text class="section-title">辦理記錄</text><text class="link" @click="newRequest">申請辦理 ›</text></view>
