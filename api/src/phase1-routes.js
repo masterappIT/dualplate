@@ -1,5 +1,6 @@
 import { db, id, now } from './db.js'
-import { computeDeadlines, ruleMatches, ruleScopes, ruleMethods, matchKeys } from './rules.js'
+import { plateFacts } from './plate-facts.js'
+import { computeDeadlines, ruleMatches, ruleScopes, ruleMethods, matchKeys, dateFields } from './rules.js'
 
 const date = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value + 'T00:00:00Z')) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -12,6 +13,7 @@ const validParams = (method, value) => {
   if (method === 'anniversary') return keys.length === 1 && integer(value.offsetDays, -3650, 3650)
   if (method === 'yearly') return keys.length === 2 && integer(value.month, 1, 12) && integer(value.day, 1, new Date(Date.UTC(2024, value.month, 0)).getUTCDate())
   if (method === 'inspection') return keys.length === 3 && ['markYears', 'inspectYears'].every(key => Array.isArray(value[key]) && value[key].every(year => integer(year, 1, 200))) && integer(value.yearlyFrom, 1, 200)
+  if (method === 'since_last' || method === 'after_field') return keys.length === 2 && dateFields[method].includes(value.field) && integer(value.days, 1, 3650)
   if (method === 'periodic') return keys.every(key => ['months', 'officialUrl'].includes(key)) && Array.isArray(value.months) && value.months.length > 0 && value.months.every(month => integer(month, 1, 12)) && (!('officialUrl' in value) || typeof value.officialUrl === 'string' && /^https?:\/\//.test(value.officialUrl))
   return false
 }
@@ -33,7 +35,7 @@ export async function phase1Routes(req, res, url, user, h) {
     if (type === 'company') return company(ownerId)
     return null
   }
-  const facts = (type, item) => type === 'plate' ? { route: item.route, indicatorCategory: item.indicator_category, port: item.port, cardExpiresOn: item.card_expires_on } : type === 'vehicle' ? { route: item.route, origin: item.origin, firstRegisteredOn: item.first_registered_on } : { jurisdiction: item.jurisdiction, status: item.status || '存續', companyStatus: item.status || '存續', incorporatedOn: item.incorporated_on }
+  const facts = (type, item) => type === 'plate' ? plateFacts(item) : type === 'vehicle' ? { route: item.route, origin: item.origin, firstRegisteredOn: item.first_registered_on } : { jurisdiction: item.jurisdiction, status: item.status || '存續', companyStatus: item.status || '存續', incorporatedOn: item.incorporated_on }
   const statusWarnings = companies => [...new Set(companies.filter(item => item.jurisdiction === '內地' && ['已註銷', '註銷中'].includes(item.status)).map(item => item.status === '已註銷' ? '內承單位已註銷' : '內承單位註銷中'))]
   const companyStatusInfo = (groupId, customerId) => query('SELECT id,jurisdiction,name,status,status_changed_on FROM companies WHERE tenant_id=? AND group_id=? AND customer_id=? ORDER BY jurisdiction,name', tenant, groupId, customerId)
   const rules = () => query('SELECT * FROM rules WHERE tenant_id=? ORDER BY sort,name', tenant).map(decoded)
@@ -148,6 +150,7 @@ export async function phase1Routes(req, res, url, user, h) {
     const customerVisible = body.customerVisible === undefined ? old ? Boolean(old.customer_visible) : true : body.customerVisible
     if (!old && (!/^[a-z][a-z0-9_]{1,39}$/.test(code || '') || !ruleScopes.includes(scope) || !ruleMethods.includes(ruleMethod))) return error(400, '規則代碼、對象或方式無效')
     if (params.field === 'cardExpiresOn' && scope !== 'plate') return error(400, '批文卡有效期來源只適用於兩地牌')
+    if (['since_last', 'after_field'].includes(ruleMethod) && scope !== 'plate') return error(400, '過關及批文日期計算只適用於兩地牌')
     if (!clean(body.name ?? old?.name) || !integer(remindDays, 0, 730) || !validMatch(match) || !validParams(ruleMethod, params) || body.active !== undefined && typeof body.active !== 'boolean' || typeof customerVisible !== 'boolean') return error(400, '規則內容無效')
     if (old) {
       db.prepare('UPDATE rules SET name=?,remind_days=?,active=?,customer_visible=?,match_json=?,params_json=? WHERE id=? AND tenant_id=?').run(clean(body.name ?? old.name, 160), remindDays, body.active === undefined ? old.active : Number(body.active), Number(customerVisible), JSON.stringify(match), JSON.stringify(params), old.id, tenant)
@@ -197,7 +200,8 @@ export async function phase1Routes(req, res, url, user, h) {
     const item = rule && owner(rule.scope, body.ownerId)
     if (!rule || !item) return error(404, '規則或對象不存在')
     if (method === 'POST' && (!rule.active || !ruleMatches(decoded(rule), facts(rule.scope, item)))) return error(400, '規則不適用於此對象')
-    if (typeof body.period !== 'string' || !/^(\d{4}|\d{4}-(0[1-9]|1[0-2]))$/.test(body.period)) return error(400, '期數無效')
+    if (rule.method === 'since_last') return error(400, '此事項請錄入最近一次日期，不用標記完成')
+    if (typeof body.period !== 'string' || !(rule.method === 'after_field' ? date(body.period) : /^(\d{4}|\d{4}-(0[1-9]|1[0-2]))$/.test(body.period))) return error(400, '期數無效')
     if (method === 'POST') db.prepare('INSERT INTO rule_completions(tenant_id,code,owner_id,period,completed_by,completed_at) VALUES (?,?,?,?,?,?) ON CONFLICT(code,owner_id,period) DO UPDATE SET completed_by=excluded.completed_by,completed_at=excluded.completed_at').run(tenant, rule.code, body.ownerId, body.period, user.id, now())
     else db.prepare('DELETE FROM rule_completions WHERE tenant_id=? AND code=? AND owner_id=? AND period=?').run(tenant, rule.code, body.ownerId, body.period)
     return send(200, { ok: true })

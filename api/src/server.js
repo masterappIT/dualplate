@@ -7,6 +7,8 @@ import { phase1Routes } from './phase1-routes.js'
 import { customerRoutes } from './customer-routes.js'
 import { parseCsv, requiredHeaders } from './plate-import.js'
 import { computeDeadlines } from './rules.js'
+import { plateFacts } from './plate-facts.js'
+import { addCrossing, deleteCrossing, crossingSummary } from './crossings.js'
 
 const port = Number(process.env.PORT || 4100)
 const allowedOrigins = new Set((process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174').split(','))
@@ -78,7 +80,7 @@ function plateSummary(item, tenantId) {
   const permit = tracked.find(entry => entry.code === (item.route === '粵港' ? 'hk_crp' : 'mo_permit'))?.expires_on || null
   const rules = query("SELECT * FROM rules WHERE tenant_id=? AND scope='plate'", tenantId).map(rule => ({ ...rule, match: JSON.parse(rule.match_json), params: JSON.parse(rule.params_json), remindDays: rule.remind_days }))
   const trackedItems = new Map(query("SELECT * FROM tracked_items WHERE tenant_id=? AND owner_type='plate' AND owner_id=?", tenantId, item.id).map(entry => [`plate:${item.id}:${entry.code}`, entry]))
-  const levels = computeDeadlines({ rules, owners: [{ ownerType: 'plate', ownerId: item.id, customerId: item.customer_id, label: item.card_number, facts: { route: item.route, indicatorCategory: item.indicator_category, port: item.port, cardExpiresOn: approval } }], tracked: trackedItems, completions: new Set(), windowDays: 365 }).map(entry => entry.level)
+  const levels = computeDeadlines({ rules, owners: [{ ownerType: 'plate', ownerId: item.id, customerId: item.customer_id, label: item.card_number, facts: plateFacts(item) }], tracked: trackedItems, completions: new Set(), windowDays: 365 }).map(entry => entry.level)
   const healthStatus = levels.includes('overdue') ? 'overdue' : levels.includes('due') ? 'due' : levels.includes('missing') || !levels.length ? 'missing' : 'ok'
   return { ...item, card_data: cardData(item.card_data), holder_company: groupCompanies.find(company => company.jurisdiction !== '內地')?.name || null, mainland_company: groupCompanies.find(company => company.jurisdiction === '內地')?.name || null, permit_expires_on: permit, health_status: healthStatus }
 }
@@ -128,7 +130,7 @@ export const server = http.createServer(async (req, res) => {
     if (path === '/api/me' && req.method === 'GET') return json(res, 200, { id: user.id, name: user.name, email: user.email, role: user.role, customerId: user.customer_id })
     if (path === '/api/catalog' && req.method === 'GET') return json(res, 200, { services, sources, routePlans: Object.fromEntries(services.map(s => [s.code, Object.fromEntries(s.routes.map(route => [route, planFor(s, route)]))])) })
     if (await phase1Routes(req, res, url, user, { json, fail, parseBody, canAccessCustomer, vehicleFor, plateFor, query, one, clean })) return
-    if (await customerRoutes(req, res, url, user, { json, fail, query, one, plateFor })) return
+    if (await customerRoutes(req, res, url, user, { json, fail, query, one, plateFor, parseBody })) return
     if (path === '/api/import/plates' && req.method === 'POST') {
       if (user.role !== 'admin') return fail(res, 403, '無權限')
       const body = await parseBody(req)
@@ -246,6 +248,17 @@ export const server = http.createServer(async (req, res) => {
     }
     if (path === '/api/customers' && req.method === 'GET') {
       return json(res, 200, user.role === 'admin' ? query('SELECT * FROM customers WHERE tenant_id=? ORDER BY name', user.tenant_id) : query('SELECT * FROM customers WHERE id=?', user.customer_id))
+    }
+    const crossingMatch = path.match(/^\/api\/plates\/([^/]+)\/crossings(?:\/([^/]+))?$/)
+    if (crossingMatch) {
+      if (user.role !== 'admin') return fail(res, 403, '無權限')
+      const plate = plateFor(user, crossingMatch[1])
+      if (!plate) return fail(res, 404, '兩地牌不存在')
+      const send = result => result.error ? fail(res, result.status, result.error) : json(res, result.status, result.body)
+      if (!crossingMatch[2] && req.method === 'GET') return json(res, 200, crossingSummary(user.tenant_id, plate.id))
+      if (!crossingMatch[2] && req.method === 'POST') { const b = await parseBody(req); return send(addCrossing({ tenantId: user.tenant_id, plateId: plate.id, crossedOn: b?.crossedOn, source: 'admin', userId: user.id })) }
+      if (crossingMatch[2] && req.method === 'DELETE') return send(deleteCrossing({ tenantId: user.tenant_id, plateId: plate.id, crossingId: crossingMatch[2] }))
+      return fail(res, 405, '不支援此操作')
     }
     if (path === '/api/plate-assets' && req.method === 'GET') {
       const customerId = url.searchParams.get('customerId')

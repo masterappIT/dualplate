@@ -1,7 +1,9 @@
 // Default expiry rules per tenant, based on the official review of 2026-10-16 (docs/requirements.md §1.2).
 // Tenants can edit names, conditions, parameters and reminder days afterwards.
 export const ruleScopes = ['plate', 'company', 'vehicle']
-export const ruleMethods = ['expiry', 'anniversary', 'yearly', 'inspection', 'periodic']
+export const ruleMethods = ['expiry', 'anniversary', 'yearly', 'inspection', 'periodic', 'since_last', 'after_field']
+// Date facts that since_last / after_field rules may count from.
+export const dateFields = { since_last: ['lastCrossedOn'], after_field: ['cardValidFrom'] }
 export const matchKeys = ['route', 'jurisdiction', 'indicatorCategory', 'port', 'origin', 'companyStatus']
 
 export const defaultRules = [
@@ -17,6 +19,11 @@ export const defaultRules = [
   { code: 'mo_tax', name: '澳門營業稅／所得補充稅申報', scope: 'company', method: 'expiry', match: { jurisdiction: '澳門' }, params: {}, remindDays: 30, customerVisible: true },
   { code: 'cn_annual_report', name: '內地工商年報', scope: 'company', method: 'yearly', match: { jurisdiction: '內地' }, params: { month: 6, day: 30 }, remindDays: 60, customerVisible: true },
   { code: 'cn_cit_annual', name: '內地企業所得稅匯算清繳', scope: 'company', method: 'yearly', match: { jurisdiction: '內地' }, params: { month: 5, day: 31 }, remindDays: 45, customerVisible: true },
+  { code: 'customs_filing', name: '海關及邊檢備案', scope: 'plate', method: 'expiry', match: {}, params: {}, remindDays: 30, customerVisible: true },
+  { code: 'new_card_filing', name: '新批文備案期限', scope: 'plate', method: 'after_field', match: {}, params: { field: 'cardValidFrom', days: 183 }, remindDays: 30, customerVisible: true },
+  { code: 'crossing_90', name: '90 天過關', scope: 'plate', method: 'since_last', match: {}, params: { field: 'lastCrossedOn', days: 90 }, remindDays: 15, customerVisible: true },
+  { code: 'hk_registered_office', name: '香港公司註冊地址／秘書服務合約', scope: 'company', method: 'expiry', match: { jurisdiction: '香港' }, params: {}, remindDays: 30, customerVisible: true },
+  { code: 'cn_registered_address', name: '內地公司註冊地址（掛靠）合約', scope: 'company', method: 'expiry', match: { jurisdiction: '內地' }, params: {}, remindDays: 30, customerVisible: true },
   { code: 'cn_status_check', name: '核對內地公司登記狀態', scope: 'company', method: 'periodic', match: { jurisdiction: '內地', companyStatus: ['存續', '經營異常', '註銷中'] }, params: { months: [1, 4, 7, 10], officialUrl: 'https://www.gsxt.gov.cn/' }, remindDays: 30, customerVisible: false }
 ]
 
@@ -96,6 +103,27 @@ export function computeDeadlines({ rules, owners, tracked, completions, today = 
         if (!due) { result.push({ ...base, level: 'missing', dueOn: null, daysLeft: null, detail: '未錄入到期日' }); continue }
         const daysLeft = Math.round((due - day) / DAY)
         result.push({ ...base, dueOn: iso(due), daysLeft, level: level(daysLeft, rule.remindDays, windowDays), detail: item?.notes || '' })
+        continue
+      }
+      if (rule.method === 'since_last') {
+        // Counts from the latest event (e.g. last border crossing); recording a new event resets it.
+        const last = parse(owner.facts[rule.params?.field])
+        if (!last) { result.push({ ...base, level: 'missing', dueOn: null, daysLeft: null, detail: rule.params?.field === 'lastCrossedOn' ? '待錄入最近過關日期' : '待錄入日期' }); continue }
+        const due = addDays(last, Number(rule.params?.days) || 0), daysLeft = Math.round((due - day) / DAY)
+        result.push({ ...base, dueOn: iso(due), daysLeft, level: level(daysLeft, rule.remindDays, windowDays), detail: `上次 ${iso(last)}` })
+        continue
+      }
+      if (rule.method === 'after_field') {
+        // A one-off deadline after a date (e.g. filing within 183 days of a new approval). No date, or long past and never
+        // marked, means it does not apply, so old cards do not flood the queue as overdue.
+        const base0 = parse(owner.facts[rule.params?.field])
+        if (!base0) continue
+        const period = iso(base0)
+        if (completions.has(`${rule.code}:${owner.ownerId}:${period}`)) continue
+        const due = addDays(base0, Number(rule.params?.days) || 0)
+        if (due < addDays(day, -Math.max(rule.remindDays, 30))) continue
+        const daysLeft = Math.round((due - day) / DAY)
+        result.push({ ...base, dueOn: iso(due), daysLeft, period, completable: true, level: level(daysLeft, rule.remindDays, windowDays), detail: `批文有效期開始 ${period}` })
         continue
       }
       const list = occurrences(rule, owner.facts, day)

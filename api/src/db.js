@@ -99,6 +99,8 @@ if (!db.prepare('SELECT name FROM schema_migrations WHERE name=?').get(companyJu
   } catch (error) { db.exec('ROLLBACK'); throw error }
 }
 addColumn('rules', 'customer_visible', 'INTEGER NOT NULL DEFAULT 1')
+// Border crossings per plate (two-way plates must cross about every 90 days); kept on the plate so a vehicle change does not reset it.
+db.exec('CREATE TABLE IF NOT EXISTS plate_crossings(id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, plate_asset_id TEXT NOT NULL, crossed_on TEXT NOT NULL, source TEXT NOT NULL, created_by TEXT, created_at TEXT NOT NULL, UNIQUE(plate_asset_id,crossed_on), FOREIGN KEY(plate_asset_id) REFERENCES plate_assets(id))')
 const companyStatusMigration = 'company-status-fields'
 if (!db.prepare('SELECT name FROM schema_migrations WHERE name=?').get(companyStatusMigration)) {
   db.exec('BEGIN IMMEDIATE')
