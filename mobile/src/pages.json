@@ -1,0 +1,17 @@
+{
+  "pages": [
+    { "path": "pages/index/index", "style": { "navigationBarTitleText": "車牌管家" } },
+    { "path": "pages/vehicles/vehicles", "style": { "navigationBarTitleText": "我的兩地牌" } },
+    { "path": "pages/plate-detail/plate-detail", "style": { "navigationBarTitleText": "兩地牌檔案" } },
+    { "path": "pages/plate-create/plate-create", "style": { "navigationBarTitleText": "登記現有批文卡" } },
+    { "path": "pages/requests/requests", "style": { "navigationBarTitleText": "申請代辦" } },
+    { "path": "pages/request-detail/request-detail", "style": { "navigationBarTitleText": "辦理進度" } },
+    { "path": "pages/login/login", "style": { "navigationBarTitleText": "登入" } }
+  ],
+  "tabBar": { "color": "#7e9485", "selectedColor": "#277052", "backgroundColor": "#ffffff", "borderStyle": "white", "list": [
+    { "pagePath": "pages/index/index", "text": "總覽", "iconPath": "static/home-normal.png", "selectedIconPath": "static/home-selected.png" },
+    { "pagePath": "pages/vehicles/vehicles", "text": "兩地牌", "iconPath": "static/vehicle-normal.png", "selectedIconPath": "static/vehicle-selected.png" },
+    { "pagePath": "pages/requests/requests", "text": "申請代辦", "iconPath": "static/request-normal.png", "selectedIconPath": "static/request-selected.png" }
+  ] },
+  "globalStyle": { "navigationBarTextStyle": "black", "navigationBarTitleText": "車牌管家", "navigationBarBackgroundColor": "#f5f7f5", "backgroundColor": "#f5f7f5" }
+}

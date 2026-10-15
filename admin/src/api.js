@@ -1,0 +1,7 @@
+const base=import.meta.env.VITE_API_BASE_URL||'http://localhost:4100'
+export const token=()=>localStorage.getItem('adminToken')||''
+export const save=(result)=>{localStorage.setItem('adminToken',result.token);localStorage.setItem('adminUser',JSON.stringify(result.user))}
+export const clear=()=>{localStorage.removeItem('adminToken');localStorage.removeItem('adminUser')}
+export const user=()=>{try{return JSON.parse(localStorage.getItem('adminUser')||'null')}catch{return null}}
+export async function api(path,method='GET',data){const response=await fetch(base+'/api'+path,{method,headers:{'content-type':'application/json',authorization:token()?'Bearer '+token():''},body:data?JSON.stringify(data):undefined});const result=await response.json();if(!response.ok){const error=new Error(result.error||'操作失敗');error.status=response.status;throw error};return result}
+export async function privateImage(path){const response=await fetch(base+'/api'+path,{headers:{authorization:token()?'Bearer '+token():''}});if(!response.ok)throw new Error('圖片載入失敗');const blob=await response.blob();return await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('圖片載入失敗'));reader.readAsDataURL(blob)})}

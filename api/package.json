@@ -1,0 +1,1 @@
+{"name":"cross-border-plate-api","private":true,"type":"module","scripts":{"dev":"node src/server.js","start":"node src/server.js","create-admin":"node src/create-admin.js"},"engines":{"node":">=24.0.0"},"dependencies":{"sharp":"^0.35.5","tesseract.js":"^7.0.0"}}

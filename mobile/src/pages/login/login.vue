@@ -1,0 +1,8 @@
+<template><view class="page login-page"><view class="brand-mark">跨</view><text class="eyebrow">車牌管家 / CLIENT PORTAL</text><text class="page-title">歡迎回來</text><text class="subtle">登入後查看車輛、牌證和代辦進度。</text><view class="card form-card"><text class="form-title">登入客戶帳戶</text><text class="field-label">電郵地址</text><input class="field" v-model="email" type="text" placeholder="name@example.com" /><text class="field-label">密碼</text><input class="field" v-model="password" password placeholder="輸入密碼" /><button class="primary login-button" :loading="loading" :disabled="loading" @click="login">登入</button><text class="help">客戶帳戶由服務團隊開通。若需協助，請聯絡你的客戶經理。</text></view></view></template>
+<script setup>
+import { ref } from 'vue'
+import { api, saveSession } from '../../lib/api'
+const email=ref(''),password=ref(''),loading=ref(false)
+async function login(){if(!email.value||!password.value)return uni.showToast({title:'請填寫電郵及密碼',icon:'none'});loading.value=true;try{const result=await api('/login','POST',{email:email.value,password:password.value});if(result.user.role!=='customer')throw new Error('此帳號請使用管理端登入');saveSession(result);uni.switchTab({url:'/pages/index/index'})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loading.value=false}}
+</script>
+<style scoped>.login-page{padding-top:90rpx}.brand-mark{background:#1b4d3e;width:91rpx;height:91rpx;border-radius:23rpx;display:flex;justify-content:center;align-items:center;color:white;font-size:46rpx;font-weight:800;margin-bottom:46rpx}.form-card{margin-top:47rpx;padding:31rpx}.form-title{display:block;font-size:28rpx;font-weight:800;margin-bottom:15rpx}.login-button{margin-top:38rpx}.help{display:block;margin-top:25rpx;text-align:center;color:#839588;font-size:20rpx;line-height:1.6}</style>
