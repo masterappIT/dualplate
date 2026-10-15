@@ -1,6 +1,8 @@
 # 任務：客戶端補強（上傳文件、顧問聯絡、登入方式、站內通知）
 
-先讀 `AGENTS.md`。背景見 `docs/ui-audit.md` 第二節。**本任務明確允許修改 `mobile/` 與 `api/src/customer-routes.js`**，但必須沿用負責人現有的客戶端設計：頁面結構、`mobile/src/App.vue` 的共用樣式（`list-card`、`pill`、`section-head` 等）、用語習慣（不用「境外」，不出現「待核對」「待內部受理」等內部字眼）。批文卡前端效果、兩個車牌組件不得改動。
+先讀 `AGENTS.md`、`docs/design-system.md`、`docs/v1-plan.md` 第六節分工。本任務在第 14 輪（工單改版）驗收後進行；文中「案件」即「工單」，「節點」即工單「步驟」，「待客戶配合」即 `owner=client` 的未完成步驟（第 14 輪的 `clientTodos`）。
+
+**分工（2026-10-16 更新）**：本任務的**後端 API、資料表、管理端畫面由你（Codex）做**；**客戶端 `mobile/` 頁面由負責人親自做**，你不要改 `mobile/`。`api/src/customer-routes.js` 本任務允許你修改以加入下列客戶 API，改動須逐行在報告說明。每個客戶 API 的請求與回應格式請在報告列出，供負責人接上手機頁面。
 
 ## 1. 客戶在手機上傳文件
 
@@ -40,7 +42,7 @@
 
 具名、一情況一測試：上傳格式與大小限制；客戶只能上傳到自己的案件；員工確認／要求重交；手機號碼登入；手機號碼重複被拒；微信登入的已綁定、未綁定、綁定碼過期、未設定環境變數；通知產生不重複、已讀、跨客戶不可見；跨租戶 404。
 
-`cd api && npm test`、`cd admin && npm run build`、`cd mobile && npm run build:h5`、`cd mobile && npm run build:mp-weixin` 全部通過。
+`cd api && npm test`、`cd admin && npm run check`、`cd admin && npm run build`、`cd mobile && npm run build:h5` 全部通過；測試數量不得減少。
 
 ## 6. 驗收方式
 
@@ -48,4 +50,4 @@
 
 ## 限制
 
-遵守 `AGENTS.md`。不新增 npm 依賴。
+遵守 `AGENTS.md`。不新增 npm 依賴；不改 `mobile/`。

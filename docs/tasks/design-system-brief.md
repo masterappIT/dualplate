@@ -8,14 +8,14 @@
 
 ## 1. 技術基礎（本任務允許新增依賴）
 
-- `admin/` 新增：`vue-router@4`、`gsap@3`（依賴）；`typescript@~5.7`、`vue-tsc@2`（開發依賴）。版本與腳手架 `package.json` 一致，寫入並產生 lock
+- 依賴**負責人已安裝**（`vue-router`、`gsap`、`typescript`、`vue-tsc`，見 `admin/package.json`）；你的沙盒不能連網，不要再執行 `npm install`，也不得新增其他依賴
 - 新增 `tsconfig.json`（`allowJs: true`，路徑別名 `@/` → `src/`，同步加到 `vite.config`）；新檔用 TypeScript，現有 JS 可逐步轉，不強制本輪全轉
 - 改用 Vue Router（hash 模式）：`#/today`、`#/customers`、`#/customers/:id`、`#/plates`、`#/plates/:id`、`#/vehicles/:id`、`#/business`、`#/requests/:id`、`#/requests/new`、`#/settings/:tab?`；舊網址（`#plates`、`#dashboard` 等）重新導向；瀏覽器上一頁／下一頁正常
 - 現有 `store.js` 的資料與動作保留，頁面改由路由參數決定打開哪個客戶／牌照／工單；換頁後資料要重新整理（現在用網址直接進入不會更新，屬缺陷）
 
 ## 2. 移植（從腳手架複製，保留 API）
 
-按 `docs/design-system.md` 第四節清單移植 `components/ui`、`components/business`（`ListPage`、`SearchForm`、`FormDialog`、`BoardView`）、`components/layout`（`AppShell`、`Sidebar`、`Topbar`、`CommandPalette`）、`composables`（`list`、`focus`、`motion`、`toast`、`confirm`、`view`）。
+按 `docs/design-system.md` 第四節清單移植 `components/ui`、`components/business`（`ListPage`、`SearchForm`、`FormDialog`、`BoardView`）、`components/layout`（`AppShell`、`Sidebar`、`Topbar`、`CommandPalette`）、`components/NeuralNet.vue`、`components/Icon.vue`（如需要）、`composables`（`list`、`focus`、`motion`**全部**、`toast`、`confirm`、`view`、`neural`、`viewport`）。管理者喜歡腳手架**所有**交互動畫：按鈕漣漪、浮層從觸發點展開、浮條升降、列表級聯、頁面過渡、側欄滑塊、數字滾動都要照搬行為。
 
 - 腳手架依賴後端的部分（權限碼、服務端菜單、字典接口、部門接口）改為本產品資料：菜單為固定五項（今日工作、客戶、牌照、業務、設定），`PermissionButton` 暫不移植
 - 樣式按七層方法建立 `admin/src/styles/`，**token 和 materials 必須重寫**成第二節的值；`components.css`、`layout.css` 可沿用結構但所有顏色、圓角、陰影只能引用 token
@@ -34,7 +34,12 @@
 - **今日工作**：`StatCard` 一列可點擊切換；`Segmented` 分頁；日期欄 `DueDate editable`；車牌用 `PlateChip`
 - **牌照總表**：分類用 `Segmented`；「匯入 CSV」為頁首次要按鈕，打開 `Drawer`（下載範本 → 選檔 → 預覽表格（新增／更新／錯誤用 `StatusTag`）→ 確認寫入）；勾選後底部浮條出現「批量填日期」；CRP 欄 `DueDate editable`；批文沒有日期顯示灰色「待錄入」
 - **規則設定**：`DataTable`，開關用 `Switch`（即時儲存、失敗還原），編輯用 `FormDialog`，操作欄吸附右側、按鈕不換行
-- **登入頁**：簡潔單卡片，本產品配色；不做腳手架的動態畫布
+- **登入頁（管理者明確指出現有登入頁「動畫和 UI 很差」，本輪重點）**：完整移植腳手架 `views/Login.vue` 的版式與全部動效——左側深色畫布 `NeuralNet`（節點、連線脈衝、緩慢呼吸）、網格、實時時鐘刻度、服務狀態銘牌、能力面板；右側登入卡隨指針輕傾 ≤ 4°；登入中按鈕收攏；成功時中心迸發並收束對勾；失敗時卡片輕搖並把錯誤留在欄位下。換成本產品內容與配色：
+  - 左側標題「車牌管家」與一句「兩地牌、公司與到期事項，一處管好。」；能力面板四格：到期提醒、工單辦理、出租收租、客戶端同步
+  - 畫布節點代表口岸與牌照（標籤可用「深圳灣」「港珠澳大橋」「蓮塘」「皇崗」等），配色用本產品深綠與淺綠脈衝，不用腳手架的藍與青檸
+  - 服務狀態銘牌讀取 `GET /api/health`（若無此接口，前端以登入接口可達與否判斷，不改後端）
+  - 不加驗證碼（後端沒有）；保留「記住登入狀態」
+  - 減少動態效果時直接靜態終態；窄螢幕（< 820px）隱藏左側畫布，只留登入卡
 - **批文卡區塊**：只可換外層容器；`ApprovalCard.vue` 與預覽、翻轉、上傳辨識、手動修改、原件核對流程**一行不改**，逐項實測仍可用
 - 介面上「案件」改為「工單」
 
