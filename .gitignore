@@ -8,3 +8,5 @@ api/data/
 *.sqlite-shm
 *.sqlite-wal
 .DS_Store
+
+api/test/fixtures/cards/
