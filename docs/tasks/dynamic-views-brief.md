@@ -1,12 +1,12 @@
 # 任務：動態視圖（第 11.6 輪）
 
-先讀 `AGENTS.md`、`docs/design-system.md`（尤其第二節視覺識別、**第九節：只做「採用」表內的視圖，「不做」表內的一律不做**）。本任務在第 11.5 輪驗收後進行。參考腳手架 `/Users/vincentw/development/scaffold-master/scaffold-vue`（只讀）的 `OrgCanvas`、`PermissionTrace`、`RelationGraph`、`MenuStarMap`、`Swimlane`、`HeatGrid`、`TrendChart`、`TickRing`、`Odometer`、`InsightPanel`、`composables/neural.ts`、`composables/viewport.ts`、`composables/view.ts`。
+先讀 `AGENTS.md`、`docs/design-system.md`（尤其第二節視覺識別、**第九節：只做「採用」表內的視圖，「不做」表內的一律不做**）。本任務在第 11.5 輪驗收後進行。參考腳手架 `/Users/vincentw/development/scaffold-master/scaffold-vue`（只讀）的 `OrgCanvas`、`PermissionTrace`、`RelationGraph`、`Swimlane`、`HeatGrid`、`Odometer`、`InsightPanel`、`GeneratorPipeline`、`composables/neural.ts`、`composables/viewport.ts`、`composables/view.ts`。
 
 **交互與動效照搬，外觀與用字全部換成本產品**（證件感：紙色、通行綠、牌照黃點綴、白底節點＋細描邊；中心節點用「客戶印章」：深綠雙線圓章、客戶名首字，取代珍珠球）。不得出現腳手架用字。
 
 ## 1. 移植
 
-`components/charts/`：`RelationGraph`、`Swimlane`、`HeatGrid`；`components/ui/Odometer`；`components/business/`：`OrgCanvas`、`InsightPanel`（及溯源、星圖所需部件）；`composables/neural.ts`、`viewport.ts`、`view.ts`。保留腳手架的性能紅線（DPR ≤ 2、離屏／隱藏暫停、每帧 try/catch、脈衝上限）、重播／暫停、減少動態效果直接終態、Esc 逐層返回、鍵盤替代路徑。
+`components/charts/`：`RelationGraph`、`Swimlane`、`HeatGrid`；`components/ui/Odometer`；`components/business/`：`OrgCanvas`、`InsightPanel`（及溯源所需部件）、`GeneratorPipeline`（改作 CSV 欄位對應）；`composables/neural.ts`、`viewport.ts`、`view.ts`。保留腳手架的性能紅線（DPR ≤ 2、離屏／隱藏暫停、每帧 try/catch、脈衝上限）、重播／暫停、減少動態效果直接終態、Esc 逐層返回、鍵盤替代路徑。
 
 ## 2. 本產品視圖（全部是 `ListPage` 的 `altView`，可切回表格，偏好按頁記住，820px 以下首次預設表格）
 
