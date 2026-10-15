@@ -7,12 +7,19 @@ const validDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.te
 const today = () => businessToday().toISOString().slice(0, 10)
 const rule = tenantId => db.prepare("SELECT params_json FROM rules WHERE tenant_id=? AND code='crossing_90'").get(tenantId)
 
+export function setReminder({ plateId, enabled }) {
+  if (typeof enabled !== 'boolean') return { status: 400, error: '請選擇開啟或關閉' }
+  db.prepare('UPDATE plate_assets SET crossing_reminder=? WHERE id=?').run(enabled ? 1 : 0, plateId)
+  return null
+}
+
 export function crossingSummary(tenantId, plateId) {
   const list = db.prepare('SELECT id,crossed_on crossedOn,source,created_at createdAt FROM plate_crossings WHERE tenant_id=? AND plate_asset_id=? ORDER BY crossed_on DESC LIMIT 10').all(tenantId, plateId)
   const days = Number(JSON.parse(rule(tenantId)?.params_json || '{}').days) || 90
   const last = list[0]?.crossedOn || null
   const next = last ? new Date(Date.parse(last + 'T00:00:00Z') + days * 86400000).toISOString().slice(0, 10) : null
-  return { lastCrossedOn: last, nextDueOn: next, days, crossings: list }
+  const enabled = Boolean(db.prepare('SELECT crossing_reminder FROM plate_assets WHERE id=?').get(plateId)?.crossing_reminder)
+  return { enabled, lastCrossedOn: last, nextDueOn: next, days, crossings: list }
 }
 
 export function addCrossing({ tenantId, plateId, crossedOn, source, userId }) {

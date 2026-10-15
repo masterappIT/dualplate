@@ -8,7 +8,7 @@ import { computeDeadlines, ruleMatches, ruleScopes, ruleMethods, matchKeys, date
 const date = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value + 'T00:00:00Z')) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 const integer = (value, min, max) => Number.isInteger(value) && value >= min && value <= max
-const validMatch = value => object(value) && Object.entries(value).every(([key, entry]) => matchKeys.includes(key) && (typeof entry === 'string' || Array.isArray(entry) && entry.every(part => typeof part === 'string')))
+const validMatch = value => object(value) && Object.entries(value).every(([key, entry]) => matchKeys.includes(key) && (key === 'crossingReminder' ? entry === 1 : typeof entry === 'string' || Array.isArray(entry) && entry.every(part => typeof part === 'string')))
 const validParams = (method, value) => {
   if (!object(value)) return false
   const keys = Object.keys(value)

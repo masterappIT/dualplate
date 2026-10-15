@@ -115,6 +115,22 @@ test('客戶牌照詳情帶最近過關與下次期限', async () => {
   assert.equal(result.body.crossing.lastCrossedOn, isoDaysAgo(0))
   assert.equal(result.body.crossing.days, 90)
 })
+test('90 天過關提醒預設關閉，沒開啟的牌照不出現', async () => {
+  const items = (await request('/overview?days=365')).body.deadlines.filter(entry => entry.ruleCode === 'crossing_90')
+  assert.equal(items.length, 0)
+})
+test('管理端可為牌照開啟或關閉 90 天過關提醒', async () => {
+  for (const id of [fixture.plate, fixture.siblingPlate]) assert.equal((await request(`/plates/${id}/crossing-reminder`, 'PUT', { enabled: true })).body.enabled, true)
+  for (const enabled of [null, 'yes', 1, undefined]) assert.equal((await request(`/plates/${fixture.plate}/crossing-reminder`, 'PUT', { enabled })).status, 400)
+  assert.equal((await request(`/plates/${fixture.foreignPlate}/crossing-reminder`, 'PUT', { enabled: true })).status, 404)
+  assert.equal((await request(`/plates/${fixture.plate}/crossing-reminder`, 'PUT', { enabled: true }, 'client')).status, 403)
+})
+test('客戶可為自己的牌照開關 90 天過關提醒', async () => {
+  assert.equal((await request(`/my/plates/${fixture.plate}/crossing-reminder`, 'PUT', { enabled: false }, 'client')).body.enabled, false)
+  assert.equal((await request(`/my/plates/${fixture.plate}/crossing-reminder`, 'PUT', { enabled: true }, 'client')).body.enabled, true)
+  assert.equal((await request(`/my/plates/${fixture.siblingPlate}/crossing-reminder`, 'PUT', { enabled: true }, 'client')).status, 404)
+  assert.equal((await request(`/my/plates/${fixture.plate}/crossing-reminder`, 'PUT', { enabled: 'on' }, 'client')).status, 400)
+})
 test('過關記錄使到期總覽的 90 天過關按最近日期計', async () => {
   const item = (await request('/overview?days=365')).body.deadlines.find(entry => entry.ruleCode === 'crossing_90' && entry.ownerId === fixture.plate)
   assert.equal(item.level, 'upcoming', '剛過關，還未到提醒期')

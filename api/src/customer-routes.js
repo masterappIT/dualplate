@@ -1,6 +1,6 @@
 import { computeDeadlines } from './rules.js'
 import { plateFacts } from './plate-facts.js'
-import { addCrossing, crossingSummary } from './crossings.js'
+import { addCrossing, crossingSummary, setReminder } from './crossings.js'
 import { scopeMap } from './entrustment.js'
 
 // Customer-facing summaries for the client app. Customers only see their own records, never
@@ -16,7 +16,8 @@ export async function customerRoutes(req, res, url, user, h) {
   if (!path.startsWith('/api/my/')) return false
   if (user.role !== 'customer') { fail(res, 403, '此功能只供客戶使用'); return true }
   const crossingPost = req.method === 'POST' && /^\/api\/my\/plates\/[^/]+\/crossings$/.test(path)
-  if (req.method !== 'GET' && !crossingPost) { fail(res, 405, '不支援此操作'); return true }
+  const reminderPut = req.method === 'PUT' && /^\/api\/my\/plates\/[^/]+\/crossing-reminder$/.test(path)
+  if (req.method !== 'GET' && !crossingPost && !reminderPut) { fail(res, 405, '不支援此操作'); return true }
   const customer = one('SELECT id,name,tenant_id FROM customers WHERE id=? AND tenant_id=?', user.customer_id, user.tenant_id)
   if (!customer) { fail(res, 404, '客戶不存在'); return true }
 
@@ -97,6 +98,15 @@ export async function customerRoutes(req, res, url, user, h) {
     const loose = companies.filter(item => !item.group_id).map(item => ({ id: item.id, name: item.name, jurisdiction: item.jurisdiction, registrationNo: item.registration_no || '', incorporatedOn: item.incorporated_on || '', status: companyStatus(item) }))
     return json(res, 200, { groups: result, ungrouped: loose }), true
   }
+  if (reminderPut) {
+    // The client decides which plates need the 90-day reminder.
+    const plate = plateFor(user, path.split('/')[4])
+    if (!plate || !plates.some(item => item.id === plate.id)) return fail(res, 404, '兩地牌不存在'), true
+    const body = await h.parseBody(req), problem = setReminder({ plateId: plate.id, enabled: body?.enabled })
+    if (problem) return fail(res, problem.status, problem.error), true
+    const summary = crossingSummary(customer.tenant_id, plate.id)
+    return json(res, 200, { enabled: summary.enabled, lastCrossedOn: summary.lastCrossedOn, nextDueOn: summary.nextDueOn, days: summary.days }), true
+  }
   if (crossingPost) {
     // The client taps 「今天已過關」 (or picks another date) on a plate of their own.
     const plateId = path.split('/')[4], plate = plateFor(user, plateId)
@@ -114,7 +124,7 @@ export async function customerRoutes(req, res, url, user, h) {
     const own = all.filter(item => plateOf(item) === plate.id || (item.ownerType === 'company' && companies.some(company => company.id === item.ownerId && company.group_id && company.group_id === plate.group_id)))
     const requests = query('SELECT id,title,status,stage,updated_at FROM requests WHERE customer_id=? AND plate_asset_id=? ORDER BY updated_at DESC', customer.id, plate.id)
     const crossing = crossingSummary(customer.tenant_id, plate.id)
-    return json(res, 200, { ...summary, crossing: { lastCrossedOn: crossing.lastCrossedOn, nextDueOn: crossing.nextDueOn, days: crossing.days }, deadlines: visible(own).sort((a, b) => String(a.dueOn).localeCompare(String(b.dueOn))), requests: requests.map(item => ({ id: item.id, title: item.title, status: item.status, stage: item.stage, updatedAt: item.updated_at })) }), true
+    return json(res, 200, { ...summary, crossing: { enabled: crossing.enabled, lastCrossedOn: crossing.lastCrossedOn, nextDueOn: crossing.nextDueOn, days: crossing.days }, deadlines: visible(own).sort((a, b) => String(a.dueOn).localeCompare(String(b.dueOn))), requests: requests.map(item => ({ id: item.id, title: item.title, status: item.status, stage: item.stage, updatedAt: item.updated_at })) }), true
   }
   return fail(res, 404, '找不到此頁'), true
 }

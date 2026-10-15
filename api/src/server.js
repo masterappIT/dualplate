@@ -8,7 +8,7 @@ import { customerRoutes } from './customer-routes.js'
 import { parseCsv, requiredHeaders } from './plate-import.js'
 import { computeDeadlines } from './rules.js'
 import { plateFacts } from './plate-facts.js'
-import { addCrossing, deleteCrossing, crossingSummary } from './crossings.js'
+import { addCrossing, deleteCrossing, crossingSummary, setReminder } from './crossings.js'
 import { entrustmentRoutes } from './entrustment-routes.js'
 
 const port = Number(process.env.PORT || 4100)
@@ -250,6 +250,14 @@ export const server = http.createServer(async (req, res) => {
     }
     if (path === '/api/customers' && req.method === 'GET') {
       return json(res, 200, user.role === 'admin' ? query('SELECT * FROM customers WHERE tenant_id=? ORDER BY is_self DESC, name', user.tenant_id) : query('SELECT * FROM customers WHERE id=?', user.customer_id))
+    }
+    const reminderMatch = path.match(/^\/api\/plates\/([^/]+)\/crossing-reminder$/)
+    if (reminderMatch) {
+      if (user.role !== 'admin') return fail(res, 403, '無權限')
+      if (req.method !== 'PUT') return fail(res, 405, '不支援此操作')
+      const plate = plateFor(user, reminderMatch[1]); if (!plate) return fail(res, 404, '兩地牌不存在')
+      const b = await parseBody(req), problem = setReminder({ plateId: plate.id, enabled: b?.enabled })
+      return problem ? fail(res, problem.status, problem.error) : json(res, 200, crossingSummary(user.tenant_id, plate.id))
     }
     const crossingMatch = path.match(/^\/api\/plates\/([^/]+)\/crossings(?:\/([^/]+))?$/)
     if (crossingMatch) {

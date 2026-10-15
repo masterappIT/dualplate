@@ -100,6 +100,8 @@ if (!db.prepare('SELECT name FROM schema_migrations WHERE name=?').get(companyJu
 }
 addColumn('rules', 'customer_visible', 'INTEGER NOT NULL DEFAULT 1')
 addColumn('rules', 'service', 'TEXT')
+// 90-day crossing reminders are opt-in per plate: many plates cross often and need no reminder.
+addColumn('plate_assets', 'crossing_reminder', 'INTEGER NOT NULL DEFAULT 0')
 addColumn('customers', 'is_self', 'INTEGER NOT NULL DEFAULT 0')
 // Entrustment per company / plate and service, with history: a change ends the current row and adds a new one.
 db.exec(`CREATE TABLE IF NOT EXISTS service_scopes(id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, owner_type TEXT NOT NULL, owner_id TEXT NOT NULL, service TEXT NOT NULL, handler TEXT NOT NULL, provider_name TEXT, started_on TEXT NOT NULL, ended_on TEXT, notes TEXT, updated_by TEXT, updated_at TEXT NOT NULL);
@@ -143,6 +145,8 @@ export function seedRules(tenantId) {
   // Rules created before services existed take the default service of their code, or of their scope.
   for (const rule of defaultRules) db.prepare('UPDATE rules SET service=? WHERE tenant_id=? AND code=? AND service IS NULL').run(rule.service, tenantId, rule.code)
   db.prepare("UPDATE rules SET service=CASE scope WHEN 'company' THEN 'company_upkeep' ELSE 'plate_service' END WHERE tenant_id=? AND service IS NULL").run(tenantId)
+  // The 90-day rule became opt-in after release; tenants seeded before keep their edits but gain the condition.
+  db.prepare("UPDATE rules SET match_json=? WHERE tenant_id=? AND code='crossing_90' AND match_json='{}'").run(JSON.stringify({ crossingReminder: 1 }), tenantId)
   ensureSelfCustomer(tenantId)
 }
 // Every tenant has exactly one built-in 「本公司（自有）」 customer for its own indicators.

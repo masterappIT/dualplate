@@ -6,7 +6,7 @@ export const defaultService = scope => scope === 'company' ? 'company_upkeep' : 
 export const ruleMethods = ['expiry', 'anniversary', 'yearly', 'inspection', 'periodic', 'since_last', 'after_field']
 // Date facts that since_last / after_field rules may count from.
 export const dateFields = { since_last: ['lastCrossedOn'], after_field: ['cardValidFrom'] }
-export const matchKeys = ['route', 'jurisdiction', 'indicatorCategory', 'port', 'origin', 'companyStatus']
+export const matchKeys = ['route', 'jurisdiction', 'indicatorCategory', 'port', 'origin', 'companyStatus', 'crossingReminder']
 
 export const defaultRules = [
   { code: 'approval', name: '批文／指標有效期', scope: 'plate', method: 'expiry', match: {}, params: { field: 'cardExpiresOn' }, remindDays: 60, service: 'plate_service', customerVisible: true },
@@ -23,7 +23,7 @@ export const defaultRules = [
   { code: 'cn_cit_annual', name: '內地企業所得稅匯算清繳', scope: 'company', method: 'yearly', match: { jurisdiction: '內地' }, params: { month: 5, day: 31 }, remindDays: 45, service: 'bookkeeping', customerVisible: true },
   { code: 'customs_filing', name: '海關及邊檢備案', scope: 'plate', method: 'expiry', match: {}, params: {}, remindDays: 30, service: 'plate_service', customerVisible: true },
   { code: 'new_card_filing', name: '新批文備案期限', scope: 'plate', method: 'after_field', match: {}, params: { field: 'cardValidFrom', days: 183 }, remindDays: 30, service: 'plate_service', customerVisible: true },
-  { code: 'crossing_90', name: '90 天過關', scope: 'plate', method: 'since_last', match: {}, params: { field: 'lastCrossedOn', days: 90 }, remindDays: 15, service: 'plate_service', customerVisible: true },
+  { code: 'crossing_90', name: '90 天過關', scope: 'plate', method: 'since_last', match: { crossingReminder: 1 }, params: { field: 'lastCrossedOn', days: 90 }, remindDays: 15, service: 'plate_service', customerVisible: true },
   { code: 'hk_registered_office', name: '香港公司註冊地址／秘書服務合約', scope: 'company', method: 'expiry', match: { jurisdiction: '香港' }, params: {}, remindDays: 30, service: 'secretary', customerVisible: true },
   { code: 'cn_registered_address', name: '內地公司註冊地址（掛靠）合約', scope: 'company', method: 'expiry', match: { jurisdiction: '內地' }, params: {}, remindDays: 30, service: 'company_upkeep', customerVisible: true },
   { code: 'hk_audit_tax', name: '香港公司審計及利得稅報稅', scope: 'company', method: 'expiry', match: { jurisdiction: '香港' }, params: {}, remindDays: 60, service: 'audit_tax', customerVisible: true },

@@ -6,5 +6,5 @@ export function plateFacts(item) {
   let card = {}
   try { card = typeof item.card_data === 'string' ? JSON.parse(item.card_data || '{}') : item.card_data || {} } catch { card = {} }
   const last = db.prepare('SELECT MAX(crossed_on) last FROM plate_crossings WHERE plate_asset_id=?').get(item.id)?.last || null
-  return { route: item.route, indicatorCategory: item.indicator_category, port: item.port, cardExpiresOn: item.card_expires_on, cardValidFrom: card.validFrom || null, lastCrossedOn: last }
+  return { route: item.route, indicatorCategory: item.indicator_category, port: item.port, cardExpiresOn: item.card_expires_on, cardValidFrom: card.validFrom || null, lastCrossedOn: last, crossingReminder: item.crossing_reminder ? 1 : 0 }
 }
