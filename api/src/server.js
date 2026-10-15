@@ -103,7 +103,8 @@ const server = http.createServer(async (req, res) => {
       if (!matched) return fail(res,400,'只接受 PNG、JPEG 或 WebP 圖片')
       const bytes=Buffer.from(matched[2],'base64')
       if (bytes.length>3500000) return fail(res,400,'圖片不可超過 3.5 MB')
-      return json(res,200,{cardData:await recognizeCard(bytes,body.side)})
+      const recognized = await recognizeCard(bytes, body.side)
+      return json(res, 200, { cardData: recognized.cardData, fieldStatus: recognized.fieldStatus })
     }
     if (path === '/api/customers' && req.method === 'GET') {
       return json(res, 200, user.role === 'admin' ? query('SELECT * FROM customers WHERE tenant_id=? ORDER BY name', user.tenant_id) : query('SELECT * FROM customers WHERE id=?', user.customer_id))
@@ -222,17 +223,17 @@ const server = http.createServer(async (req, res) => {
       const bytes = Buffer.from(matched[2], 'base64')
       if (!bytes.length || bytes.length > 3500000) return fail(res, 400, '圖片不可超過 3.5 MB')
       const side=cardMatch[2]
-      let recognized={}
+      let recognized={cardData:cardData(null),fieldStatus:{}}
       try { recognized=await recognizeCard(bytes,side) } catch (error) { console.error('Card OCR failed:',error) }
       const existing=cardData(item.card_data)
-      const proposed=cleanCard({...existing,...Object.fromEntries(Object.entries(recognized).filter(([,v])=>v))})
+      const proposed=cleanCard({...existing,...Object.fromEntries(Object.entries(recognized.cardData).filter(([,v])=>v))})
       db.exec('BEGIN IMMEDIATE')
       try {
         db.prepare('INSERT INTO approval_card_images VALUES (?,?,?,?) ON CONFLICT(plate_asset_id,side) DO UPDATE SET mime=excluded.mime,data=excluded.data').run(item.id,side,matched[1],bytes)
         db.prepare('UPDATE plate_assets SET card_data=?,card_status=?,card_number=?,card_expires_on=?,mainland_plate=?,local_plate=?,card_updated_by=?,card_updated_at=?,updated_at=? WHERE id=?').run(JSON.stringify(proposed),'待核對',proposed.cardNumber||null,proposed.validTo||null,proposed.mainlandPlate||null,proposed.localPlate||null,user.name,now(),now(),item.id)
         db.exec('COMMIT')
       } catch (error) { db.exec('ROLLBACK'); throw error }
-      return json(res, 200, { side, uploaded: true, recognized, cardData: proposed, needsReview: true })
+      return json(res, 200, { side, uploaded: true, recognized: recognized.cardData, fieldStatus: recognized.fieldStatus, cardData: proposed, needsReview: true })
     }
     const photoMatch = path.match(/^\/api\/plate-assets\/([^/]+)\/photo\/(mainland|local)$/)
     if (photoMatch && req.method === 'POST') {

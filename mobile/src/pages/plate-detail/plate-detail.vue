@@ -1,9 +1,9 @@
 <template>
   <view class="page vehicles-page"><text class="eyebrow">牌照詳情 / PLATE</text><text class="page-title">{{ creating ? '新增牌照' : summary.mainlandPlate || plates[0]?.mainland_plate || '牌照詳情' }}</text><text class="subtle">{{ creating ? '拍下批文卡交給我們建檔。' : [summary.localPlate, summary.holder].filter(Boolean).join(' · ') }}</text>
     <view v-if="creating" class="file-form"><text class="form-title">登記現有批文卡</text><text class="form-note">建檔已移至批文卡核對流程。尚未取得批文卡，請使用申請代辦。</text><button class="save-file" @click="uni.redirectTo({url:'/pages/plate-create/plate-create'})">前往批文卡建檔</button></view>
-    <view v-if="!creating && !plates.length" class="card empty">找不到這個兩地牌檔案。</view>
-    <view v-for="p in plates" :key="p.id" class="asset-block">
-      <view class="card-section top-card"><view class="section-heading"><strong>批文卡 · 模擬卡</strong><text>{{ p.card_status || '待核對' }}</text></view><ApprovalCard :key="p.id" :data="displayCardData(p)"/><text class="card-hint">按提供的批文卡樣式重繪；內容由上傳或手動編輯更新，需以原件核對。</text><view class="card-actions"><button class="card-action" @click="editCard(p)">修改內容</button><button class="card-action" @click="uploadCard(p)">上傳新批文卡</button></view><view v-if="editingCardId===p.id" class="card-editor"><view v-for="field in cardFields" :key="field.key"><text>{{ field.label }}</text><input v-model="cardDraft[field.key]" :placeholder="field.label"/></view><button @click="saveCard(p)">更新模擬卡</button><button @click="editingCardId=''">取消</button></view></view>
+      <view v-if="!creating && !plates.length" class="card empty">找不到這個兩地牌檔案。</view>
+      <view v-for="p in plates" :key="p.id" class="asset-block">
+      <view class="card-section top-card"><view class="section-heading"><strong>批文卡 · 模擬卡</strong><text>{{ p.card_status || '待核對' }}</text></view><ApprovalCard :key="p.id" :data="displayCardData(p)"/><text class="card-hint">按提供的批文卡樣式重繪；內容由上傳或手動編輯更新，需以原件核對。</text><view class="card-actions"><button class="card-action" @click="editCard(p)">修改內容</button><button class="card-action" @click="uploadCard(p)">上傳新批文卡</button></view><view v-if="editingCardId===p.id" class="card-editor"><view v-for="field in cardFields" :key="field.key"><text>{{ field.label }}<text v-if="fieldStatusText(fieldStatus[field.key])" class="field-status" :class="fieldStatusClass(fieldStatus[field.key])">{{ fieldStatusText(fieldStatus[field.key]) }}</text></text><input v-model="cardDraft[field.key]" :placeholder="field.label"/></view><button @click="saveCard(p)">更新模擬卡</button><button @click="editingCardId=''">取消</button></view></view>
       <view v-if="summary.id" class="summary">
         <view v-if="summary.warnings?.length" class="list-card warn-card"><text class="list-title">{{ summary.warnings.join('、') }}</text><text class="list-sub">牌照仍照常管理，如需處理我們會聯絡你。</text></view>
         <view class="section-head"><text class="section-title">到期項目</text><text class="pill" :class="{due:'amber',overdue:'red',pending:'gray'}[summary.health]">{{ {ok:'正常',due:'快到期',overdue:'已逾期',pending:'資料整理中'}[summary.health] }}</text></view>
@@ -43,7 +43,7 @@ import ApprovalCard from '../../components/ApprovalCard.vue'
 import MainlandPlate from '../../components/MainlandPlate.vue'
 import HongKongPlate from '../../components/HongKongPlate.vue'
 const vehicles=ref([]),detail=ref({}),plates=ref([]),plateDetail=ref({}),plateImages=ref({}),sources=ref([])
-const summary=ref({}),showEdit=ref(false)
+const summary=ref({}),showEdit=ref(false),fieldStatus=ref({})
 const quickActions=[{code:'renewal',name:'續期'},{code:'vehicle_change',name:'換車'},{code:'driver_change',name:'換司機'},{code:'other',name:'其他'}]
 function openRequest(id){uni.navigateTo({url:'/pages/request-detail/request-detail?id='+id})}
 const editingCardId=ref(''),cardDraft=ref({}),creating=ref(false),plateForm=ref({}),savingFile=ref(false)
@@ -54,6 +54,8 @@ function fillPlateForm(p){plateForm.value={mainlandPlate:p.mainland_plate||'',lo
 async function savePlate(p){if(savingFile.value)return;savingFile.value=true;try{const updated=await api('/plate-assets/'+p.id,'PATCH',plateForm.value);plates.value=[updated];plateDetail.value={...plateDetail.value,[p.id]:updated};fillPlateForm(updated);uni.showToast({title:'兩地牌資料已更新',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{savingFile.value=false}}
 function displayCardData(p){return editingCardId.value===p.id?cardDraft.value:plateDetail.value[p.id]?.cardData||{}}
 function editCard(p){cardDraft.value={...(plateDetail.value[p.id]?.cardData||{})};editingCardId.value=p.id}
+function fieldStatusText(status){return status?.status==='uncertain'?'請核對':status?.status==='failed'?'未能辨識，請手動填寫':''}
+function fieldStatusClass(status){return status?.status==='failed'?'failed':'uncertain'}
 async function saveCard(p){try{const updated=await api('/plate-assets/'+p.id,'PUT',{cardData:cardDraft.value});plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editingCardId.value='';uni.showToast({title:'模擬卡已更新',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}}
 async function selectedImageData(result){
   // #ifdef H5
@@ -69,7 +71,7 @@ async function selectedImageData(result){
   return `data:${mime};base64,${base64}`
   // #endif
 }
-function uploadCard(p){uni.showActionSheet({itemList:['正面','背面'],success:choice=>{const side=choice.tapIndex===0?'front':'back';uni.chooseImage({count:1,sizeType:['original'],sourceType:['album','camera'],success:async result=>{try{const image=await selectedImageData(result);await api('/plate-assets/'+p.id+'/card/'+side,'POST',{image});const updated=await api('/plate-assets/'+p.id);plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editCard(p);uni.showToast({title:'已辨識，請核對欄位',icon:'none'})}catch(e){uni.showToast({title:e.message||'上傳失敗',icon:'none'})}}})}})}
+function uploadCard(p){uni.showActionSheet({itemList:['正面','背面'],success:choice=>{const side=choice.tapIndex===0?'front':'back';uni.chooseImage({count:1,sizeType:['original'],sourceType:['album','camera'],success:async result=>{try{const image=await selectedImageData(result);const response=await api('/plate-assets/'+p.id+'/card/'+side,'POST',{image});fieldStatus.value=response.fieldStatus||{};const updated=await api('/plate-assets/'+p.id);plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editCard(p);uni.showToast({title:'已辨識，請核對欄位',icon:'none'})}catch(e){uni.showToast({title:e.message||'上傳失敗',icon:'none'})}}})}})}
 function boundVehicle(p){const v=vehicles.value.find(x=>x.id===p.vehicle_id);return v?[v.brand,v.model,v.plate].filter(Boolean).join(' · '):'未綁定'}
 function mainlandParts(value){const clean=String(value||'').toUpperCase().replace(/[\s·•.-]/g,'');const match=clean.match(/^([粵粤])([A-Z])(.+?)([港澳])$/);return match?{province:'粵',code:match[2],serial:match[3],suffix:match[4]}:{province:'',code:'',serial:clean,suffix:''}}
 function formatHongKong(value){const clean=String(value||'').toUpperCase().replace(/\s+/g,'');return clean.replace(/^([A-Z]{1,2})([0-9]{1,4})$/,'$1 $2')}
@@ -87,6 +89,7 @@ onShow(load)
 </style>
 
 <style scoped>
+.field-status{margin-left:8rpx;color:#a26700;font-size:17rpx;font-weight:700}.field-status.failed{color:#a64700}
 .card-hint{display:block;color:#7d8f82;font-size:18rpx;line-height:1.5;margin-top:17rpx}.card-actions{display:flex;gap:12rpx;margin-top:15rpx}.card-action{flex:1;background:#edf4ee;color:#275c43;font-size:20rpx;font-weight:750;border-radius:10rpx}.card-editor{display:grid;gap:12rpx;margin-top:18rpx;padding:18rpx;background:#f6f8f6;border-radius:13rpx}.card-editor view text{display:block;color:#6d8174;font-size:18rpx;margin-bottom:5rpx}.card-editor input{height:56rpx;border:1rpx solid #cddbd0;border-radius:8rpx;background:white;padding:0 12rpx;font-size:20rpx}.card-editor button{font-size:20rpx;background:#1c4c3e;color:white}
 </style>
 
