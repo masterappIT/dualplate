@@ -1,11 +1,12 @@
 import { computeDeadlines } from './rules.js'
 import { plateFacts } from './plate-facts.js'
 import { addCrossing, crossingSummary } from './crossings.js'
+import { scopeMap } from './entrustment.js'
 
 // Customer-facing summaries for the client app. Customers only see their own records, never
 // internal "missing data" items, rule codes or tenant details.
 const levelRank = { overdue: 0, due: 1, upcoming: 2, ok: 3 }
-const publicDeadline = item => ({ name: item.name, ownerType: item.ownerType, ownerId: item.ownerId, ownerLabel: item.ownerLabel, dueOn: item.dueOn, daysLeft: item.daysLeft, level: item.level, detail: item.method === 'expiry' ? '' : item.detail })
+const publicDeadline = item => ({ handledBy: item.handler === 'client' ? 'you' : 'us', name: item.name, ownerType: item.ownerType, ownerId: item.ownerId, ownerLabel: item.ownerLabel, dueOn: item.dueOn, daysLeft: item.daysLeft, level: item.level, detail: item.method === 'expiry' ? '' : item.detail })
 const plateLabel = plate => `${plate.mainland_plate || '內地車牌待補'} · ${plate.local_plate || '港澳車牌待補'}`
 const companyStatus = company => company.status || '存續'
 
@@ -31,11 +32,11 @@ export async function customerRoutes(req, res, url, user, h) {
     const owners = [
       ...plates.map(item => ({ ownerType: 'plate', ownerId: item.id, label: plateLabel(item), facts: plateFacts(item) })),
       ...companies.filter(item => companyStatus(item) !== '已註銷').map(item => ({ ownerType: 'company', ownerId: item.id, label: item.name, facts: { jurisdiction: item.jurisdiction, incorporatedOn: item.incorporated_on, status: companyStatus(item), companyStatus: companyStatus(item) } })),
-      ...vehicles.map(item => ({ ownerType: 'vehicle', ownerId: item.id, label: item.plate, facts: { route: item.route, origin: item.origin, firstRegisteredOn: item.first_registered_on } }))
+      ...vehicles.map(item => { const plate = plates.find(entry => entry.vehicle_id === item.id); return { ownerType: 'vehicle', ownerId: item.id, label: item.plate, facts: { route: item.route, origin: item.origin, firstRegisteredOn: item.first_registered_on }, scopeOwner: plate ? { type: 'plate', id: plate.id } : null } })
     ]
     const tracked = new Map(query('SELECT * FROM tracked_items WHERE tenant_id=?', customer.tenant_id).map(item => [`${item.owner_type}:${item.owner_id}:${item.code}`, item]))
     const completions = new Set(query('SELECT * FROM rule_completions WHERE tenant_id=?', customer.tenant_id).map(item => `${item.code}:${item.owner_id}:${item.period}`))
-    return computeDeadlines({ rules, owners, tracked, completions, windowDays: 180 }).map(item => ({ ...publicDeadline(item), plateId: plateOf(item) || null }))
+    return computeDeadlines({ rules, owners, tracked, completions, scopes: scopeMap(customer.tenant_id), windowDays: 180 }).map(item => ({ ...publicDeadline(item), plateId: plateOf(item) || null }))
   }
   // Vehicle deadlines belong to the plate the vehicle is mounted on.
   const visible = list => list.filter(item => item.level !== 'missing')

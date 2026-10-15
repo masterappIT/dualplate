@@ -99,6 +99,12 @@ if (!db.prepare('SELECT name FROM schema_migrations WHERE name=?').get(companyJu
   } catch (error) { db.exec('ROLLBACK'); throw error }
 }
 addColumn('rules', 'customer_visible', 'INTEGER NOT NULL DEFAULT 1')
+addColumn('rules', 'service', 'TEXT')
+addColumn('customers', 'is_self', 'INTEGER NOT NULL DEFAULT 0')
+// Entrustment per company / plate and service, with history: a change ends the current row and adds a new one.
+db.exec(`CREATE TABLE IF NOT EXISTS service_scopes(id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, owner_type TEXT NOT NULL, owner_id TEXT NOT NULL, service TEXT NOT NULL, handler TEXT NOT NULL, provider_name TEXT, started_on TEXT NOT NULL, ended_on TEXT, notes TEXT, updated_by TEXT, updated_at TEXT NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS service_scopes_current ON service_scopes(owner_type, owner_id, service) WHERE ended_on IS NULL;
+CREATE TABLE IF NOT EXISTS plate_transfers(id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, plate_asset_id TEXT NOT NULL, from_customer_id TEXT NOT NULL, to_customer_id TEXT NOT NULL, transferred_on TEXT NOT NULL, notes TEXT, created_by TEXT, created_at TEXT NOT NULL)`)
 // Border crossings per plate (two-way plates must cross about every 90 days); kept on the plate so a vehicle change does not reset it.
 db.exec('CREATE TABLE IF NOT EXISTS plate_crossings(id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, plate_asset_id TEXT NOT NULL, crossed_on TEXT NOT NULL, source TEXT NOT NULL, created_by TEXT, created_at TEXT NOT NULL, UNIQUE(plate_asset_id,crossed_on), FOREIGN KEY(plate_asset_id) REFERENCES plate_assets(id))')
 const companyStatusMigration = 'company-status-fields'
@@ -132,8 +138,17 @@ db.prepare('UPDATE users SET tenant_id=? WHERE tenant_id IS NULL').run(DEFAULT_T
 db.prepare('UPDATE customers SET tenant_id=? WHERE tenant_id IS NULL').run(DEFAULT_TENANT)
 // Every tenant gets any default rule it does not have yet; edited rules are left alone.
 export function seedRules(tenantId) {
-  defaultRules.forEach((rule, index) => db.prepare('INSERT OR IGNORE INTO rules(id,tenant_id,code,name,scope,method,match_json,params_json,remind_days,active,customer_visible,sort) VALUES (?,?,?,?,?,?,?,?,?,1,?,?)')
-    .run(randomUUID(), tenantId, rule.code, rule.name, rule.scope, rule.method, JSON.stringify(rule.match), JSON.stringify(rule.params), rule.remindDays, Number(rule.customerVisible), index))
+  defaultRules.forEach((rule, index) => db.prepare('INSERT OR IGNORE INTO rules(id,tenant_id,code,name,scope,method,match_json,params_json,remind_days,active,customer_visible,sort,service) VALUES (?,?,?,?,?,?,?,?,?,1,?,?,?)')
+    .run(randomUUID(), tenantId, rule.code, rule.name, rule.scope, rule.method, JSON.stringify(rule.match), JSON.stringify(rule.params), rule.remindDays, Number(rule.customerVisible), index, rule.service))
+  // Rules created before services existed take the default service of their code, or of their scope.
+  for (const rule of defaultRules) db.prepare('UPDATE rules SET service=? WHERE tenant_id=? AND code=? AND service IS NULL').run(rule.service, tenantId, rule.code)
+  db.prepare("UPDATE rules SET service=CASE scope WHEN 'company' THEN 'company_upkeep' ELSE 'plate_service' END WHERE tenant_id=? AND service IS NULL").run(tenantId)
+  ensureSelfCustomer(tenantId)
+}
+// Every tenant has exactly one built-in 「本公司（自有）」 customer for its own indicators.
+export function ensureSelfCustomer(tenantId) {
+  if (db.prepare('SELECT id FROM customers WHERE tenant_id=? AND is_self=1').get(tenantId)) return
+  db.prepare('INSERT INTO customers(id,name,kind,tenant_id,is_self) VALUES (?,?,?,?,1)').run(randomUUID(), '本公司（自有）', '公司', tenantId)
 }
 for (const tenant of db.prepare('SELECT id FROM tenants').all()) seedRules(tenant.id)
 const approvalRuleMigration = 'approval-rule-card-expires-on'

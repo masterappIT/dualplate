@@ -9,6 +9,7 @@ import { parseCsv, requiredHeaders } from './plate-import.js'
 import { computeDeadlines } from './rules.js'
 import { plateFacts } from './plate-facts.js'
 import { addCrossing, deleteCrossing, crossingSummary } from './crossings.js'
+import { entrustmentRoutes } from './entrustment-routes.js'
 
 const port = Number(process.env.PORT || 4100)
 const allowedOrigins = new Set((process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174').split(','))
@@ -131,6 +132,7 @@ export const server = http.createServer(async (req, res) => {
     if (path === '/api/catalog' && req.method === 'GET') return json(res, 200, { services, sources, routePlans: Object.fromEntries(services.map(s => [s.code, Object.fromEntries(s.routes.map(route => [route, planFor(s, route)]))])) })
     if (await phase1Routes(req, res, url, user, { json, fail, parseBody, canAccessCustomer, vehicleFor, plateFor, query, one, clean })) return
     if (await customerRoutes(req, res, url, user, { json, fail, query, one, plateFor, parseBody })) return
+    if (await entrustmentRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (path === '/api/import/plates' && req.method === 'POST') {
       if (user.role !== 'admin') return fail(res, 403, '無權限')
       const body = await parseBody(req)
@@ -247,7 +249,7 @@ export const server = http.createServer(async (req, res) => {
       return json(res, 200, { cardData: recognized.cardData, fieldStatus: recognized.fieldStatus })
     }
     if (path === '/api/customers' && req.method === 'GET') {
-      return json(res, 200, user.role === 'admin' ? query('SELECT * FROM customers WHERE tenant_id=? ORDER BY name', user.tenant_id) : query('SELECT * FROM customers WHERE id=?', user.customer_id))
+      return json(res, 200, user.role === 'admin' ? query('SELECT * FROM customers WHERE tenant_id=? ORDER BY is_self DESC, name', user.tenant_id) : query('SELECT * FROM customers WHERE id=?', user.customer_id))
     }
     const crossingMatch = path.match(/^\/api\/plates\/([^/]+)\/crossings(?:\/([^/]+))?$/)
     if (crossingMatch) {
@@ -435,6 +437,7 @@ export const server = http.createServer(async (req, res) => {
       const body = await parseBody(req)
       if (!required(body, ['customerId', 'name', 'email', 'password'])) return fail(res, 400, '資料不完整')
       if (!canAccessCustomer(user, body.customerId)) return fail(res, 404, '客戶不存在')
+      if (one('SELECT is_self FROM customers WHERE id=?', body.customerId)?.is_self) return fail(res, 409, '本公司（自有）不開通客戶端登入')
       if (body.password.length < 12) return fail(res, 400, '密碼至少 12 字元')
       const userId = id()
       db.prepare('INSERT INTO users(id,role,name,email,password_hash,customer_id,tenant_id) VALUES (?,?,?,?,?,?,?)').run(userId, 'customer', clean(body.name, 100), clean(body.email, 160).toLowerCase(), hashPassword(body.password), body.customerId, user.tenant_id)

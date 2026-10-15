@@ -242,7 +242,8 @@ describe('第一階段 API 整合測試', { concurrency:false }, () => {
     assert.equal(created.status,0,created.stderr)
     const token = (await state.request('/admin/login','POST',{username:'newtenantadmin',password:'password123'})).body.token
     assert.equal((await state.request('/rules','GET',undefined,token)).body.length,defaultRules.length)
-    assert.deepEqual((await state.request('/customers','GET',undefined,token)).body,[])
+    // 新租戶只有內置的「本公司（自有）」客戶（委託範圍與自有指標，管理者 2026-10-16 確認）
+    assert.deepEqual((await state.request('/customers','GET',undefined,token)).body.map(item => [item.name, item.is_self]),[['本公司（自有）',1]])
   })
 
   const importHeaders = '客戶,路線,內地車牌,港澳車牌,批文卡號,批文到期,CRP／通行證到期,香港／澳門公司,內地公司'

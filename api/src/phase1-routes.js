@@ -1,5 +1,8 @@
 import { db, id, now } from './db.js'
 import { plateFacts } from './plate-facts.js'
+import { scopeMap } from './entrustment.js'
+// Vehicle items follow the entrustment of the plate the vehicle is mounted on.
+const mountedOn = (plates, vehicleId) => { const plate = plates.find(item => item.vehicle_id === vehicleId); return plate ? { type: 'plate', id: plate.id } : null }
 import { computeDeadlines, ruleMatches, ruleScopes, ruleMethods, matchKeys, dateFields } from './rules.js'
 
 const date = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value + 'T00:00:00Z')) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value
@@ -217,15 +220,17 @@ export async function phase1Routes(req, res, url, user, h) {
     const owners = [
       ...plates.map(item => ({ ownerType: 'plate', ownerId: item.id, label: `${item.mainland_plate || '內地車牌待補'} · ${item.local_plate || '港澳車牌待補'}`, customerId: item.customer_id, customerName: names.get(item.customer_id), facts: facts('plate', item) })),
       ...companies.map(item => ({ ownerType: 'company', ownerId: item.id, label: item.name, customerId: item.customer_id, customerName: names.get(item.customer_id), facts: facts('company', item) })),
-      ...vehicles.map(item => ({ ownerType: 'vehicle', ownerId: item.id, label: item.plate, customerId: item.customer_id, customerName: names.get(item.customer_id), facts: facts('vehicle', item) }))
+      ...vehicles.map(item => ({ ownerType: 'vehicle', ownerId: item.id, label: item.plate, customerId: item.customer_id, customerName: names.get(item.customer_id), facts: facts('vehicle', item), scopeOwner: mountedOn(plates, item.id) }))
     ]
     const tracked = new Map(query('SELECT * FROM tracked_items WHERE tenant_id=?', tenant).map(item => [`${item.owner_type}:${item.owner_id}:${item.code}`, item]))
     const completions = new Set(query('SELECT * FROM rule_completions WHERE tenant_id=?', tenant).map(item => `${item.code}:${item.owner_id}:${item.period}`))
-    const deadlines = computeDeadlines({ rules: rules(), owners, tracked, completions, windowDays: days }).filter(item => item.level !== 'ok')
-    const counts = Object.fromEntries(['overdue','due','missing','upcoming'].map(level => [level, deadlines.filter(item => item.level === level).length]))
+    const deadlines = computeDeadlines({ rules: rules(), owners, tracked, completions, scopes: scopeMap(tenant), windowDays: days }).filter(item => item.level !== 'ok')
+    // Items the client handles themselves are listed (for the client view) but never counted as our work.
+    const ours = deadlines.filter(item => item.handler !== 'client')
+    const counts = Object.fromEntries(['overdue','due','missing','upcoming'].map(level => [level, ours.filter(item => item.level === level).length]))
     const byUsage = Object.fromEntries([...new Set(plates.map(item => item.usage_status))].map(status => [status, plates.filter(item => item.usage_status === status).length]))
     return send(200, { deadlines, counts, plates: { total: plates.length, byUsage }, customers: customers.map(item => {
-      const entries = deadlines.filter(entry => entry.customerId === item.id), overdue = entries.filter(entry => entry.level === 'overdue').length, due = entries.filter(entry => entry.level === 'due').length, missing = entries.filter(entry => entry.level === 'missing').length
+      const entries = ours.filter(entry => entry.customerId === item.id), overdue = entries.filter(entry => entry.level === 'overdue').length, due = entries.filter(entry => entry.level === 'due').length, missing = entries.filter(entry => entry.level === 'missing').length
       const customerCompanies = companies.filter(company => company.customer_id === item.id)
       return { ...item, plates: plates.filter(plate => plate.customer_id === item.id).length, companies: customerCompanies.filter(company => company.status !== '已註銷').length, dissolvedCompanies: customerCompanies.filter(company => company.status === '已註銷').length, overdue, due, missing, health: overdue ? 'red' : due || missing ? 'amber' : 'green' }
     }) })
