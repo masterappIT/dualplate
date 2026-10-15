@@ -1,106 +1,27 @@
 <template>
-  <div class="page-heading">
-    <div>
-      <button class="back" @click="view = 'customers'">← 返回客戶</button>
-      <div class="eyebrow">CUSTOMER PROFILE</div>
-      <h1>{{ selectedCustomer.name }}</h1>
-      <p>
-        {{ selectedCustomer.kind }} · {{ selectedCustomer.phone || "未填電話" }}
-      </p>
-    </div>
-    <div class="heading-actions">
-      <button class="button outline" @click="modal = 'customer-user'">
-        開通客戶登入</button
-      ><button class="button outline" @click="modal = 'vehicle'">
-        ＋ 登記車輛</button
-      ><button class="button primary" @click="modal = 'plate'">
-        ＋ 登記兩地牌
-      </button>
-    </div>
-  </div>
-  <div class="grid-two">
-    <section class="panel">
-      <div class="panel-head">
-        <div>
-          <h2>名下兩地牌</h2>
-          <p>每個牌的上牌與使用狀態獨立管理</p>
-        </div>
-      </div>
-      <button
-        v-for="p in customerPlates"
-        :key="p.id"
-        class="list-row"
-        @click="openPlate(p)"
-      >
-        <span class="list-icon">▰</span
-        ><span class="list-main"
-          ><strong
-            >{{ p.mainland_plate || "內地號牌待補充" }} ·
-            {{ p.local_plate || "港／澳號牌待補充" }}</strong
-          ><small
-            >{{ p.route }} · {{ p.installation_status }} ·
-            {{ p.usage_status }}</small
-          ></span
-        ><span>→</span>
-      </button>
-      <div v-if="!customerPlates.length" class="empty">尚未登記兩地牌</div>
-    </section>
-    <section class="panel">
-      <div class="panel-head">
-        <div>
-          <h2>名下車輛</h2>
-          <p>牌證和驗車由車輛檔案管理</p>
-        </div>
-      </div>
-      <button
-        v-for="v in customerVehicles"
-        :key="v.id"
-        class="list-row"
-        @click="openVehicle(v)"
-      >
-        <span class="list-icon">▰</span
-        ><span class="list-main"
-          ><strong>{{ v.plate }}</strong
-          ><small>{{ v.route }} · {{ v.origin }} · {{ v.type }}</small></span
-        ><span>→</span>
-      </button>
-      <div v-if="!customerVehicles.length" class="empty">尚未登記車輛</div>
-    </section>
-  </div>
-  <section class="panel">
-    <div class="panel-head">
-      <div>
-        <h2>代辦案件</h2>
-        <p>包含客戶端提交的要求</p>
-      </div>
-    </div>
-    <button
-      v-for="r in customerRequests"
-      :key="r.id"
-      class="list-row"
-      @click="openRequest(r)"
-    >
-      <span class="list-icon">{{ iconFor(r.service_code) }}</span
-      ><span class="list-main"
-        ><strong>{{ r.title }}</strong
-        ><small>{{ r.stage }}</small></span
-      ><span class="badge">{{ r.status }}</span>
-    </button>
-    <div v-if="!customerRequests.length" class="empty">尚無案件</div>
-  </section>
+  <div class="page-heading"><div><button class="back" @click="view = 'customers'">← 返回客戶</button><div class="eyebrow">CUSTOMER PROFILE</div><h1>{{ selectedCustomer.name }}</h1><p>{{ selectedCustomer.kind }} · {{ selectedCustomer.phone || '未填電話' }} · {{ customerPlates.length }} 個牌照 · {{ companyGroups.length }} 個公司組</p></div><div class="heading-actions"><button class="button outline" @click="modal = 'customer-user'">開通登入</button><select class="button" aria-label="新增資料" @change="addRecord($event)"><option value="">＋ 新增</option><option value="plate">牌照</option><option value="vehicle">車輛</option><option value="company">公司組</option><option value="request">案件</option></select></div></div>
+  <div class="customer-summary"><span><strong>{{ customerPlates.length }}</strong>個牌照</span><span><strong>{{ companyGroups.length }}</strong>個公司組</span><span><strong>{{ customerVehicles.length }}</strong>輛車</span><span><strong>{{ customerRequests.length }}</strong>個業務</span></div>
+  <div class="tabs customer-tabs"><button v-for="tab in tabs" :key="tab.id" class="tab" :class="{ active: customerTab === tab.id }" @click="customerTab = tab.id">{{ tab.name }}</button></div>
+  <template v-if="customerTab === 'overview'"><div class="customer-summary"><span>已逾期：{{ customerDeadlines.filter(item => item.level === 'overdue').length }}</span><span>需處理：{{ customerDeadlines.filter(item => item.level === 'due').length }}</span><span>待錄入：{{ customerDeadlines.filter(item => item.level === 'missing').length }}</span><span>進行中業務：{{ customerRequests.filter(item => item.status !== '已完成').length }}</span><span>牌照：{{ customerPlates.length }}</span><span>公司：{{ customerCompanies.length }}</span></div><div class="grid-two"><section class="panel"><div class="panel-head"><div><h2>需要處理的事</h2><p>只顯示此客戶的逾期、需處理與待錄入。</p></div></div><div v-for="item in customerDeadlines" :key="`${item.ruleCode}:${item.ownerId}`" class="record-row"><div><strong>{{ item.name }}</strong><small>{{ item.ownerLabel }}</small></div><span class="badge" :class="tone(item.level)">{{ label(item.level) }}</span></div><div v-if="!customerDeadlines.length" class="empty">目前沒有待處理項目</div></section><section class="panel"><div class="panel-head"><div><h2>進行中業務</h2><p>此客戶尚未完成的案件。</p></div></div><button v-for="request in customerRequests.filter(item => item.status !== '已完成')" :key="request.id" class="list-row" @click="openRequest(request)"><span class="list-icon">{{ iconFor(request.service_code) }}</span><span class="list-main"><strong>{{ request.title }}</strong><small>{{ request.stage }} · {{ request.status }}</small></span><span>→</span></button><div v-if="!customerRequests.some(item => item.status !== '已完成')" class="empty">目前沒有進行中業務</div></section></div></template>
+  <template v-else-if="customerTab === 'companies'"><Companies :initial-customer="selectedCustomer.id" :add-group-request="addGroupRequest" @plate="openPlateById" @saved="companySaved" @error="showError" /></template>
+  <template v-else-if="customerTab === 'plates'"><section class="panel table-panel"><div class="panel-head"><div><h2>客戶牌照</h2><p>欄位與牌照總表一致。</p></div></div><div class="table-wrap"><table><thead><tr><th>車牌</th><th>持牌公司</th><th>客戶</th><th>口岸</th><th>批文到期</th><th>CRP／通行證到期</th><th>使用</th><th>狀態</th></tr></thead><tbody><tr v-for="plate in customerPlates" :key="plate.id"><td><button class="phase-link" @click="openPlate(plate)">{{ plate.mainland_plate || '待補充' }} · {{ plate.local_plate || '待補充' }}</button></td><td>{{ plate.holder_company || plate.card_data?.company || '批文卡商號待補' }}</td><td>{{ selectedCustomer.name }}</td><td>{{ plate.port || '待設定' }}</td><td>{{ plate.card_expires_on || '資料不全' }}</td><td><input class="date-cell" type="date" :value="plate.permit_expires_on || ''" @change="savePermit(plate, $event.target.value)" /></td><td>{{ plate.usage_status }}</td><td><span class="badge" :class="tone(plate.health_status)">{{ label(plate.health_status) }}</span></td></tr></tbody></table></div></section></template>
+  <template v-else-if="customerTab === 'vehicles'"><section class="panel"><div class="panel-head"><div><h2>車輛與司機</h2><p>司機名單取自各牌照批文卡上的駕駛人。</p></div></div><div v-for="vehicle in customerVehicles" :key="vehicle.id" class="record-row"><button class="phase-link" @click="openVehicle(vehicle)">{{ vehicle.plate }}</button><span>{{ vehicle.route }} · {{ vehicle.origin }} · {{ vehicle.type }}</span><span>{{ driversFor(vehicle).join('、') || '批文卡尚未填寫駕駛人' }}</span></div><div v-if="!customerVehicles.length" class="empty">尚未登記車輛</div></section></template>
+  <template v-else><section class="panel"><div class="panel-head"><div><h2>客戶業務</h2><p>沿用現有案件詳情與節點操作。</p></div></div><button v-for="request in customerRequests" :key="request.id" class="list-row" @click="openRequest(request)"><span class="list-icon">{{ iconFor(request.service_code) }}</span><span class="list-main"><strong>{{ request.title }}</strong><small>{{ request.stage }}</small></span><span class="badge">{{ request.status }}</span></button><div v-if="!customerRequests.length" class="empty">尚無案件</div></section></template>
 </template>
 <script setup>
-import { useAdminStore } from "../store";
-const {
-  view,
-  selectedCustomer,
-  modal,
-  customerVehicles,
-  customerPlates,
-  customerRequests,
-  openPlate,
-  openVehicle,
-  openRequest,
-  iconFor,
-} = useAdminStore();
+import { computed, ref } from 'vue'
+import Companies from './Companies.vue'
+import { useAdminStore } from '../store'
+const { view, selectedCustomer, modal, customerTab, customerPlates, customerVehicles, customerRequests, overviewData, companyGroups: allGroups, companyRecords, newRequest, saveTrackedItem, refresh, openPlate, openPlateById, openVehicle, openRequest, iconFor, showSuccess, showError } = useAdminStore()
+const tabs = [{ id: 'overview', name: '概覽' }, { id: 'companies', name: '公司組' }, { id: 'plates', name: '牌照' }, { id: 'vehicles', name: '車輛與司機' }, { id: 'business', name: '業務' }]
+const addGroupRequest = ref(0)
+const companyGroups = computed(() => allGroups.value.filter(group => group.customer_id === selectedCustomer.value?.id))
+const customerCompanies = computed(() => companyRecords.value.filter(company => company.customer_id === selectedCustomer.value?.id))
+function addRecord(event) { const choice = event.target.value; event.target.value = ''; if (choice === 'company') { customerTab.value = 'companies'; addGroupRequest.value += 1 } else if (choice === 'request') { newRequest.value.customerId = selectedCustomer.value.id; view.value = 'new-request' } else if (choice) { useAdminStore().form.value = { customerId: selectedCustomer.value.id, route: '粵港', origin: '香港', kind: '個人' }; modal.value = choice } }
+async function companySaved(message) { await refresh(); showSuccess(message) }
+async function savePermit(plate, expiresOn) { await saveTrackedItem({ ownerType: 'plate', ownerId: plate.id, code: plate.route === '粵港' ? 'hk_crp' : 'mo_permit', expiresOn }) }
+const customerDeadlines = computed(() => (overviewData.value.deadlines || []).filter(item => item.customerId === selectedCustomer.value?.id && ['overdue', 'due', 'missing'].includes(item.level)))
+const tone = level => ({ overdue: 'danger', due: 'amber', missing: 'muted' }[level] || '')
+const label = level => ({ overdue: '已逾期', due: '需處理', missing: '待錄入', ok: '正常' }[level] || level)
+const driversFor = vehicle => [...new Set(customerPlates.value.filter(plate => plate.vehicle_id === vehicle.id).flatMap(plate => Object.entries(plate.card_data || {}).filter(([key, value]) => /^driver\d+$/.test(key) && value).map(([, value]) => value)))]
 </script>

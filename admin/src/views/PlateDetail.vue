@@ -1,7 +1,7 @@
 <template>
   <div class="page-heading">
     <div>
-      <button class="back" @click="view = 'vehicles'">← 返回兩地牌</button>
+      <button class="back" @click="view = 'plates'">← 返回牌照</button>
       <div class="eyebrow">PLATE RECORD</div>
       <h1>
         {{ selectedPlate.mainland_plate || "內地號牌待補充" }} ·

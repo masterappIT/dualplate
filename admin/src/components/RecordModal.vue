@@ -143,23 +143,6 @@
           儲存出租記錄
         </button></template
       >
-      <template v-if="modal === 'credential'"
-        ><p class="dialog-note">{{ selectedVehicle?.plate }} 的獨立牌證紀錄</p>
-        <label>證件名稱</label
-        ><input v-model="form.name" placeholder="例如：廣東批文卡" /><label
-          >簽發機關</label
-        ><input v-model="form.issuer" /><label>證件編號</label
-        ><input v-model="form.number" /><label>有效期至</label
-        ><input v-model="form.expiresOn" type="date" /><label>官方來源</label
-        ><select v-model="form.sourceId">
-          <option value="">待核對</option>
-          <option v-for="s in sources" :value="s.id" :key="s.id">
-            {{ s.id }} · {{ s.title }}
-          </option></select
-        ><button class="button primary full" @click="createCredential">
-          新增牌證
-        </button></template
-      >
       <template v-if="modal === 'inspection'"
         ><p class="dialog-note">
           {{ selectedVehicle?.plate }} · 驗車要求以適用官方來源核對
@@ -200,7 +183,6 @@ const {
   createVehicle,
   createPlate,
   createRental,
-  createCredential,
   createInspection,
 } = useAdminStore();
 </script>

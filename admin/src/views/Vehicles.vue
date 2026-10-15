@@ -1,100 +1,23 @@
 <template>
-  <div class="page-heading">
-    <div>
-      <div class="eyebrow">PLATE & VEHICLE RECORDS</div>
-      <h1>兩地牌、車輛與牌證</h1>
-      <p>每個牌可獨立記錄上牌、出租、批文卡正反面。</p>
-    </div>
-    <div class="heading-actions">
-      <button class="button outline" @click="modal = 'vehicle'">
-        ＋ 登記車輛</button
-      ><button class="button primary" @click="modal = 'plate'">
-        ＋ 登記兩地牌
-      </button>
-    </div>
-  </div>
-  <section class="panel table-panel">
-    <div class="panel-head plate-panel-head">
-      <div>
-        <h2>兩地牌台帳</h2>
-        <p>未上牌的牌也可獨立保存</p>
-      </div>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>內地號牌</th>
-            <th>港／澳號牌</th>
-            <th>客戶</th>
-            <th>路線</th>
-            <th>上牌</th>
-            <th>使用</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="p in plates" :key="p.id" @click="openPlate(p)">
-            <td>
-              <strong>{{ p.mainland_plate || "待補充" }}</strong>
-            </td>
-            <td>{{ p.local_plate || "待補充" }}</td>
-            <td>{{ customerName(p.customer_id) }}</td>
-            <td>
-              <span class="route-tag">{{ p.route }}</span>
-            </td>
-            <td>{{ p.installation_status }}</td>
-            <td>{{ p.usage_status }}</td>
-            <td>→</td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-if="!plates.length" class="empty">尚未登記兩地牌</div>
-    </div>
+  <div class="page-heading"><div><div class="eyebrow">PLATE REGISTER</div><h1>牌照</h1><p>全部牌照集中在一張表，日期可直接填寫或批量更新。</p></div><div class="heading-actions"><button class="button outline" @click="modal = 'vehicle'">＋ 登記車輛</button><button class="button primary" @click="modal = 'plate'">＋ 登記牌照</button></div></div>
+  <section class="panel table-panel"><div class="panel-head"><div><h2>牌照總表</h2><p>點選車牌進入現有兩地牌詳情。</p></div><div class="table-tools"><input v-model="plateSearch" class="table-search" placeholder="搜尋車牌、客戶或公司" /><label class="file-button button">匯入 CSV<input type="file" accept=".csv,text/csv" @change="readCsv" /></label></div></div>
+    <div class="tabs"><button v-for="filter in filters" :key="filter.id" class="tab" :class="{ active: plateFilter === filter.id }" @click="plateFilter = filter.id">{{ filter.name }}</button></div>
+    <div class="bulk-bar"><label>已選 {{ selectedPlateIds.length }} 個牌照</label><select v-model="bulkRule" :disabled="!allowedBulkRules.length"><option v-if="allowedBulkRules.includes('hk_crp')" value="hk_crp">CRP 到期</option><option v-if="allowedBulkRules.includes('mo_permit')" value="mo_permit">澳門通行證到期</option></select><input v-model="bulkDate" type="date" /><button class="button" :disabled="!allowedBulkRules.length" @click="saveBulkDates">批量儲存日期</button><span v-if="!allowedBulkRules.length">請按路線分開批量填寫</span></div>
+    <div class="table-wrap"><table><thead><tr><th><input type="checkbox" :checked="allSelected" @change="toggleAll" /></th><th>車牌</th><th>持牌公司</th><th>客戶</th><th>口岸</th><th>批文到期</th><th>CRP／通行證到期</th><th>使用</th><th>狀態</th></tr></thead><tbody><tr v-for="plate in filteredPlateRows" :key="plate.id"><td><input v-model="selectedPlateIds" type="checkbox" :value="plate.id" @click.stop /></td><td @click="openPlate(plate)"><strong>{{ plate.mainland_plate || '待補充' }} · {{ plate.local_plate || '待補充' }}</strong><small>{{ plate.route }} · {{ plate.card_number || '批文卡號待補' }}</small></td><td>{{ plate.holder_company || plate.card_data?.company || '批文卡商號待補' }}</td><td>{{ customerName(plate.customer_id) }}</td><td>{{ plate.port || '待設定' }}</td><td>{{ plate.card_expires_on || '資料不全' }}</td><td><input class="date-cell" type="date" :value="plate.permit_expires_on || ''" @click.stop @change="savePermit(plate, $event.target.value)" /></td><td>{{ usageLabel(plate.usage_status) }}</td><td><span class="badge" :class="statusTone(plate.health_status)">{{ statusLabel(plate.health_status) }}</span></td></tr></tbody></table><div v-if="!filteredPlateRows.length" class="empty">尚未找到符合條件的牌照</div></div>
   </section>
-  <section class="panel table-panel">
-    <div class="panel-head plate-panel-head">
-      <div>
-        <h2>車輛檔案</h2>
-        <p>可綁定至相關兩地牌</p>
-      </div>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>車輛</th>
-            <th>客戶</th>
-            <th>路線</th>
-            <th>來源地</th>
-            <th>製造年份</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="v in vehicles" :key="v.id" @click="openVehicle(v)">
-            <td>
-              <strong>{{ v.plate }}</strong
-              ><small>{{
-                [v.brand, v.model].filter(Boolean).join(" ") || v.type
-              }}</small>
-            </td>
-            <td>{{ customerName(v.customer_id) }}</td>
-            <td>
-              <span class="route-tag">{{ v.route }}</span>
-            </td>
-            <td>{{ v.origin }}</td>
-            <td>{{ v.manufactured_year || "待核對" }}</td>
-            <td>→</td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-if="!vehicles.length" class="empty">尚未登記車輛</div>
-    </div>
-  </section>
+  <section v-if="importPreview" class="panel"><div class="panel-head"><div><h2>CSV 匯入預覽</h2><p>確認前不會寫入資料；相同客戶、路線與批文卡號會更新；空白欄位不清除原資料。</p></div><button class="button" @click="importPreview = null">關閉預覽</button></div><div class="import-summary"><span>新增 {{ importPreview.summary.create }}</span><span>更新 {{ importPreview.summary.update }}</span><span>錯誤 {{ importPreview.summary.error }}</span></div><div v-for="row in importPreview.rows" :key="row.rowNumber" class="import-row"><strong>第 {{ row.rowNumber }} 列 · {{ row.action }}</strong><span v-for="header in importPreview.headers" :key="header">{{ header }}：{{ row.values[header] || '—' }}</span><span v-if="row.groupAction">公司組：{{ row.groupAction }}</span><span v-if="row.errors.length" class="badge danger">{{ row.errors.join('；') }}</span><span v-else class="badge success">可寫入</span></div><button v-if="importPreview.dryRun && !importPreview.summary.error" class="button primary" @click="confirmImport">確認寫入</button></section>
 </template>
 <script setup>
-import { useAdminStore } from "../store";
-const { modal, plates, vehicles, customerName, openPlate, openVehicle } =
-  useAdminStore();
+import { computed } from 'vue'
+import { useAdminStore } from '../store'
+const { modal, plateSearch, plateFilter, filteredPlateRows, selectedPlateIds, bulkRule, allowedBulkRules, bulkDate, saveBulkDates, customerName, openPlate, previewPlateImport, confirmPlateImport, importPreview, saveTrackedItem, showError } = useAdminStore()
+const filters = [{ id: 'all', name: '全部' }, { id: 'attention', name: '需注意' }, { id: 'rental', name: '出租中' }, { id: 'own', name: '自用' }, { id: 'empty', name: '空置' }, { id: 'missing', name: '資料不全' }]
+const allSelected = computed(() => filteredPlateRows.value.length > 0 && filteredPlateRows.value.every(item => selectedPlateIds.value.includes(item.id)))
+const statusTone = status => ({ overdue: 'danger', due: 'amber', missing: 'muted', ok: 'success' }[status] || '')
+const statusLabel = status => ({ overdue: '已逾期', due: '需注意', missing: '資料不全', ok: '正常' }[status] || status)
+const usageLabel = status => status
+function toggleAll(event) { selectedPlateIds.value = event.target.checked ? filteredPlateRows.value.map(item => item.id) : [] }
+async function savePermit(plate, expiresOn) { try { await saveTrackedItem({ ownerType: 'plate', ownerId: plate.id, code: plate.route === '粵港' ? 'hk_crp' : 'mo_permit', expiresOn }) } catch (error) { showError(error) } }
+function readCsv(event) { const file = event.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { const text = String(reader.result); if (text.includes('\uFFFD')) return showError(new Error('檔案不是 UTF-8，請在 Excel 選「CSV UTF-8（逗號分隔）」另存')); previewPlateImport(text) }; reader.onerror = () => showError(new Error('CSV 讀取失敗')); reader.readAsText(file, 'UTF-8'); event.target.value = '' }
+async function confirmImport() { await confirmPlateImport() }
 </script>

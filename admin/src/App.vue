@@ -1,10 +1,10 @@
 <template>
   <div v-if="!account" class="login-screen">
     <div class="login-card">
-      <div class="brand-icon">跨</div>
-      <div class="eyebrow">CROSS BORDER · OPERATIONS</div>
-      <h1>跨境車牌代辦管理</h1>
-      <p>以官方流程為依據，管理客戶、車輛與每一項代辦。</p>
+      <div class="brand-icon">牌</div>
+      <div class="eyebrow">PLATE CARE · ADMIN</div>
+      <h1>車牌管家</h1>
+      <p>管理客戶的兩地牌、公司與到期事項。</p>
       <label for="admin-username">管理員帳號</label>
       <input
         id="admin-username"
@@ -33,8 +33,8 @@
   <div v-else class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-icon">跨</div>
-        <div><strong>跨境車牌代辦</strong><small>OPERATIONS HUB</small></div>
+        <div class="brand-icon">牌</div>
+        <div><strong>車牌管家</strong><small>PLATE CARE</small></div>
       </div>
       <div class="nav-group-title">工作空間</div>
       <button
@@ -51,7 +51,7 @@
           :size="19"
           :stroke-width="1.8"
         /><span>{{ nav.name }}</span
-        ><span v-if="nav.id === 'requests' && newCount" class="nav-count">{{
+        ><span v-if="nav.id === 'business' && newCount" class="nav-count">{{
           newCount
         }}</span>
       </button>
@@ -99,38 +99,20 @@
             ×
           </button>
         </div>
-        <Overview
-          v-if="view === 'overview'"
-          @open="openDeadline"
-          @error="showError"
-        />
-        <Companies
-          v-else-if="view === 'companies'"
-          :customers="customers"
-          :initial-customer="companyCustomer"
-          @plate="openPlateById"
-          @saved="showSuccess"
-          @error="showError"
-        />
-        <Rules
-          v-else-if="view === 'rules'"
-          @saved="showSuccess"
-          @error="showError"
-        />
-        <Dashboard v-else-if="view === 'dashboard'" />
-        <Requests v-else-if="view === 'requests'" />
-        <RequestDetail v-else-if="view === 'request-detail' && selected" />
+        <Dashboard v-if="view === 'dashboard'" />
         <Customers v-else-if="view === 'customers'" />
+        <Vehicles v-else-if="view === 'plates'" />
+        <Requests v-else-if="view === 'business'" />
+        <Settings v-else-if="view === 'settings'" @saved="showSuccess" @error="showError" />
+        <RequestDetail v-else-if="view === 'request-detail' && selected" />
         <CustomerDetail
           v-else-if="view === 'customer-detail' && selectedCustomer"
         />
-        <Vehicles v-else-if="view === 'vehicles'" />
         <PlateDetail v-else-if="view === 'plate-detail' && selectedPlate" />
         <VehicleDetail
           v-else-if="view === 'vehicle-detail' && selectedVehicle"
         />
         <NewRequest v-else-if="view === 'new-request'" />
-        <Sources v-else-if="view === 'sources'" />
       </div>
     </main>
     <RecordModal />
@@ -140,9 +122,7 @@
 import { onMounted } from "vue";
 import { ShieldCheck, LogOut } from "@lucide/vue";
 import { useAdminStore } from "./store";
-import Overview from "./views/Overview.vue";
-import Companies from "./views/Companies.vue";
-import Rules from "./views/Rules.vue";
+import Settings from "./views/Settings.vue";
 import Dashboard from "./views/Dashboard.vue";
 import Requests from "./views/Requests.vue";
 import RequestDetail from "./views/RequestDetail.vue";
@@ -152,7 +132,6 @@ import Vehicles from "./views/Vehicles.vue";
 import VehicleDetail from "./views/VehicleDetail.vue";
 import PlateDetail from "./views/PlateDetail.vue";
 import NewRequest from "./views/NewRequest.vue";
-import Sources from "./views/Sources.vue";
 import RecordModal from "./components/RecordModal.vue";
 const {
   account,
@@ -167,8 +146,6 @@ const {
   navigate,
   newCount,
   customers,
-  companyCustomer,
-  openDeadline,
   showError,
   openPlateById,
   showSuccess,

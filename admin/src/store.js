@@ -15,20 +15,21 @@ import {
   ArrowUpRight,
   BellRing,
   Clock3,
+  CalendarClock,
+  BriefcaseBusiness,
+  Settings2,
+  Table2,
 } from "@lucide/vue";
 import { api, save, clear, user } from "./api";
 const navigation = [
-  { id: "overview", name: "管理總覽", icon: LayoutDashboard },
-  { id: "dashboard", name: "案件工作台", icon: LayoutDashboard },
-  { id: "companies", name: "公司與指標", icon: UsersRound },
-  { id: "rules", name: "規則設定", icon: ClipboardCheck },
-  { id: "requests", name: "代辦案件", icon: FolderKanban },
-  { id: "customers", name: "客戶管理", icon: UsersRound },
-  { id: "vehicles", name: "車輛與牌證", icon: CarFront },
-  { id: "sources", name: "官方來源", icon: BookOpenCheck },
+  { id: "dashboard", name: "今日工作", icon: CalendarClock },
+  { id: "customers", name: "客戶", icon: UsersRound },
+  { id: "plates", name: "牌照", icon: Table2 },
+  { id: "business", name: "業務", icon: BriefcaseBusiness },
+  { id: "settings", name: "設定", icon: Settings2 },
 ];
 const account = ref(user()),
-  view = ref("overview"),
+  view = ref("dashboard"),
   companyCustomer = ref(""),
   error = ref(""),
   notice = ref(""),
@@ -37,13 +38,17 @@ const account = ref(user()),
   customers = ref([]),
   vehicles = ref([]),
   plates = ref([]),
+  companyGroups = ref([]),
+  companyRecords = ref([]),
   requests = ref([]),
+  requestDetails = ref([]),
   services = ref([]),
   sources = ref([]),
   search = ref(""),
   statusFilter = ref(""),
   selected = ref(null),
   selectedCustomer = ref(null),
+  customerTab = ref("overview"),
   selectedVehicle = ref(null),
   selectedPlate = ref(null),
   plateForm = ref({}),
@@ -62,7 +67,18 @@ const account = ref(user()),
     description: "",
   });
 const plateGroups = ref([]),
-  vehicleForm = ref({});
+  vehicleForm = ref({}),
+  overviewData = ref({ counts: {}, deadlines: [], customers: [], plates: { total: 0, byUsage: {} } }),
+  todayTab = ref("due"),
+  todayCustomerId = ref(""),
+  customerSearch = ref(""),
+  plateFilter = ref("all"),
+  plateSearch = ref(""),
+  selectedPlateIds = ref([]),
+  bulkRule = ref("hk_crp"),
+  bulkDate = ref(""),
+  importPreview = ref(null),
+  importCsv = ref("");
 watch(selectedPlate, async (plate) => {
   if (!plate) return;
   try {
@@ -105,6 +121,33 @@ async function saveVehicle() {
     showError(e);
   }
 }
+
+async function saveTrackedItem(item) {
+  try {
+    await api('/tracked-items', 'PUT', { ownerType: item.ownerType, ownerId: item.ownerId, code: item.code, expiresOn: item.expiresOn || '', notes: item.notes || '' })
+    await refresh()
+    showSuccess('到期日期已儲存')
+  } catch (error) { showError(error); await refresh() }
+}
+
+async function saveBulkDates() {
+  if (!selectedPlateIds.value.length || !bulkDate.value) return showError(new Error('請先勾選牌照並填寫日期'))
+  try {
+    await api('/tracked-items/bulk', 'PUT', { plateIds: selectedPlateIds.value, code: bulkRule.value, expiresOn: bulkDate.value })
+    selectedPlateIds.value = []
+    bulkDate.value = ''
+    await refresh()
+    showSuccess('已批量儲存到期日期')
+  } catch (error) { showError(error) }
+}
+
+async function previewPlateImport(csv) {
+  try { importPreview.value = null; importCsv.value = csv; importPreview.value = await api('/import/plates?dryRun=1', 'POST', { csv }) } catch (error) { showError(error) }
+}
+
+async function confirmPlateImport() {
+  try { importPreview.value = await api('/import/plates', 'POST', { csv: importCsv.value, previewKey: importPreview.value?.previewKey, confirm: true }); await refresh(); showSuccess('牌照匯入已完成') } catch (error) { showError(error) }
+}
 const cardFields = [
   ["cardNumber", "編號"],
   ["company", "商號"],
@@ -131,7 +174,6 @@ const todayLabel = new Intl.DateTimeFormat("zh-Hant", {
   day: "numeric",
   weekday: "long",
 }).format(new Date());
-const credentialRecords = ref([]);
 const newCount = computed(
     () => requests.value.filter((r) => r.status === "新要求").length,
   ),
@@ -176,7 +218,6 @@ const newCount = computed(
         vehicle: "登記車輛",
         plate: "登記兩地牌",
         rental: "登記出租",
-        credential: "新增牌證",
         inspection: "建立驗車任務",
       })[modal.value] || "操作",
   );
@@ -191,18 +232,6 @@ const priorityRequests = computed(() =>
 );
 const requestRank = (r) =>
   r.status === "新要求" ? 0 : r.status === "已完成" ? 2 : 1;
-const dueCredentials = computed(() =>
-  credentialRecords.value
-    .filter((c) => c.status === "已核對" && c.expires_on)
-    .map((c) => ({
-      ...c,
-      days: Math.ceil(
-        (new Date(c.expires_on + "T00:00:00") - new Date()) / 86400000,
-      ),
-    }))
-    .filter((c) => Number.isFinite(c.days) && c.days <= 120)
-    .sort((a, b) => a.days - b.days),
-);
 const focusTitle = computed(() =>
   newCount.value
     ? `有 ${newCount.value} 項新要求等待受理`
@@ -228,8 +257,44 @@ const serviceIcon = (code) =>
   })[code] || FileText;
 function goFilteredRequests(status) {
   statusFilter.value = status || "active";
-  view.value = "requests";
+  view.value = "business";
 }
+const todayDeadlines = computed(() => {
+  const items = overviewData.value.deadlines || [];
+  const visible = todayTab.value === "missing" ? items.filter((item) => item.level === "missing") : todayTab.value === "customer" ? requestDetails.value.flatMap((request) => (request.tasks || []).filter((task) => task.status === "待客戶配合").map((task) => ({ ...task, request }))) : todayTab.value === "active" ? requests.value.filter((request) => request.status !== "已完成") : items.filter((item) => ["overdue", "due"].includes(item.level));
+  return todayCustomerId.value ? visible.filter((item) => item.customerId === todayCustomerId.value || item.customer_id === todayCustomerId.value || item.request?.customer_id === todayCustomerId.value) : visible;
+});
+const todayCounts = computed(() => ({
+  overdue: overviewData.value.counts?.overdue || 0,
+  due: (overviewData.value.deadlines || []).filter((item) => item.dueOn && item.daysLeft >= 0 && item.daysLeft <= 7).length,
+  missing: overviewData.value.counts?.missing || 0,
+  active: requests.value.filter((request) => request.status !== '已完成').length,
+}));
+const customerRows = computed(() => {
+  const term = customerSearch.value.trim().toLowerCase();
+  return customers.value.filter((customer) => !term || `${customer.name} ${customer.kind}`.toLowerCase().includes(term)).map((customer) => {
+    const entries = overviewData.value.customers?.find((item) => item.id === customer.id) || {};
+    const customerPlates = plates.value.filter((plate) => plate.customer_id === customer.id);
+    const groups = companyGroups.value.filter((group) => group.customer_id === customer.id);
+    const next = (overviewData.value.deadlines || []).filter((item) => item.customerId === customer.id && item.dueOn).sort((a, b) => a.dueOn.localeCompare(b.dueOn))[0];
+    return { ...customer, plateCount: customerPlates.length, groupCount: groups.length, health: entries.health || "green", nextDue: next?.dueOn || "—" };
+  });
+});
+const filteredPlateRows = computed(() => {
+  const term = plateSearch.value.trim().toLowerCase();
+  return plates.value.filter((plate) => {
+    const text = `${plate.mainland_plate || ""} ${plate.local_plate || ""} ${customerName(plate.customer_id)} ${plate.route} ${plate.holder_company || ""}`.toLowerCase();
+    const filterMatches = plateFilter.value === "all" || plateFilter.value === "attention" && ["overdue", "due"].includes(plate.health_status) || plateFilter.value === "rental" && plate.usage_status === "出租中" || plateFilter.value === "own" && plate.usage_status === "自用" || plateFilter.value === "empty" && plate.usage_status === "空置" || plateFilter.value === "missing" && plate.health_status === "missing";
+    return filterMatches && (!term || text.includes(term));
+  });
+});
+const allowedBulkRules = computed(() => {
+  const selected = plates.value.filter(plate => selectedPlateIds.value.includes(plate.id));
+  if (!selected.length) return ['hk_crp', 'mo_permit'];
+  const routes = new Set(selected.map(plate => plate.route));
+  return routes.size === 1 ? [routes.has('粵港') ? 'hk_crp' : 'mo_permit'] : [];
+});
+watch(allowedBulkRules, rules => { if (rules.length && !rules.includes(bulkRule.value)) bulkRule.value = rules[0] });
 function openVehicleById(id) {
   const vehicle = vehicles.value.find((v) => v.id === id);
   if (vehicle) openVehicle(vehicle);
@@ -239,8 +304,12 @@ function openPlateById(id) {
 }
 function openDeadline(item) {
   if (item.ownerType === "company") {
-    companyCustomer.value = item.customerId;
-    view.value = "companies";
+    const customer = customers.value.find((entry) => entry.id === item.customerId);
+    if (customer) {
+      selectedCustomer.value = customer;
+      customerTab.value = "companies";
+      view.value = "customer-detail";
+    }
   } else if (item.ownerType === "plate") openPlateById(item.ownerId);
   else openVehicle({ id: item.ownerId });
 }
@@ -261,29 +330,26 @@ const date = (value) => (value ? String(value).slice(0, 10) : "—"),
 async function refresh() {
   if (!account.value) return;
   try {
-    const [c, v, p, r, cat] = await Promise.all([
+    const [c, v, p, r, cat, overview, groups, companies] = await Promise.all([
       api("/customers"),
       api("/vehicles"),
-      api("/plate-assets"),
+      api("/plate-assets?summary=1"),
       api("/requests"),
       api("/catalog"),
+      api("/overview?days=90"),
+      api('/company-groups'),
+      api('/companies'),
     ]);
     customers.value = c;
     vehicles.value = v;
     plates.value = p;
+    companyGroups.value = groups;
+    companyRecords.value = companies;
     requests.value = r;
+    overviewData.value = overview;
     services.value = cat.services;
     sources.value = cat.sources;
-    const details = await Promise.all(
-      v.map((item) => api("/vehicles/" + item.id)),
-    );
-    credentialRecords.value = details.flatMap((item) =>
-      (item.credentials || []).map((c) => ({
-        ...c,
-        plate: item.plate,
-        vehicleId: item.id,
-      })),
-    );
+    requestDetails.value = await Promise.all(r.map((item) => api("/requests/" + item.id)));
     error.value = "";
   } catch (e) {
     if (e.status === 401) {
@@ -317,12 +383,24 @@ async function login() {
 function logout() {
   clear();
   account.value = null;
-  view.value = "overview";
+  view.value = "dashboard";
 }
 function navigate(id) {
-  view.value = id;
+  const aliases = { overview: "dashboard", companies: "customers", requests: "business", vehicles: "plates", rules: "settings", sources: "settings" };
+  const target = aliases[id] || (navigation.some(item => item.id === id) ? id : 'dashboard');
+  if (target === 'customers' && id === 'companies' && selectedCustomer.value) { customerTab.value = 'companies'; view.value = 'customer-detail' }
+  else view.value = target;
+  if (typeof window !== 'undefined' && window.location.hash.slice(1) !== id) window.location.hash = `#${id}`;
   error.value = "";
   notice.value = "";
+}
+if (typeof window !== 'undefined') {
+  const initial = window.location.hash.slice(1);
+  if (initial) navigate(initial);
+  window.addEventListener('hashchange', () => {
+    const target = window.location.hash.slice(1);
+    if (target && target !== view.value && !(target === 'sources' && view.value === 'settings') && !(target === 'rules' && view.value === 'settings')) navigate(target);
+  });
 }
 function showSuccess(message) {
   error.value = "";
@@ -347,7 +425,22 @@ async function openRequest(r) {
 }
 function openCustomer(c) {
   selectedCustomer.value = c;
+  customerTab.value = "overview";
   view.value = "customer-detail";
+}
+
+async function createRequestFromDeadline(item) {
+  const company = item.ownerType === 'company' ? companyRecords.value.find(entry => entry.id === item.ownerId) : null;
+  const plate = item.ownerType === "plate" ? plates.value.find((entry) => entry.id === item.ownerId) : company?.group_id ? plates.value.find(entry => entry.group_id === company.group_id && entry.customer_id === item.customerId) : null;
+  const vehicle = item.ownerType === "vehicle" ? vehicles.value.find((entry) => entry.id === item.ownerId) : plate?.vehicle_id ? vehicles.value.find((entry) => entry.id === plate.vehicle_id) : null;
+  const serviceCode = item.ruleCode === "inspection" ? "inspection" : ["approval", "hk_crp", "mo_permit"].includes(item.ruleCode) ? "renewal" : "other";
+  if (item.ownerType === 'plate' && !plate || item.ownerType === 'vehicle' && !vehicle) return showError(new Error('到期對象不存在'));
+  try {
+    const request = await api("/requests", "POST", { customerId: item.customerId, vehicleId: vehicle?.id || null, plateAssetId: plate?.id || null, route: plate?.route || vehicle?.route || "粵港", serviceCode, title: `${item.name}代辦`, description: `由今日工作建立；對象：${item.ownerLabel}` });
+    await refresh();
+    await openRequest(request);
+    showSuccess("案件已建立");
+  } catch (error) { showError(error) }
 }
 async function openVehicle(v) {
   try {
@@ -605,32 +698,6 @@ async function createVehicle() {
     showError(e);
   }
 }
-async function createCredential() {
-  try {
-    await api("/credentials", "POST", {
-      ...form.value,
-      vehicleId: selectedVehicle.value.id,
-    });
-    modal.value = null;
-    form.value = {};
-    await openVehicle(selectedVehicle.value);
-    await refresh();
-    showSuccess("牌證已新增，待專員核對");
-  } catch (e) {
-    showError(e);
-  }
-}
-async function updateCredential(item, status) {
-  try {
-    await api("/credentials/" + item.id, "PATCH", { status });
-    await openVehicle(selectedVehicle.value);
-    await refresh();
-    showSuccess("牌證狀態已更新");
-  } catch (e) {
-    showError(e);
-    await openVehicle(selectedVehicle.value);
-  }
-}
 async function createInspection() {
   try {
     await api("/inspections", "POST", {
@@ -724,6 +791,8 @@ export const adminStore = {
   customers,
   vehicles,
   plates,
+  companyGroups,
+  companyRecords,
   requests,
   services,
   sources,
@@ -731,6 +800,7 @@ export const adminStore = {
   statusFilter,
   selected,
   selectedCustomer,
+  customerTab,
   selectedVehicle,
   selectedPlate,
   plateForm,
@@ -745,10 +815,29 @@ export const adminStore = {
   saveVehicle,
   cardFields,
   todayLabel,
-  credentialRecords,
   newCount,
   activeCount,
   filteredRequests,
+  overviewData,
+  todayTab,
+  todayCustomerId,
+  todayCounts,
+  todayDeadlines,
+  saveTrackedItem,
+  saveBulkDates,
+  previewPlateImport,
+  confirmPlateImport,
+  customerSearch,
+  customerRows,
+  plateFilter,
+  plateSearch,
+  filteredPlateRows,
+  selectedPlateIds,
+  bulkRule,
+  allowedBulkRules,
+  bulkDate,
+  importPreview,
+  importCsv,
   customerVehicles,
   customerPlates,
   customerRequests,
@@ -757,7 +846,6 @@ export const adminStore = {
   modalTitle,
   priorityRequests,
   requestRank,
-  dueCredentials,
   focusTitle,
   focusDescription,
   statusTone,
@@ -766,6 +854,7 @@ export const adminStore = {
   openVehicleById,
   openPlateById,
   openDeadline,
+  createRequestFromDeadline,
   date,
   customerName,
   serviceName,
@@ -798,8 +887,6 @@ export const adminStore = {
   createCustomer,
   createCustomerUser,
   createVehicle,
-  createCredential,
-  updateCredential,
   createInspection,
   openInspectionForm,
   LayoutDashboard,
@@ -817,6 +904,10 @@ export const adminStore = {
   ArrowUpRight,
   BellRing,
   Clock3,
+  CalendarClock,
+  BriefcaseBusiness,
+  Settings2,
+  Table2,
 };
 export function useAdminStore() {
   return adminStore;

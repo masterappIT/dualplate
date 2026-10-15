@@ -1,7 +1,7 @@
 <template>
   <div class="page-heading">
     <div>
-      <button class="back" @click="view = 'requests'">← 返回案件</button>
+      <button class="back" @click="view = 'business'">← 返回業務</button>
       <div class="eyebrow">CASE DETAIL</div>
       <h1>{{ selected.title }}</h1>
       <p>

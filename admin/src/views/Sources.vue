@@ -1,11 +1,5 @@
 <template>
-  <div class="page-heading">
-    <div>
-      <div class="eyebrow">OFFICIAL REFERENCES</div>
-      <h1>官方來源索引</h1>
-      <p>業務規則只以主管部門原始資料為依據。</p>
-    </div>
-  </div>
+  <section class="panel"><div class="panel-head"><div><h2>官方來源索引</h2><p>業務規則只以主管部門原始資料為依據。</p></div></div></section>
   <div class="source-grid">
     <a
       v-for="s in sources"

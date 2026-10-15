@@ -1,7 +1,7 @@
 <template>
   <div class="page-heading">
     <div>
-      <button class="back" @click="view = 'requests'">← 返回案件</button>
+      <button class="back" @click="view = 'business'">← 返回業務</button>
       <div class="eyebrow">CREATE CASE</div>
       <h1>建立代辦案件</h1>
       <p>客戶也可在小程序或 App 端自行提交要求。</p>
@@ -86,7 +86,7 @@
       placeholder="記錄客戶需求和目前已有的資料"
     ></textarea>
     <div class="form-actions">
-      <button class="button outline" @click="view = 'requests'">取消</button
+      <button class="button outline" @click="view = 'business'">取消</button
       ><button class="button primary" @click="createRequest">建立案件</button>
     </div>
   </section>

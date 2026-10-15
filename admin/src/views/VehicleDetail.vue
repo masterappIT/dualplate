@@ -1,7 +1,7 @@
 <template>
   <div class="page-heading">
     <div>
-      <button class="back" @click="view = 'vehicles'">← 返回車輛</button>
+      <button class="back" @click="view = 'plates'">← 返回牌照</button>
       <div class="eyebrow">VEHICLE PROFILE</div>
       <h1>{{ selectedVehicle.plate }}</h1>
       <p>
@@ -13,9 +13,7 @@
     <div class="heading-actions">
       <button class="button outline" @click="modal = 'inspection'">
         ＋ 驗車</button
-      ><button class="button primary" @click="modal = 'credential'">
-        ＋ 新增牌證
-      </button>
+      >
     </div>
   </div>
   <section class="panel vehicle-data-panel">
@@ -54,44 +52,7 @@
     @saved="showSuccess"
     @error="showError"
   />
-  <div class="grid-two">
-    <section class="panel">
-      <div class="panel-head">
-        <div>
-          <h2>牌證台帳</h2>
-          <p>每張證件獨立記錄有效期</p>
-        </div>
-      </div>
-      <div
-        v-for="c in selectedVehicle.credentials"
-        :key="c.id"
-        class="record-row"
-      >
-        <div>
-          <strong>{{ c.name }}</strong
-          ><small
-            >{{ c.issuer || "待核對簽發機關" }} ·
-            {{ c.number || "未填號碼" }}</small
-          >
-        </div>
-        <div class="record-right">
-          <strong>{{ c.expires_on || "待核對" }}</strong
-          ><select
-            :value="c.status"
-            @change="updateCredential(c, $event.target.value)"
-          >
-            <option>待核對</option>
-            <option>已核對</option>
-            <option>待續期</option>
-            <option>已失效</option>
-          </select>
-        </div>
-      </div>
-      <div v-if="!selectedVehicle.credentials?.length" class="empty">
-        尚無牌證紀錄
-      </div>
-    </section>
-    <section class="panel">
+  <section class="panel">
       <div class="panel-head">
         <div>
           <h2>驗車與官方核對</h2>
@@ -149,8 +110,7 @@
           ></span
         >
       </div>
-    </section>
-  </div>
+  </section>
 </template>
 <script setup>
 import { useAdminStore } from "../store";
@@ -164,7 +124,6 @@ const {
   saveVehicle,
   showSuccess,
   showError,
-  updateCredential,
   updateInspection,
   sources,
   openInspectionForm,

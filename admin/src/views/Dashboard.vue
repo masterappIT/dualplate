@@ -1,177 +1,45 @@
 <template>
-  <div class="page-heading dashboard-heading">
-    <div>
-      <div class="eyebrow">OPERATIONS / 工作台</div>
-      <h1>案件工作台</h1>
-      <p>先處理客戶要求，再跟進案件節點與牌證日期。</p>
-    </div>
-    <button class="button primary heading-cta" @click="view = 'new-request'">
-      <FilePlus2 :size="17" /> 建立案件
-    </button>
-  </div>
-  <div class="dashboard-intro">
-    <div class="dashboard-intro-main">
-      <span class="intro-kicker"
-        ><span class="live-dot"></span> 今日工作焦點</span
-      >
-      <h2>{{ focusTitle }}</h2>
-      <p>{{ focusDescription }}</p>
-      <div class="intro-actions">
-        <button class="button intro-primary" @click="view = 'requests'">
-          查看案件 <ArrowUpRight :size="16" /></button
-        ><button class="button intro-secondary" @click="view = 'vehicles'">
-          車輛與牌證
-        </button>
-      </div>
-    </div>
-    <div class="dashboard-intro-side">
-      <span class="side-caption">工作隊列</span>
-      <div>
-        <strong>{{ newCount }}</strong
-        ><span>待受理要求</span>
-      </div>
-      <div>
-        <strong>{{ activeCount }}</strong
-        ><span>辦理中案件</span>
-      </div>
-      <div>
-        <strong>{{ dueCredentials.length }}</strong
-        ><span>120 天內到期牌證</span>
-      </div>
-    </div>
+  <div class="page-heading">
+    <div><div class="eyebrow">TODAY / WORK QUEUE</div><h1>今日工作</h1><p>按優先順序處理到期項目、業務與待客戶提供資料。</p></div>
+    <button class="button primary" @click="view = 'new-request'">＋ 開工單</button>
   </div>
   <div class="metrics">
-    <button class="metric metric-action" @click="goFilteredRequests('新要求')">
-      <span class="metric-top"
-        ><span class="metric-label">待受理要求</span
-        ><BellRing :size="18" /></span
-      ><strong>{{ newCount }}</strong
-      ><small>查看客戶新提交的需求 <ArrowUpRight :size="14" /></small></button
-    ><button class="metric metric-action" @click="goFilteredRequests('')">
-      <span class="metric-top"
-        ><span class="metric-label">辦理中案件</span><Clock3 :size="18" /></span
-      ><strong>{{ activeCount }}</strong
-      ><small>按進度跟進辦理節點 <ArrowUpRight :size="14" /></small></button
-    ><button class="metric metric-action" @click="view = 'customers'">
-      <span class="metric-top"
-        ><span class="metric-label">客戶檔案</span
-        ><UsersRound :size="18" /></span
-      ><strong>{{ customers.length }}</strong
-      ><small>查看聯絡與名下案件 <ArrowUpRight :size="14" /></small></button
-    ><button class="metric metric-action" @click="view = 'vehicles'">
-      <span class="metric-top"
-        ><span class="metric-label">管理車輛</span><CarFront :size="18" /></span
-      ><strong>{{ vehicles.length }}</strong
-      ><small>查看牌證及驗車紀錄 <ArrowUpRight :size="14" /></small>
-    </button>
+    <button class="metric metric-action" @click="todayTab = 'due'"><span class="metric-label">已逾期</span><strong>{{ todayCounts.overdue }}</strong><small>立即跟進</small></button>
+    <button class="metric metric-action" @click="todayTab = 'due'"><span class="metric-label">7 天內要辦</span><strong>{{ todayCounts.due }}</strong><small>到期項目</small></button>
+    <button class="metric metric-action" @click="todayTab = 'missing'"><span class="metric-label">待錄入資料</span><strong>{{ todayCounts.missing }}</strong><small>補上日期或資料</small></button>
+    <button class="metric metric-action" @click="todayTab = 'active'"><span class="metric-label">進行中業務</span><strong>{{ todayCounts.active }}</strong><small>未完成案件</small></button>
   </div>
-  <div class="dashboard-columns">
-    <section class="panel queue-panel">
-      <div class="panel-head">
-        <div>
-          <span class="section-kicker">CASE QUEUE</span>
-          <h2>案件工作隊列</h2>
-          <p>依待受理與最新更新排序</p>
-        </div>
-        <button class="text-button" @click="view = 'requests'">
-          全部案件 <ArrowUpRight :size="15" />
-        </button>
-      </div>
-      <div class="queue-head">
-        <span>案件 / 客戶</span><span>目前階段</span><span>狀態</span>
-      </div>
-      <div v-if="!priorityRequests.length" class="empty">目前沒有案件</div>
-      <button
-        v-for="r in priorityRequests"
-        :key="r.id"
-        class="queue-row"
-        @click="openRequest(r)"
-      >
-        <span class="queue-identity"
-          ><span class="service-icon"
-            ><component
-              :is="serviceIcon(r.service_code)"
-              :size="18"
-              :stroke-width="1.8" /></span
-          ><span
-            ><strong>{{ r.title }}</strong
-            ><small
-              >{{ r.customer_name }} · {{ r.route }} ·
-              {{ r.plate || "未指定車輛" }}</small
-            ></span
-          ></span
-        ><span class="queue-stage">{{ r.stage }}</span
-        ><span class="badge" :class="statusTone(r.status)">{{ r.status }}</span>
-      </button>
-    </section>
-    <div class="dashboard-aside">
-      <section class="panel due-panel">
-        <div class="panel-head">
-          <div>
-            <span class="section-kicker">REMINDERS</span>
-            <h2>牌證日期提醒</h2>
-            <p>依檔案記錄；實際日期須再核對證件</p>
-          </div>
-        </div>
-        <div v-if="!dueCredentials.length" class="clear-state">
-          <span class="clear-state-icon"><ShieldCheck :size="20" /></span
-          ><strong>目前沒有臨期牌證</strong
-          ><small>已核對且 120 天內到期的牌證會顯示於此。</small>
-        </div>
-        <button
-          v-for="c in dueCredentials.slice(0, 4)"
-          :key="c.id"
-          class="due-row"
-          @click="openVehicleById(c.vehicleId)"
-        >
-          <span class="due-icon"><FileText :size="17" /></span
-          ><span
-            ><strong>{{ c.name }}</strong
-            ><small>{{ c.plate }} · {{ c.expires_on }}</small></span
-          ><span class="badge amber">{{
-            c.days < 0 ? "已到期" : `${c.days} 天`
-          }}</span>
-        </button>
-      </section>
-      <section class="panel source-note">
-        <span class="source-note-icon"><BookOpenCheck :size="18" /></span>
-        <div>
-          <strong>官方依據索引</strong>
-          <p>案件節點的適用條件由專員按主管部門原始資料核對。</p>
-          <button class="text-button" @click="view = 'sources'">
-            查看來源 <ArrowUpRight :size="14" />
-          </button>
-        </div>
-      </section>
+  <section class="panel">
+    <div class="panel-head"><div><h2>工作隊列</h2><p>日期可直接錄入；批文卡有效期請回到批文卡修改。</p></div><select v-model="todayCustomerId"><option value="">全部客戶</option><option v-for="customer in customers" :key="customer.id" :value="customer.id">{{ customer.name }}</option></select></div>
+    <div class="tabs"><button v-for="tab in tabs" :key="tab.id" class="tab" :class="{ active: todayTab === tab.id }" @click="todayTab = tab.id">{{ tab.name }}</button></div>
+    <label class="queue-filter">狀態篩選<select v-model="todayStatus"><option value="">全部狀態</option><option value="overdue">已逾期</option><option value="due">需處理</option><option value="missing">待錄入</option><option value="新要求">新要求</option><option value="辦理中">辦理中</option><option value="待客戶配合">待客戶配合</option></select></label>
+    <div v-if="!visibleRows.length" class="empty">目前沒有符合條件的工作</div>
+    <div v-for="item in visibleRows" :key="item.id || `${item.ruleCode}:${item.ownerId}`" class="today-row">
+      <template v-if="item.ruleCode">
+        <div><strong>{{ item.name }}</strong><small>{{ item.ownerLabel }} · {{ item.customerName }}</small></div>
+        <span class="badge" :class="tone(item.level)">{{ label(item.level) }}</span>
+        <label v-if="item.method === 'expiry' && item.ruleCode !== 'approval'" class="inline-date"><span>到期日</span><input :value="item.dueOn || ''" type="date" @change="saveDate(item, $event.target.value)" /></label>
+        <button v-else-if="item.ruleCode === 'approval'" class="text-button" @click="openPlateById(item.ownerId)">到批文卡修改 ↗</button>
+        <button v-else-if="item.completable" class="button" @click="complete(item)">已辦好</button>
+        <button class="button" @click="createRequestFromDeadline(item)">開工單</button>
+      </template>
+      <template v-else-if="item.request">
+        <div><strong>{{ item.title }}</strong><small>{{ item.request?.customer_name || '客戶' }} · {{ item.request?.title }}</small></div><span class="badge amber">待客戶提供</span><span>請補交所需資料</span><button class="text-button" @click="openRequest(item.request)">查看案件 →</button>
+      </template>
+      <template v-else><div><strong>{{ item.title }}</strong><small>{{ item.customer_name }} · {{ item.stage }}</small></div><span class="badge amber">{{ item.status }}</span><span>進行中業務</span><button class="text-button" @click="openRequest(item)">查看案件 →</button></template>
     </div>
-  </div>
+  </section>
 </template>
 <script setup>
-import { useAdminStore } from "../store";
-import {
-  FilePlus2,
-  ArrowUpRight,
-  BellRing,
-  Clock3,
-  UsersRound,
-  CarFront,
-  ShieldCheck,
-  FileText,
-} from "@lucide/vue";
-const {
-  view,
-  focusTitle,
-  focusDescription,
-  newCount,
-  activeCount,
-  dueCredentials,
-  goFilteredRequests,
-  customers,
-  vehicles,
-  priorityRequests,
-  serviceIcon,
-  statusTone,
-  openRequest,
-  openVehicleById,
-} = useAdminStore();
+import { ref, computed } from 'vue'
+import { useAdminStore } from '../store'
+import { api } from '../api'
+const { view, customers, todayTab, todayCustomerId, todayCounts, todayDeadlines, saveTrackedItem, createRequestFromDeadline, openPlateById, openRequest, showSuccess, showError } = useAdminStore()
+const todayStatus = ref('')
+const visibleRows = computed(() => todayDeadlines.value.filter(item => !todayStatus.value || (item.ruleCode ? item.level : item.status) === todayStatus.value))
+const tabs = [{ id: 'due', name: '到期待辦' }, { id: 'active', name: '進行中業務' }, { id: 'missing', name: '待錄入' }, { id: 'customer', name: '待客戶提供' }]
+const label = level => ({ overdue: '已逾期', due: '需處理', missing: '待錄入' }[level] || level)
+const tone = level => ({ overdue: 'danger', due: 'amber', missing: 'muted' }[level] || '')
+async function saveDate(item, expiresOn) { await saveTrackedItem({ ...item, code: item.ruleCode, expiresOn }) }
+async function complete(item) { try { await api('/rule-completions', 'POST', { ruleCode: item.ruleCode, ownerId: item.ownerId, period: item.period }); await useAdminStore().refresh(); showSuccess('本期已標記完成') } catch (error) { showError(error) } }
 </script>
