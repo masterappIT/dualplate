@@ -18,6 +18,8 @@
 
 ## 第 A 輪：合約、應收款、管理端與客戶端
 
+> **委託範圍（第 12 輪已上線）**：牌照的 `rental_management` 為 `client`（客戶自理）時，管理端不產生收款提醒工作，只記錄合約與狀態；`outsourced` 時顯示外包單位。
+
 ### 1. 資料（一次性遷移，沿用 `schema_migrations`）
 
 - `rental_contracts`：`id`、`tenant_id`、`plate_asset_id`、承租方（`renter_name`、`renter_type` 個人／公司、`renter_phone`、`renter_vehicle_plate`、`renter_driver`）、`starts_on`、`ends_on`、`rent_amount`（以「分」為單位的整數）、`lessor_type`（`company` 持牌的香港／澳門公司／`client` 客戶個人／`agent` 代辦公司作為代理人）與 `lessor_company_id`（`company` 時必填，須屬同一客戶）、`currency`（`HKD`／`RMB`／`MOP`）、`cycle`（`monthly`／`quarterly`／`yearly`）、`due_day`（1–28）、`deposit_amount`、`collection_mode`（`代收`／`直付`）、`fee_type`（`none`／`fixed`／`percent`）與 `fee_value`（代收時的管理費）、`status`（`草擬`／`生效`／`已結束`／`已終止`）、`notes`、建立及更新時間

@@ -32,6 +32,9 @@
 
 ## 4. 站內通知
 
+- 到期類通知只發給：客戶看得到的規則，且 90 天過關只限已開啟提醒的牌照；`handler=client` 的項目通知文字寫「請你處理」，其他寫「我們會為你辦理」
+- 「開通客戶登入」成功後，管理端顯示一段可複製轉發的文字（小程序名稱或網址、帳號、首次登入步驟），見 `docs/v1-plan.md` 第八節
+
 - 新表 `notifications`：`id`、`tenant_id`、`customer_id`、`kind`、`title`、`body`、`link`（客戶端頁面路徑）、`read_at`、`created_at`
 - 產生時機：案件狀態改變、節點變為「待客戶配合」、上傳文件被要求重交、到期項目首次進入「需處理」或「已逾期」（每項每期只發一次；伺服器啟動及每次讀取總覽時檢查即可，不需排程器）
 - 客戶 API：`GET /api/my/notifications`、`POST /api/my/notifications/read`（單筆或全部）

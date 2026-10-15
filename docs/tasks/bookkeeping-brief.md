@@ -11,6 +11,8 @@
 
 ## 1. 資料（一次性遷移）
 
+> **委託範圍（第 12 輪已上線）**：內地公司 `bookkeeping` 為 `client`（客戶自理）時**不產生**每月報帳工作；為 `outsourced` 時，外包單位即該公司的會計公司（預設帶入 `provider_name`）。
+
 - `accounting_firms`：`id`、`tenant_id`、名稱、聯絡人、電話、電郵、備註
 - `companies` 加 `accounting_firm_id`、`taxpayer_type`（已有欄位沿用）、`filing_cycle`（`monthly`／`quarterly`，小規模納稅人可按季）
 - `filing_periods`：`id`、`tenant_id`、`company_id`、`period`（`YYYY-MM`；按季者為季首月）、`due_on`、步驟狀態：`docs_received_on`（客戶票據收齊）、`sent_to_firm_on`（交給會計）、`filed_on`（已申報）、`paid_on`（已繳款）、`tax_amount`（分）、`zero_filing`（零申報）、`receipt`（回執圖片／PDF，另表存放）、`notes`、更新人與時間
