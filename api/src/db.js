@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { randomUUID, scryptSync, timingSafeEqual } from 'node:crypto'
+import { defaultRules } from './rules.js'
 
 const file = resolve(process.env.DB_PATH || './data/app.sqlite')
 mkdirSync(dirname(file), { recursive: true })
@@ -29,6 +30,7 @@ CREATE INDEX IF NOT EXISTS idx_plate_rentals_asset ON plate_rentals(plate_asset_
 CREATE INDEX IF NOT EXISTS idx_card_versions_asset ON approval_card_versions(plate_asset_id,version_number DESC);
 CREATE INDEX IF NOT EXISTS idx_credentials_vehicle ON credentials(vehicle_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_request ON tasks(request_id);`)
+db.exec('CREATE TABLE IF NOT EXISTS schema_migrations(name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)')
 
 // Apply additive schema changes to existing local databases.
 const userColumns = db.prepare('PRAGMA table_info(users)').all().map(x => x.name)
@@ -51,6 +53,74 @@ if (!plateColumns.includes('card_status')) db.exec("ALTER TABLE plate_assets ADD
 const requestColumns = db.prepare('PRAGMA table_info(requests)').all().map(x => x.name)
 if (!requestColumns.includes('plate_asset_id')) db.exec('ALTER TABLE requests ADD COLUMN plate_asset_id TEXT REFERENCES plate_assets(id)')
 db.exec('CREATE INDEX IF NOT EXISTS idx_requests_plate_asset ON requests(plate_asset_id)')
+
+// Phase 1: tenants, company groups and configurable expiry rules (docs/phase1-design.md).
+db.exec(`CREATE TABLE IF NOT EXISTS tenants(id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS company_groups(id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, customer_id TEXT NOT NULL, name TEXT NOT NULL, notes TEXT, created_at TEXT NOT NULL, FOREIGN KEY(customer_id) REFERENCES customers(id));
+CREATE TABLE IF NOT EXISTS companies(id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, customer_id TEXT NOT NULL, group_id TEXT, jurisdiction TEXT NOT NULL, name TEXT NOT NULL, registration_no TEXT, incorporated_on TEXT, taxpayer_type TEXT, notes TEXT, status TEXT NOT NULL DEFAULT '存續', status_changed_on TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(customer_id) REFERENCES customers(id), FOREIGN KEY(group_id) REFERENCES company_groups(id));
+CREATE TABLE IF NOT EXISTS rules(id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, code TEXT NOT NULL, name TEXT NOT NULL, scope TEXT NOT NULL, method TEXT NOT NULL, match_json TEXT NOT NULL DEFAULT '{}', params_json TEXT NOT NULL DEFAULT '{}', remind_days INTEGER NOT NULL DEFAULT 30, active INTEGER NOT NULL DEFAULT 1, customer_visible INTEGER NOT NULL DEFAULT 1, sort INTEGER NOT NULL DEFAULT 0, UNIQUE(tenant_id,code));
+CREATE TABLE IF NOT EXISTS tracked_items(tenant_id TEXT NOT NULL, owner_type TEXT NOT NULL, owner_id TEXT NOT NULL, code TEXT NOT NULL, expires_on TEXT, notes TEXT, updated_by TEXT, updated_at TEXT NOT NULL, PRIMARY KEY(owner_type,owner_id,code));
+CREATE TABLE IF NOT EXISTS rule_completions(tenant_id TEXT NOT NULL, code TEXT NOT NULL, owner_id TEXT NOT NULL, period TEXT NOT NULL, completed_by TEXT, completed_at TEXT NOT NULL, PRIMARY KEY(code,owner_id,period));
+CREATE INDEX IF NOT EXISTS idx_company_groups_customer ON company_groups(customer_id);
+CREATE INDEX IF NOT EXISTS idx_companies_group ON companies(group_id);
+CREATE INDEX IF NOT EXISTS idx_tracked_items_tenant ON tracked_items(tenant_id);`)
+const addColumn = (table, column, definition) => { if (!db.prepare(`PRAGMA table_info(${table})`).all().some(x => x.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`) }
+addColumn('users', 'tenant_id', 'TEXT')
+addColumn('customers', 'tenant_id', 'TEXT')
+addColumn('plate_assets', 'group_id', 'TEXT REFERENCES company_groups(id)')
+addColumn('plate_assets', 'indicator_category', 'TEXT')
+addColumn('plate_assets', 'port', 'TEXT')
+addColumn('vehicles', 'first_registered_on', 'TEXT')
+addColumn('companies', 'status', "TEXT NOT NULL DEFAULT '存續'")
+addColumn('companies', 'status_changed_on', 'TEXT')
+addColumn('rules', 'customer_visible', 'INTEGER NOT NULL DEFAULT 1')
+const companyStatusMigration = 'company-status-fields'
+if (!db.prepare('SELECT name FROM schema_migrations WHERE name=?').get(companyStatusMigration)) {
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    db.exec("UPDATE companies SET status='存續' WHERE status IS NULL OR TRIM(status)=''")
+    db.prepare('INSERT INTO schema_migrations(name,applied_at) VALUES (?,?)').run(companyStatusMigration, new Date().toISOString())
+    db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
+  }
+}
+db.exec('CREATE INDEX IF NOT EXISTS idx_customers_tenant ON customers(tenant_id)')
+const customerVisibleMigration = 'rules-customer-visible'
+if (!db.prepare('SELECT name FROM schema_migrations WHERE name=?').get(customerVisibleMigration)) {
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    db.exec("UPDATE rules SET customer_visible=CASE WHEN code='cn_status_check' THEN 0 ELSE customer_visible END")
+    db.prepare('INSERT INTO schema_migrations(name,applied_at) VALUES (?,?)').run(customerVisibleMigration, new Date().toISOString())
+    db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
+  }
+}
+export const DEFAULT_TENANT = 'default'
+if (!db.prepare('SELECT id FROM tenants WHERE id=?').get(DEFAULT_TENANT)) db.prepare('INSERT INTO tenants VALUES (?,?,?)').run(DEFAULT_TENANT, process.env.DEFAULT_TENANT_NAME || '本公司', new Date().toISOString())
+db.prepare('UPDATE users SET tenant_id=? WHERE tenant_id IS NULL').run(DEFAULT_TENANT)
+db.prepare('UPDATE customers SET tenant_id=? WHERE tenant_id IS NULL').run(DEFAULT_TENANT)
+// Every tenant gets any default rule it does not have yet; edited rules are left alone.
+export function seedRules(tenantId) {
+  defaultRules.forEach((rule, index) => db.prepare('INSERT OR IGNORE INTO rules(id,tenant_id,code,name,scope,method,match_json,params_json,remind_days,active,customer_visible,sort) VALUES (?,?,?,?,?,?,?,?,?,1,?,?)')
+    .run(randomUUID(), tenantId, rule.code, rule.name, rule.scope, rule.method, JSON.stringify(rule.match), JSON.stringify(rule.params), rule.remindDays, Number(rule.customerVisible), index))
+}
+for (const tenant of db.prepare('SELECT id FROM tenants').all()) seedRules(tenant.id)
+const approvalRuleMigration = 'approval-rule-card-expires-on'
+if (!db.prepare('SELECT name FROM schema_migrations WHERE name=?').get(approvalRuleMigration)) {
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    db.prepare("UPDATE rules SET params_json=? WHERE code='approval' AND params_json='{}'").run(JSON.stringify({ field: 'cardExpiresOn' }))
+    db.prepare('INSERT INTO schema_migrations(name,applied_at) VALUES (?,?)').run(approvalRuleMigration, new Date().toISOString())
+    db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
+  }
+}
 
 // Preserve cards created before version history was introduced, including both scans.
 const unversionedCards = db.prepare(`SELECT p.* FROM plate_assets p WHERE p.card_updated_at IS NOT NULL
@@ -76,10 +146,10 @@ export function verifyPassword(password, stored) { const [salt, hex] = stored.sp
 
 if (process.env.DEMO_SEED === '1' && db.prepare('SELECT COUNT(*) count FROM users').get().count === 0) {
   const adminId = id(), customerId = id(), customerUserId = id(), vehicleId = id(), requestId = id()
-  db.prepare('INSERT INTO customers VALUES (?,?,?,?,?,?)').run(customerId, '示範客戶 · 陳先生', '個人', '13800000000', adminId, '僅供本機演示')
-  db.prepare('INSERT INTO users(id,role,name,email,password_hash,customer_id,username) VALUES (?,?,?,?,?,?,?)').run(adminId, 'admin', '代辦主管', 'admin@demo.local', hashPassword('AdminDemo123!'), null, 'admin')
-  db.prepare('INSERT INTO users(id,role,name,email,password_hash,customer_id) VALUES (?,?,?,?,?,?)').run(customerUserId, 'customer', '陳先生', 'customer@demo.local', hashPassword('CustomerDemo123!'), customerId)
-  db.prepare('INSERT INTO vehicles VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(vehicleId, customerId, '粵港', '香港', '私家車', '粵Z·示範港', 'Toyota', 'Alphard', 'DEMO-VIN-001', 2020, '演示資料，並非真實車輛')
+  db.prepare('INSERT INTO customers(id,name,kind,phone,owner_id,notes,tenant_id) VALUES (?,?,?,?,?,?,?)').run(customerId, '示範客戶 · 陳先生', '個人', '13800000000', adminId, '僅供本機演示', DEFAULT_TENANT)
+  db.prepare('INSERT INTO users(id,role,name,email,password_hash,customer_id,username,tenant_id) VALUES (?,?,?,?,?,?,?,?)').run(adminId, 'admin', '代辦主管', 'admin@demo.local', hashPassword('AdminDemo123!'), null, 'admin', DEFAULT_TENANT)
+  db.prepare('INSERT INTO users(id,role,name,email,password_hash,customer_id,tenant_id) VALUES (?,?,?,?,?,?,?)').run(customerUserId, 'customer', '陳先生', 'customer@demo.local', hashPassword('CustomerDemo123!'), customerId, DEFAULT_TENANT)
+  db.prepare('INSERT INTO vehicles(id,customer_id,route,origin,type,plate,brand,model,vin,manufactured_year,notes) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(vehicleId, customerId, '粵港', '香港', '私家車', '粵Z·示範港', 'Toyota', 'Alphard', 'DEMO-VIN-001', 2020, '演示資料，並非真實車輛')
   db.prepare('INSERT INTO credentials VALUES (?,?,?,?,?,?,?,?)').run(id(), vehicleId, '廣東批文卡', '廣東省公安廳', 'DEMO-001', '2027-01-20', '待核對', 'GD-WEB-2026')
   db.prepare('INSERT INTO credentials VALUES (?,?,?,?,?,?,?,?)').run(id(), vehicleId, '香港封閉道路通行許可證', '香港運輸署', 'DEMO-CRP', '2027-02-12', '待核對', 'HK-CRP')
   db.prepare('INSERT INTO requests(id,customer_id,vehicle_id,service_code,route,title,description,status,stage,assignee_id,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').run(requestId, customerId, vehicleId, 'renewal', '粵港', '批文卡及香港許可證續期', '示範案件', '待收件', '官方材料收集', adminId, now(), now())

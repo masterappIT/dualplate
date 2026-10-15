@@ -3,23 +3,30 @@ import { randomBytes } from 'node:crypto'
 import { db, id, now, hashPassword, verifyPassword } from './db.js'
 import { services, sources, inspectionGuidance, planFor } from './catalog.js'
 import { cardData, cleanCard, recognizeCard } from './card.js'
+import { phase1Routes } from './phase1-routes.js'
+import { customerRoutes } from './customer-routes.js'
 
 const port = Number(process.env.PORT || 4100)
 const allowedOrigins = new Set((process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174').split(','))
 const json = (res, status, value) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(value)) }
 const fail = (res, status, message) => json(res, status, { error: message })
-const parseBody = async req => { let raw = ''; for await (const chunk of req) { raw += chunk; if (raw.length > 12000000) throw new Error('請求內容過大') } return raw ? JSON.parse(raw) : {} }
+const parseBody = async req => { let raw = ''; for await (const chunk of req) { raw += chunk; if (raw.length > 12000000) throw new Error('請求內容過大') } if (!raw) return {}; const body = JSON.parse(raw); if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('請求內容格式錯誤'); return body }
 const required = (body, keys) => keys.every(key => typeof body[key] === 'string' && body[key].trim())
 const clean = (value, max = 500) => String(value ?? '').trim().slice(0, max)
 const query = (sql, ...params) => db.prepare(sql).all(...params)
+const validDate = value => { const text = String(value || ''); return /^\d{4}-\d{2}-\d{2}$/.test(text) && !Number.isNaN(Date.parse(text + 'T00:00:00Z')) && new Date(text + 'T00:00:00Z').toISOString().slice(0, 10) === text ? text : null }
 const one = (sql, ...params) => db.prepare(sql).get(...params)
 
 function auth(req) {
   const token = (req.headers.authorization || '').replace(/^Bearer /, '')
   if (!token) return null
-  return one('SELECT u.id,u.role,u.name,u.email,u.customer_id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires_at>?', token, now())
+  return one('SELECT u.id,u.role,u.name,u.email,u.customer_id,u.tenant_id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires_at>?', token, now())
 }
-function canAccessCustomer(user, customerId) { return user.role === 'admin' || user.customer_id === customerId }
+// Every customer belongs to one tenant; admins see their tenant only, customers see themselves only.
+function canAccessCustomer(user, customerId) {
+  const customer = customerId && one('SELECT tenant_id FROM customers WHERE id=?', customerId)
+  return !!customer && customer.tenant_id === user.tenant_id && (user.role === 'admin' || user.customer_id === customerId)
+}
 function requestFor(user, requestId) {
   const item = one('SELECT * FROM requests WHERE id=?', requestId)
   return item && canAccessCustomer(user, item.customer_id) ? item : null
@@ -51,7 +58,9 @@ function plateDetail(user, plateId) {
   const images = query('SELECT side,mime,data FROM approval_card_images WHERE plate_asset_id=?', item.id)
   const photos = query('SELECT kind,mime,data FROM plate_photos WHERE plate_asset_id=?', item.id)
   const imageValue = x => user.role === 'admin' ? `data:${x.mime};base64,${x.data.toString('base64')}` : true
-  return { ...item, cardData: cardData(item.card_data), cardVersions: cardVersions(item.id), rentals: query('SELECT * FROM plate_rentals WHERE plate_asset_id=? ORDER BY created_at DESC', item.id), cardImages: Object.fromEntries(images.map(x => [x.side, imageValue(x)])), platePhotos: Object.fromEntries(photos.map(x => [x.kind, imageValue(x)])) }
+  const companyStatuses = user.role === 'admin' && item.group_id ? query('SELECT c.id,c.jurisdiction,c.name,c.status,c.status_changed_on FROM companies c JOIN company_groups g ON g.id=c.group_id AND g.tenant_id=c.tenant_id WHERE c.tenant_id=? AND c.group_id=? AND g.customer_id=? ORDER BY c.jurisdiction,c.name', user.tenant_id, item.group_id, item.customer_id) : []
+  const warnings = companyStatuses.filter(company => company.jurisdiction === '內地' && ['已註銷', '註銷中'].includes(company.status)).map(company => company.status === '已註銷' ? '內承單位已註銷' : '內承單位註銷中')
+  return { ...item, cardData: cardData(item.card_data), cardVersions: cardVersions(item.id), rentals: query('SELECT * FROM plate_rentals WHERE plate_asset_id=? ORDER BY created_at DESC', item.id), cardImages: Object.fromEntries(images.map(x => [x.side, imageValue(x)])), platePhotos: Object.fromEntries(photos.map(x => [x.kind, imageValue(x)])), companyStatuses, warnings: [...new Set(warnings)] }
 }
 function pushActivity(requestId, actorId, kind, detail) { db.prepare('INSERT INTO activities VALUES (?,?,?,?,?,?)').run(id(), requestId, actorId, kind, detail, now()) }
 function addTasks(requestId, service, route) {
@@ -67,7 +76,7 @@ const server = http.createServer(async (req, res) => {
   const origin = req.headers.origin
   if (origin && allowedOrigins.has(origin)) res.setHeader('access-control-allow-origin', origin)
   res.setHeader('access-control-allow-headers', 'authorization,content-type')
-  res.setHeader('access-control-allow-methods', 'GET,POST,PATCH,PUT,OPTIONS')
+  res.setHeader('access-control-allow-methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS')
   if (req.method === 'OPTIONS') { res.writeHead(204); return res.end() }
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`)
   const path = url.pathname
@@ -98,6 +107,8 @@ const server = http.createServer(async (req, res) => {
     if (!user) return fail(res, 401, '請先登入')
     if (path === '/api/me' && req.method === 'GET') return json(res, 200, { id: user.id, name: user.name, email: user.email, role: user.role, customerId: user.customer_id })
     if (path === '/api/catalog' && req.method === 'GET') return json(res, 200, { services, sources, routePlans: Object.fromEntries(services.map(s => [s.code, Object.fromEntries(s.routes.map(route => [route, planFor(s, route)]))])) })
+    if (await phase1Routes(req, res, url, user, { json, fail, parseBody, canAccessCustomer, vehicleFor, plateFor, query, one, clean })) return
+    if (await customerRoutes(req, res, url, user, { json, fail, query, one, plateFor })) return
     if (path === '/api/card-recognize' && req.method === 'POST') {
       const body = await parseBody(req)
       if (!['front','back'].includes(body.side)) return fail(res,400,'請選擇批文卡正面或背面')
@@ -108,19 +119,19 @@ const server = http.createServer(async (req, res) => {
       return json(res,200,{cardData:await recognizeCard(bytes,body.side)})
     }
     if (path === '/api/customers' && req.method === 'GET') {
-      return json(res, 200, user.role === 'admin' ? query('SELECT * FROM customers ORDER BY name') : query('SELECT * FROM customers WHERE id=?', user.customer_id))
+      return json(res, 200, user.role === 'admin' ? query('SELECT * FROM customers WHERE tenant_id=? ORDER BY name', user.tenant_id) : query('SELECT * FROM customers WHERE id=?', user.customer_id))
     }
     if (path === '/api/plate-assets' && req.method === 'GET') {
       const customerId = url.searchParams.get('customerId')
       const condition = "card_number IS NOT NULL AND TRIM(card_number)<>''"
-      if (user.role === 'admin') return json(res, 200, customerId ? query('SELECT * FROM plate_assets WHERE customer_id=? ORDER BY created_at DESC', customerId) : query('SELECT * FROM plate_assets ORDER BY created_at DESC'))
+      if (user.role === 'admin') return json(res, 200, customerId ? (canAccessCustomer(user, customerId) ? query('SELECT * FROM plate_assets WHERE customer_id=? ORDER BY created_at DESC', customerId) : []) : query('SELECT p.* FROM plate_assets p JOIN customers c ON c.id=p.customer_id WHERE c.tenant_id=? ORDER BY p.created_at DESC', user.tenant_id))
       return json(res, 200, query(`SELECT * FROM plate_assets WHERE customer_id=? AND ${condition} ORDER BY created_at DESC`, user.customer_id))
     }
     if (path === '/api/plate-assets' && req.method === 'POST') {
       const b = await parseBody(req)
       if (!required(b, ['customerId', 'route'])) return fail(res, 400, '請選擇客戶和路線')
       if (user.role !== 'admin' && b.customerId !== user.customer_id) return fail(res, 403, '只能建立自己的兩地牌')
-      if (!one('SELECT id FROM customers WHERE id=?', b.customerId)) return fail(res, 404, '客戶不存在')
+      if (!canAccessCustomer(user, b.customerId)) return fail(res, 404, '客戶不存在')
       if (!['粵港','粵澳'].includes(b.route)) return fail(res, 400, '路線無效')
       if (b.vehicleId) { const v = one('SELECT * FROM vehicles WHERE id=?', b.vehicleId); if (!v || v.customer_id !== b.customerId || v.route !== b.route) return fail(res, 400, '車輛與客戶或路線不符') }
       if (b.sourceRequestId) {
@@ -172,6 +183,9 @@ const server = http.createServer(async (req, res) => {
       if (vehicleId) { const v = one('SELECT * FROM vehicles WHERE id=?', vehicleId); if (!v || v.customer_id !== old.customer_id || v.route !== old.route) return fail(res, 400, '車輛與客戶或路線不符') }
       if (installation === '已上牌' && !vehicleId && usage !== '出租中') return fail(res, 400, '自用已上牌須指定車輛')
       if (installation === '未上牌' && vehicleId) return fail(res, 400, '未上牌不能綁定車輛')
+      const groupId = b.groupId === undefined ? old.group_id : b.groupId || null
+      if (groupId) { const parent = one('SELECT * FROM company_groups WHERE id=? AND tenant_id=?', groupId, user.tenant_id); if (!parent) return fail(res, 404, '公司組不存在'); if (parent.customer_id !== old.customer_id) return fail(res, 400, '公司組與客戶不符') }
+      if (user.role !== 'admin' && (b.groupId !== undefined || b.indicatorCategory !== undefined || b.port !== undefined)) return fail(res, 403, '指標類別、口岸和公司組須由專員維護')
       if (usage === '出租中' && !one("SELECT id FROM plate_rentals WHERE plate_asset_id=? AND status='出租中'", old.id)) return fail(res, 400, '出租中須先建立出租記錄')
       if (usage !== '出租中' && one("SELECT id FROM plate_rentals WHERE plate_asset_id=? AND status='出租中'", old.id)) return fail(res, 400, '請先結束出租記錄')
       const nextCardNumber = clean(b.cardNumber ?? old.card_number,80)
@@ -181,7 +195,7 @@ const server = http.createServer(async (req, res) => {
       const nextCard = cardNumberChanged ? cleanCard({...cardData(old.card_data),cardNumber:nextCardNumber}) : null
       db.exec('BEGIN IMMEDIATE')
       try {
-        db.prepare('UPDATE plate_assets SET mainland_plate=?,local_plate=?,vehicle_id=?,installation_status=?,usage_status=?,card_number=?,card_expires_on=?,notes=?,updated_at=? WHERE id=?').run(clean(b.mainlandPlate ?? old.mainland_plate,30)||null,clean(b.localPlate ?? old.local_plate,30)||null,vehicleId,installation,usage,nextCardNumber,clean(b.cardExpiresOn ?? old.card_expires_on,20)||null,clean(b.notes ?? old.notes,1000),now(),old.id)
+        db.prepare('UPDATE plate_assets SET mainland_plate=?,local_plate=?,vehicle_id=?,installation_status=?,usage_status=?,card_number=?,card_expires_on=?,notes=?,group_id=?,indicator_category=?,port=?,updated_at=? WHERE id=?').run(clean(b.mainlandPlate ?? old.mainland_plate,30)||null,clean(b.localPlate ?? old.local_plate,30)||null,vehicleId,installation,usage,nextCardNumber,clean(b.cardExpiresOn ?? old.card_expires_on,20)||null,clean(b.notes ?? old.notes,1000),groupId,clean(b.indicatorCategory ?? old.indicator_category,40)||null,clean(b.port ?? old.port,40)||null,now(),old.id)
         if (cardNumberChanged) {
           db.prepare('UPDATE plate_assets SET card_data=?,card_status=?,card_updated_by=?,card_updated_at=? WHERE id=?').run(JSON.stringify(nextCard),'待核對',user.name,now(),old.id)
           saveCardVersion(old,nextCard,'待核對',user.name,'修改批文卡編號')
@@ -285,22 +299,22 @@ const server = http.createServer(async (req, res) => {
       const body = await parseBody(req)
       if (!required(body, ['name', 'kind'])) return fail(res, 400, '請填寫客戶名稱和類型')
       const customerId = id()
-      db.prepare('INSERT INTO customers VALUES (?,?,?,?,?,?)').run(customerId, clean(body.name, 120), clean(body.kind, 20), clean(body.phone, 40), user.id, clean(body.notes, 2000))
+      db.prepare('INSERT INTO customers(id,name,kind,phone,owner_id,notes,tenant_id) VALUES (?,?,?,?,?,?,?)').run(customerId, clean(body.name, 120), clean(body.kind, 20), clean(body.phone, 40), user.id, clean(body.notes, 2000), user.tenant_id)
       return json(res, 201, one('SELECT * FROM customers WHERE id=?', customerId))
     }
     if (path === '/api/customer-users' && req.method === 'POST') {
       if (user.role !== 'admin') return fail(res, 403, '無權限')
       const body = await parseBody(req)
       if (!required(body, ['customerId', 'name', 'email', 'password'])) return fail(res, 400, '資料不完整')
-      if (!one('SELECT id FROM customers WHERE id=?', body.customerId)) return fail(res, 404, '客戶不存在')
+      if (!canAccessCustomer(user, body.customerId)) return fail(res, 404, '客戶不存在')
       if (body.password.length < 12) return fail(res, 400, '密碼至少 12 字元')
       const userId = id()
-      db.prepare('INSERT INTO users(id,role,name,email,password_hash,customer_id) VALUES (?,?,?,?,?,?)').run(userId, 'customer', clean(body.name, 100), clean(body.email, 160).toLowerCase(), hashPassword(body.password), body.customerId)
+      db.prepare('INSERT INTO users(id,role,name,email,password_hash,customer_id,tenant_id) VALUES (?,?,?,?,?,?,?)').run(userId, 'customer', clean(body.name, 100), clean(body.email, 160).toLowerCase(), hashPassword(body.password), body.customerId, user.tenant_id)
       return json(res, 201, { id: userId })
     }
     if (path === '/api/vehicles' && req.method === 'GET') {
       const customerId = url.searchParams.get('customerId')
-      if (user.role === 'admin') return json(res, 200, customerId ? query('SELECT * FROM vehicles WHERE customer_id=? ORDER BY plate', customerId) : query('SELECT * FROM vehicles ORDER BY plate'))
+      if (user.role === 'admin') return json(res, 200, customerId ? (canAccessCustomer(user, customerId) ? query('SELECT * FROM vehicles WHERE customer_id=? ORDER BY plate', customerId) : []) : query('SELECT v.* FROM vehicles v JOIN customers c ON c.id=v.customer_id WHERE c.tenant_id=? ORDER BY v.plate', user.tenant_id))
       return json(res, 200, query('SELECT * FROM vehicles WHERE customer_id=? ORDER BY plate', user.customer_id))
     }
     if (path === '/api/vehicles' && req.method === 'POST') {
@@ -308,9 +322,10 @@ const server = http.createServer(async (req, res) => {
       const b = await parseBody(req)
       if (!required(b, ['customerId', 'route', 'origin', 'type', 'plate'])) return fail(res, 400, '車輛資料不完整')
       if (!['粵港', '粵澳'].includes(b.route) || !['香港', '內地', '澳門'].includes(b.origin)) return fail(res, 400, '路線或來源地無效')
-      if (!one('SELECT id FROM customers WHERE id=?', b.customerId)) return fail(res, 404, '客戶不存在')
+      if (b.firstRegisteredOn && !validDate(b.firstRegisteredOn)) return fail(res, 400, '首次註冊日期無效')
+      if (!canAccessCustomer(user, b.customerId)) return fail(res, 404, '客戶不存在')
       const vehicleId = id()
-      db.prepare('INSERT INTO vehicles VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(vehicleId, b.customerId, clean(b.route, 20), clean(b.origin, 20), clean(b.type, 40), clean(b.plate, 50), clean(b.brand, 60), clean(b.model, 60), clean(b.vin, 100), Number(b.manufacturedYear) || null, clean(b.notes, 1000))
+      db.prepare('INSERT INTO vehicles(id,customer_id,route,origin,type,plate,brand,model,vin,manufactured_year,notes,first_registered_on) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').run(vehicleId, b.customerId, clean(b.route, 20), clean(b.origin, 20), clean(b.type, 40), clean(b.plate, 50), clean(b.brand, 60), clean(b.model, 60), clean(b.vin, 100), Number(b.manufacturedYear) || null, clean(b.notes, 1000), validDate(b.firstRegisteredOn))
       return json(res, 201, one('SELECT * FROM vehicles WHERE id=?', vehicleId))
     }
     const vehicleMatch = path.match(/^\/api\/vehicles\/([^/]+)$/)
@@ -319,11 +334,23 @@ const server = http.createServer(async (req, res) => {
       if (!vehicle) return fail(res, 404, '車輛不存在')
       return json(res, 200, { ...vehicle, credentials: query('SELECT * FROM credentials WHERE vehicle_id=? ORDER BY expires_on', vehicle.id), inspections: query('SELECT * FROM inspections WHERE vehicle_id=? ORDER BY appointment_on DESC', vehicle.id), inspectionGuidance: inspectionGuidance(vehicle, 'renewal') })
     }
+    if (vehicleMatch && req.method === 'PATCH') {
+      if (user.role !== 'admin') return fail(res, 403, '無權限')
+      const old = vehicleFor(user, vehicleMatch[1]); if (!old) return fail(res, 404, '車輛不存在')
+      const b = await parseBody(req)
+      const next = { plate: b.plate === undefined ? old.plate : clean(b.plate, 50), brand: b.brand === undefined ? old.brand : clean(b.brand, 60), model: b.model === undefined ? old.model : clean(b.model, 60), vin: b.vin === undefined ? old.vin : clean(b.vin, 100), notes: b.notes === undefined ? old.notes : clean(b.notes, 1000), firstRegisteredOn: b.firstRegisteredOn === undefined ? old.first_registered_on : b.firstRegisteredOn === '' ? null : validDate(b.firstRegisteredOn), origin: b.origin ?? old.origin, manufacturedYear: b.manufacturedYear === undefined ? old.manufactured_year : b.manufacturedYear === '' ? null : b.manufacturedYear }
+      if (!next.plate) return fail(res, 400, '車牌不可為空')
+      if (b.firstRegisteredOn != null && b.firstRegisteredOn !== '' && !next.firstRegisteredOn) return fail(res, 400, '首次註冊日期無效')
+      if (!['香港', '澳門', '內地'].includes(next.origin)) return fail(res, 400, '來源地無效')
+      if (next.manufacturedYear !== null && next.manufacturedYear !== '' && (!Number.isInteger(next.manufacturedYear) || next.manufacturedYear < 1886 || next.manufacturedYear > 9999)) return fail(res, 400, '製造年份無效')
+      db.prepare('UPDATE vehicles SET plate=?,brand=?,model=?,vin=?,notes=?,first_registered_on=?,origin=?,manufactured_year=? WHERE id=?').run(next.plate, next.brand, next.model, next.vin, next.notes, next.firstRegisteredOn, next.origin, next.manufacturedYear, old.id)
+      return json(res, 200, one('SELECT * FROM vehicles WHERE id=?', old.id))
+    }
     if (path === '/api/credentials' && req.method === 'POST') {
       if (user.role !== 'admin') return fail(res, 403, '無權限')
       const b = await parseBody(req)
       if (!required(b, ['vehicleId', 'name'])) return fail(res, 400, '證件資料不完整')
-      if (!one('SELECT id FROM vehicles WHERE id=?', b.vehicleId)) return fail(res, 404, '車輛不存在')
+      if (!vehicleFor(user, b.vehicleId)) return fail(res, 404, '車輛不存在')
       if (b.sourceId && !sources.some(s => s.id === b.sourceId)) return fail(res, 400, '官方來源不存在')
       const credentialId = id()
       db.prepare('INSERT INTO credentials VALUES (?,?,?,?,?,?,?,?)').run(credentialId, b.vehicleId, clean(b.name, 100), clean(b.issuer, 100), clean(b.number, 100), clean(b.expiresOn, 20) || null, '待核對', clean(b.sourceId, 60) || null)
@@ -332,7 +359,7 @@ const server = http.createServer(async (req, res) => {
     const credentialMatch = path.match(/^\/api\/credentials\/([^/]+)$/)
     if (credentialMatch && req.method === 'PATCH') {
       if (user.role !== 'admin') return fail(res, 403, '無權限')
-      const existing = one('SELECT * FROM credentials WHERE id=?', credentialMatch[1]); if (!existing) return fail(res, 404, '牌證不存在')
+      const existing = one('SELECT * FROM credentials WHERE id=?', credentialMatch[1]); if (!existing || !vehicleFor(user, existing.vehicle_id)) return fail(res, 404, '牌證不存在')
       const b = await parseBody(req)
       const allowed = ['待核對', '已核對', '待續期', '已失效']
       if (b.status && !allowed.includes(b.status)) return fail(res, 400, '牌證狀態無效')
@@ -341,7 +368,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (path === '/api/requests' && req.method === 'GET') {
       const customerId = url.searchParams.get('customerId')
-      if (user.role === 'admin') return json(res, 200, customerId ? query('SELECT r.*,c.name customer_name,v.plate FROM requests r JOIN customers c ON c.id=r.customer_id LEFT JOIN vehicles v ON v.id=r.vehicle_id WHERE r.customer_id=? ORDER BY r.created_at DESC', customerId) : query('SELECT r.*,c.name customer_name,v.plate FROM requests r JOIN customers c ON c.id=r.customer_id LEFT JOIN vehicles v ON v.id=r.vehicle_id ORDER BY r.created_at DESC'))
+      if (user.role === 'admin') return json(res, 200, customerId ? query('SELECT r.*,c.name customer_name,v.plate FROM requests r JOIN customers c ON c.id=r.customer_id LEFT JOIN vehicles v ON v.id=r.vehicle_id WHERE r.customer_id=? AND c.tenant_id=? ORDER BY r.created_at DESC', customerId, user.tenant_id) : query('SELECT r.*,c.name customer_name,v.plate FROM requests r JOIN customers c ON c.id=r.customer_id LEFT JOIN vehicles v ON v.id=r.vehicle_id WHERE c.tenant_id=? ORDER BY r.created_at DESC', user.tenant_id))
       return json(res, 200, query('SELECT r.*,c.name customer_name,v.plate FROM requests r JOIN customers c ON c.id=r.customer_id LEFT JOIN vehicles v ON v.id=r.vehicle_id WHERE r.customer_id=? ORDER BY r.created_at DESC', user.customer_id))
     }
     if (path === '/api/requests' && req.method === 'POST') {
@@ -350,7 +377,7 @@ const server = http.createServer(async (req, res) => {
       const service = services.find(s => s.code === b.serviceCode && s.routes.includes(b.route))
       if (!service) return fail(res, 400, '服務類型與路線不相符')
       const customerId = user.role === 'admin' ? b.customerId : user.customer_id
-      if (!customerId || !one('SELECT id FROM customers WHERE id=?', customerId)) return fail(res, 400, '客戶不存在')
+      if (!customerId || !canAccessCustomer(user, customerId)) return fail(res, 400, '客戶不存在')
       if (b.vehicleId) { const vehicle = one('SELECT * FROM vehicles WHERE id=?', b.vehicleId); if (!vehicle || vehicle.customer_id !== customerId || vehicle.route !== b.route) return fail(res, 400, '車輛與客戶或路線不相符') }
       if (b.plateAssetId) { const plate = one('SELECT * FROM plate_assets WHERE id=?', b.plateAssetId); if (!plate || plate.customer_id !== customerId || plate.route !== b.route || !clean(plate.card_number)) return fail(res, 400, '兩地牌檔案與客戶或路線不相符') }
       if (service.code === 'new_application' && b.plateAssetId) return fail(res, 400, '新申請不應關聯既有兩地牌')
@@ -388,7 +415,7 @@ const server = http.createServer(async (req, res) => {
     const taskMatch = path.match(/^\/api\/tasks\/([^/]+)$/)
     if (taskMatch && req.method === 'PATCH') {
       if (user.role !== 'admin') return fail(res, 403, '無權限')
-      const task = one('SELECT * FROM tasks WHERE id=?', taskMatch[1]); if (!task) return fail(res, 404, '任務不存在')
+      const task = one('SELECT * FROM tasks WHERE id=?', taskMatch[1]); if (!task || !requestFor(user, task.request_id)) return fail(res, 404, '任務不存在')
       const b = await parseBody(req)
       const status = clean(b.status || task.status, 40)
       if (!['待辦', '待官方核實', '辦理中', '待客戶配合', '已完成', '不適用'].includes(status)) return fail(res, 400, '任務狀態無效')
@@ -406,7 +433,7 @@ const server = http.createServer(async (req, res) => {
       if (user.role !== 'admin') return fail(res, 403, '無權限')
       const b = await parseBody(req)
       if (!required(b, ['vehicleId', 'title'])) return fail(res, 400, '請填寫車輛與驗車項目')
-      if (!one('SELECT id FROM vehicles WHERE id=?', b.vehicleId)) return fail(res, 404, '車輛不存在')
+      if (!vehicleFor(user, b.vehicleId)) return fail(res, 404, '車輛不存在')
       if (b.requestId) { const parent = one('SELECT vehicle_id FROM requests WHERE id=?', b.requestId); if (!parent || parent.vehicle_id !== b.vehicleId) return fail(res, 400, '案件與車輛不相符') }
       if (b.sourceId && !sources.some(s => s.id === b.sourceId)) return fail(res, 400, '官方來源不存在')
       const inspectionId = id()
@@ -416,7 +443,7 @@ const server = http.createServer(async (req, res) => {
     const inspectionMatch = path.match(/^\/api\/inspections\/([^/]+)$/)
     if (inspectionMatch && req.method === 'PATCH') {
       if (user.role !== 'admin') return fail(res, 403, '無權限')
-      const existing = one('SELECT * FROM inspections WHERE id=?', inspectionMatch[1]); if (!existing) return fail(res, 404, '驗車項目不存在')
+      const existing = one('SELECT * FROM inspections WHERE id=?', inspectionMatch[1]); if (!existing || !vehicleFor(user, existing.vehicle_id)) return fail(res, 404, '驗車項目不存在')
       const b = await parseBody(req)
       if (b.status && !['待預約', '已預約', '檢驗中', '合格', '不合格', '不適用'].includes(b.status)) return fail(res, 400, '驗車狀態無效')
       db.prepare('UPDATE inspections SET status=?,appointment_on=?,result_on=?,notes=? WHERE id=?').run(clean(b.status, 40) || existing.status, clean(b.appointmentOn, 20) || existing.appointment_on, clean(b.resultOn, 20) || existing.result_on, clean(b.notes, 1000) || existing.notes, existing.id)
@@ -425,6 +452,7 @@ const server = http.createServer(async (req, res) => {
     return fail(res, 404, '找不到此頁')
   } catch (error) {
     if (error instanceof SyntaxError) return fail(res, 400, 'JSON 格式錯誤')
+    if (error.message === '請求內容格式錯誤') return fail(res, 400, error.message)
     if (String(error.message).includes('UNIQUE constraint')) return fail(res, 409, '資料已存在')
     console.error(error)
     return fail(res, 500, '伺服器處理失敗')
