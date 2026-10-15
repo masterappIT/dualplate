@@ -24,11 +24,16 @@
 
 ## 長期限制
 
+- **驗收工具**：`scripts/lead-review.sh` 和 `.review/` 屬負責人，不得讀取以外的用途、不得修改。負責人每輪會比對受保護檔案、測試與斷言數量；**不得刪除或放寬現有測試**，確有需要時在報告寫明理由，由負責人決定。
+
 - **客戶端由負責人親自設計**：`mobile/` 的頁面、`mobile/src/components/MainlandPlate.vue`、`HongKongPlate.vue` 和 `api/src/customer-routes.js` 是負責人按管理者意見做的，任務沒有明確要求時不要改動。
 - **批文卡前端效果必須保留**：不得修改 `admin/src/components/ApprovalCard.vue`、`mobile/src/components/ApprovalCard.vue` 的呈現；`App.vue` 中批文卡預覽、翻轉、上傳辨識、手動修改、原件核對等區塊不得刪改（版本選擇已由管理者決定移除，見 docs/tasks/card-latest-only-brief.md）。後端存檔邏輯可以改，但前端流程必須照常可用。
 - 不讀取或修改 `api/data/`、`data/`、任何 `*.sqlite`；`api/test/fixtures/cards/` 只可在測試中讀取，不得複製到其他位置。
 - 不新增 npm 依賴（任務另有說明除外）；不 git commit、不建立分支。
 - 不改動與任務無關的程式碼；後端風格與 `api/src/server.js` 一致。
+- **簡單易用**：所有畫面遵守 `docs/v1-plan.md` 第四節「簡單使用」準則，流程按第五節指定的成熟系統做法設計，不自創流程。
+- **設計系統**：所有畫面遵守 `docs/design-system.md`。管理端用移植自管理者腳手架的組件（`admin/src/components/ui|business|layout`）；客戶端用 Wot Design Uni。**禁止重複造輪子**：沒有合適組件時先在 `ui/` 或 `business/` 新增並登記，頁面內不可自寫顏色、字號、圓角、陰影。參考腳手架 `/Users/vincentw/development/scaffold-master` 只可讀取，不可修改。
+- **公司欄位按司法區顯示**：「納稅人類型」只屬於內地公司，香港、澳門公司不顯示。
 - **用語**：介面上**不使用「境外」字眼**。按公司註冊地寫「香港公司」「澳門公司」，兩者都可能時寫「香港／澳門公司」；另一方寫「內地公司」。程式內部變數名不受限。
 
 ## 報告要求

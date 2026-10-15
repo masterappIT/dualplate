@@ -10,3 +10,4 @@ api/data/
 .DS_Store
 
 api/test/fixtures/cards/
+.review/

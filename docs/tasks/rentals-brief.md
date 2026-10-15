@@ -13,11 +13,13 @@
 
 ---
 
+- **自有指標**（2026-10-16）：出租方預設「本公司（自有）」，租金是本公司收入，不產生應付客戶結算；`lessor_type=agent` 只用於客戶的牌照
+
 ## 第 A 輪：合約、應收款、管理端與客戶端
 
 ### 1. 資料（一次性遷移，沿用 `schema_migrations`）
 
-- `rental_contracts`：`id`、`tenant_id`、`plate_asset_id`、承租方（`renter_name`、`renter_type` 個人／公司、`renter_phone`、`renter_vehicle_plate`、`renter_driver`）、`starts_on`、`ends_on`、`rent_amount`（以「分」為單位的整數）、`currency`（`HKD`／`RMB`）、`cycle`（`monthly`／`quarterly`／`yearly`）、`due_day`（1–28）、`deposit_amount`、`collection_mode`（`代收`／`直付`）、`fee_type`（`none`／`fixed`／`percent`）與 `fee_value`（代收時的管理費）、`status`（`草擬`／`生效`／`已結束`／`已終止`）、`notes`、建立及更新時間
+- `rental_contracts`：`id`、`tenant_id`、`plate_asset_id`、承租方（`renter_name`、`renter_type` 個人／公司、`renter_phone`、`renter_vehicle_plate`、`renter_driver`）、`starts_on`、`ends_on`、`rent_amount`（以「分」為單位的整數）、`lessor_type`（`company` 持牌的香港／澳門公司／`client` 客戶個人／`agent` 代辦公司作為代理人）與 `lessor_company_id`（`company` 時必填，須屬同一客戶）、`currency`（`HKD`／`RMB`／`MOP`）、`cycle`（`monthly`／`quarterly`／`yearly`）、`due_day`（1–28）、`deposit_amount`、`collection_mode`（`代收`／`直付`）、`fee_type`（`none`／`fixed`／`percent`）與 `fee_value`（代收時的管理費）、`status`（`草擬`／`生效`／`已結束`／`已終止`）、`notes`、建立及更新時間
 - `rent_invoices`：`id`、`contract_id`、`period`（`YYYY-MM`，季繳／年繳用期初月份）、`due_on`、`amount`、`received_on`、`received_amount`、`received_by`（`代辦公司`／`客戶`）、`proof`（轉帳憑證圖片，另表存放）、`confirmed_by`、`notes`
 - 既有 `plate_rentals` 中「出租中」的記錄遷移為 `生效` 合約（缺少租金資料者金額為 0、標註「待補充」），舊表保留不刪
 - 兩地牌的 `usage_status` 改為由合約推算：有 `生效` 合約即「出租中」，合約結束則回到原本狀態；不要再讓兩處各自維護
