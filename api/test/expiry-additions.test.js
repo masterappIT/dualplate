@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { Readable } from 'node:stream'
 import { randomUUID } from 'node:crypto'
-import { computeDeadlines } from '../src/rules.js'
+import { computeDeadlines, businessToday } from '../src/rules.js'
 
 // ── 計算方式：since_last（上次過關後 N 天）與 after_field（批文有效期開始後 N 天，一次性） ──
 const today = new Date('2026-05-01T00:00:00Z')
@@ -31,6 +31,10 @@ test('90 天過關：天數參數可改', () => assert.equal(run({ ...crossing, 
 test('新批文備案：沒有有效期開始日不產生', () => assert.equal(run(filing, {}).length, 0))
 test('新批文備案：有效期開始後 183 天到期', () => assert.equal(run(filing, { cardValidFrom: '2026-03-01' })[0].dueOn, '2026-08-31'))
 test('新批文備案：已標記完成不再出現', () => assert.equal(run(filing, { cardValidFrom: '2026-03-01' }, new Set(['new_card_filing:p1:2026-03-01'])).length, 0))
+test('業務日期按香港時區計算', () => {
+  assert.equal(businessToday(new Date('2026-10-15T17:30:00Z')).toISOString().slice(0, 10), '2026-10-16')
+  assert.equal(businessToday(new Date('2026-10-15T15:30:00Z')).toISOString().slice(0, 10), '2026-10-15')
+})
 test('新批文備案：多年前的舊批文不當作逾期', () => assert.equal(run(filing, { cardValidFrom: '2020-01-01' }).length, 0))
 
 // ── API ──
@@ -63,7 +67,7 @@ function request(path, method = 'GET', body, token = 'admin') {
   Object.assign(incoming, { method, url: `/api${path}`, headers: { host: 'localhost', authorization: `Bearer ${token}` } })
   return new Promise(resolve => fixture.server.emit('request', incoming, { setHeader() {}, writeHead(status) { this.status = status }, end(text) { resolve({ status: this.status, body: JSON.parse(text) }) } }))
 }
-const isoDaysAgo = days => new Date(Date.now() - days * 86400000).toISOString().slice(0, 10)
+const isoDaysAgo = days => new Date(businessToday().getTime() - days * 86400000).toISOString().slice(0, 10)
 
 const newCodes = ['customs_filing', 'new_card_filing', 'crossing_90', 'hk_registered_office', 'cn_registered_address']
 test('新增的預設規則已為現有租戶建立', () => {

@@ -28,6 +28,12 @@ export const defaultRules = [
 ]
 
 const DAY = 86400000
+// "Today" in the business time zone (Hong Kong by default), as a UTC-midnight date. Using the server's UTC date
+// made a client's 「今天已過關」 fail before 8 a.m. and shifted every days-left count by one.
+export function businessToday(now = new Date()) {
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone: process.env.BUSINESS_TZ || 'Asia/Hong_Kong', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
+  return new Date(day + 'T00:00:00Z')
+}
 const iso = date => date.toISOString().slice(0, 10)
 const parse = value => { if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return null; const date = new Date(value + 'T00:00:00Z'); return Number.isFinite(date.getTime()) && iso(date) === value ? date : null }
 const addDays = (date, days) => new Date(date.getTime() + days * DAY)
@@ -89,7 +95,7 @@ function level(daysLeft, remindDays, windowDays) {
 // owners: [{ ownerType, ownerId, label, customerId, customerName, facts }]
 // tracked: Map key `${ownerType}:${ownerId}:${code}` → { expires_on, notes }
 // completions: Set of `${code}:${ownerId}:${period}`
-export function computeDeadlines({ rules, owners, tracked, completions, today = new Date(), windowDays = 90 }) {
+export function computeDeadlines({ rules, owners, tracked, completions, today = businessToday(), windowDays = 90 }) {
   const day = parse(iso(today))
   const result = []
   for (const owner of owners) {

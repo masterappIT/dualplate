@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { db } from './db.js'
+import { businessToday } from './rules.js'
 
 // Border crossings recorded by staff or by the client. Same-day repeats return the existing record.
 const validDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value + 'T00:00:00Z')) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => businessToday().toISOString().slice(0, 10)
 const rule = tenantId => db.prepare("SELECT params_json FROM rules WHERE tenant_id=? AND code='crossing_90'").get(tenantId)
 
 export function crossingSummary(tenantId, plateId) {
