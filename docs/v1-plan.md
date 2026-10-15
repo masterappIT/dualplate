@@ -27,7 +27,7 @@
 | 11.6 | **動態視圖**：移植畫布、溯源圖譜、星圖、泳道、熱力格、數字滾動，對應客戶結構、牌照關係、到期日曆等 | `dynamic-views-brief.md` |
 | 11.7 | **管理端視覺識別**（負責人親自做）：證件感 token、防偽底紋、票根、印章、車牌徽章 | 負責人 |
 | 12 | 委託範圍與自有指標 | `entrustment-brief.md` |
-| 13 | 到期補充＋90 天過關提醒 | `expiry-additions-brief.md` |
+| 13 | 到期補充＋90 天過關提醒 | 後端與客戶端：負責人已完成；管理端畫面：`expiry-additions-brief.md` 第 3 節 |
 | 14 | 工單改版：業務步驟範本、看板、負責人、截止日、員工帳號與兩級權限 | `work-orders-brief.md` |
 | 14.5 | 司機管理：司機資料、證件到期、主／副司機備案 | `drivers-brief.md` |
 | 15 | 客戶端補強：上傳文件、顧問、手機號碼登入、站內通知；**客戶端改用 Wot Design Uni、統一 token** | `client-enhance-brief.md`，開工前更新 |

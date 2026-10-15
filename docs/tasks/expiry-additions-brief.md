@@ -1,5 +1,8 @@
 # 任務：到期事項補充與 90 天過關提醒（第 13 輪）
 
+> **2026-10-16 更新：後端與客戶端已由負責人完成並提交**（`f2aa4d8`、`e7c7deb`）：新規則、`since_last`／`after_field` 計算方式、`plate_crossings` 表、`api/src/crossings.js`、管理端 API `GET/POST /api/plates/:id/crossings`、`DELETE /api/plates/:id/crossings/:crossingId`、客戶 API、業務時區（香港）計算「今天」，測試見 `api/test/expiry-additions.test.js`。
+> **Codex 只需做第 3 節的管理端畫面**（今日工作「已過關」、牌照總表上次過關欄與篩選、牌照詳情過關記錄、公司卡片新欄位、規則設定新計算方式的白話顯示與編輯）。第 1、2 節僅供理解，不要重寫。API 回應格式：`{ lastCrossedOn, nextDueOn, days, crossings: [{ id, crossedOn, source, createdAt }] }`。
+
 先讀 `AGENTS.md` 和 `docs/v1-plan.md`（第四節簡單使用準則、第五節參照系統）。本任務在「委託範圍與自有指標」驗收後進行。參照：**Fleetio 續期提醒**——每個事項「到期日＋提前提醒」，快到期／逾期兩段狀態。
 
 ## 業務規則（管理者已確認，不要自行修改）
