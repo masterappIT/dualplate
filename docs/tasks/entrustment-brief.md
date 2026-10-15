@@ -1,5 +1,9 @@
 # 任務：委託範圍與自有指標
 
+> **2026-10-16 更新：後端主體已由負責人完成**（`api/src/entrustment.js`、`api/src/entrustment-routes.js`；規則 `service` 欄、`service_scopes`、`plate_transfers`、`customers.is_self`、每租戶自動建立「本公司（自有）」、今日工作數字排除客戶自理、客戶到期項目帶 `handledBy`）。
+> **Codex 要做**：(1) 按第 7 節為上述後端**補齊具名測試**（負責人尚未寫，這是驗收重點）；發現缺陷照常修正並報告；(2) 第 3、4、5 節的**管理端畫面**；(3) 第 6 節「普通編輯 API 不可改 `customer_id`」逐一核實並補測試。
+> API：`GET /api/service-scopes?ownerType=&ownerId=`、`PUT /api/service-scopes {ownerType, ownerId, service, handler, providerName, notes}`、`POST /api/customers/:id/apply-template {template: full|plates_only|plates_and_mainland, dryRun}`（預設 dryRun 只預覽，`dryRun:false` 才寫入）、`POST /api/plates/:id/transfer {toCustomerId, transferredOn, notes, includePlateIds}`（同公司組有其他牌照時 409 並回傳 `otherPlates`）、`GET /api/plates/:id/transfers`。到期項目新增欄位 `service`、`handler`、`providerName`。
+
 先讀 `AGENTS.md`。本任務在「管理端結構重整」驗收後進行。業務背景見 `docs/requirements.md` 第 5.6.1 節（管理者 2026-10-16 確認）。
 
 ## 業務規則（管理者已確認，不要自行修改）
