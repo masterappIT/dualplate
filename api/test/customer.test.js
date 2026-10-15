@@ -19,7 +19,7 @@ async function request(path, token, method = 'GET') { const response = await fet
 
 before(async () => {
   directory = mkdtempSync(join(dirname(fileURLToPath(import.meta.url)), '.customer-api-'))
-  const databasePath = join(directory, 'test.sqlite')
+  const databasePath = join(directory, 'test.db')
   port = await freePort()
   child = spawn(process.execPath, ['src/server.js'], { cwd: new URL('../', import.meta.url), env: { ...process.env, DB_PATH: databasePath, PORT: String(port), DEMO_SEED: '0' }, stdio: 'pipe' })
   for (let attempt = 0; attempt < 100; attempt++) { try { if ((await fetch(`http://127.0.0.1:${port}/api/health`)).ok) break } catch {} await new Promise(resolve => setTimeout(resolve, 50)) }

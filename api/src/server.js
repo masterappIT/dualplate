@@ -39,19 +39,6 @@ function plateFor(user, plateId) {
   const item = one('SELECT * FROM plate_assets WHERE id=?', plateId)
   return item && canAccessCustomer(user, item.customer_id) ? item : null
 }
-function cardVersions(plateId) {
-  return query('SELECT id,version_number,card_data,card_status,updated_by,created_at,source FROM approval_card_versions WHERE plate_asset_id=? ORDER BY version_number DESC',plateId)
-    .map(x=>({id:x.id,number:x.version_number,cardData:cardData(x.card_data),status:x.card_status,updatedBy:x.updated_by,createdAt:x.created_at,source:x.source,
-      imageSides:query('SELECT side FROM approval_card_version_images WHERE version_id=?',x.id).map(image=>image.side)}))
-}
-function saveCardVersion(item, data, status, actor, source) {
-  const versionId=id()
-  const next=one('SELECT COALESCE(MAX(version_number),0)+1 AS value FROM approval_card_versions WHERE plate_asset_id=?',item.id).value
-  db.prepare('INSERT INTO approval_card_versions(id,plate_asset_id,version_number,card_data,card_status,updated_by,created_at,source) VALUES (?,?,?,?,?,?,?,?)')
-    .run(versionId,item.id,next,JSON.stringify(data),status,actor,now(),source)
-  db.prepare('INSERT INTO approval_card_version_images(version_id,side,mime,data) SELECT ?,side,mime,data FROM approval_card_images WHERE plate_asset_id=?').run(versionId,item.id)
-  return versionId
-}
 function plateDetail(user, plateId) {
   const item = plateFor(user, plateId)
   if (!item) return null
@@ -60,7 +47,7 @@ function plateDetail(user, plateId) {
   const imageValue = x => user.role === 'admin' ? `data:${x.mime};base64,${x.data.toString('base64')}` : true
   const companyStatuses = user.role === 'admin' && item.group_id ? query('SELECT c.id,c.jurisdiction,c.name,c.status,c.status_changed_on FROM companies c JOIN company_groups g ON g.id=c.group_id AND g.tenant_id=c.tenant_id WHERE c.tenant_id=? AND c.group_id=? AND g.customer_id=? ORDER BY c.jurisdiction,c.name', user.tenant_id, item.group_id, item.customer_id) : []
   const warnings = companyStatuses.filter(company => company.jurisdiction === '內地' && ['已註銷', '註銷中'].includes(company.status)).map(company => company.status === '已註銷' ? '內承單位已註銷' : '內承單位註銷中')
-  return { ...item, cardData: cardData(item.card_data), cardVersions: cardVersions(item.id), rentals: query('SELECT * FROM plate_rentals WHERE plate_asset_id=? ORDER BY created_at DESC', item.id), cardImages: Object.fromEntries(images.map(x => [x.side, imageValue(x)])), platePhotos: Object.fromEntries(photos.map(x => [x.kind, imageValue(x)])), companyStatuses, warnings: [...new Set(warnings)] }
+  return { ...item, cardData: cardData(item.card_data), rentals: query('SELECT * FROM plate_rentals WHERE plate_asset_id=? ORDER BY created_at DESC', item.id), cardImages: Object.fromEntries(images.map(x => [x.side, imageValue(x)])), platePhotos: Object.fromEntries(photos.map(x => [x.kind, imageValue(x)])), companyStatuses, warnings: [...new Set(warnings)] }
 }
 function pushActivity(requestId, actorId, kind, detail) { db.prepare('INSERT INTO activities VALUES (?,?,?,?,?,?)').run(id(), requestId, actorId, kind, detail, now()) }
 function addTasks(requestId, service, route) {
@@ -159,7 +146,6 @@ const server = http.createServer(async (req, res) => {
       try {
         db.prepare('INSERT INTO plate_assets(id,customer_id,route,mainland_plate,local_plate,vehicle_id,installation_status,usage_status,card_number,card_expires_on,notes,created_at,updated_at,card_data,card_status,card_updated_by,card_updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(assetId,b.customerId,b.route,mainlandPlate,localPlate,b.vehicleId||null,'待核對','待核對',cardNumber,cardExpiresOn,clean(b.notes,1000),now(),now(),JSON.stringify({...proposedCard,cardNumber}),'待核對',user.name,now())
         for(const [side,mime,bytes] of cardImages) db.prepare('INSERT INTO approval_card_images VALUES (?,?,?,?)').run(assetId,side,mime,bytes)
-        saveCardVersion({id:assetId},{...proposedCard,cardNumber},'待核對',user.name,'首次建檔')
         if (b.sourceRequestId) {
           db.prepare('UPDATE requests SET plate_asset_id=?,updated_at=? WHERE id=? AND plate_asset_id IS NULL').run(assetId,now(),b.sourceRequestId)
           pushActivity(b.sourceRequestId,user.id,'plate_created',`已取得批文卡 ${cardNumber}，建立兩地牌檔案`)
@@ -198,7 +184,6 @@ const server = http.createServer(async (req, res) => {
         db.prepare('UPDATE plate_assets SET mainland_plate=?,local_plate=?,vehicle_id=?,installation_status=?,usage_status=?,card_number=?,card_expires_on=?,notes=?,group_id=?,indicator_category=?,port=?,updated_at=? WHERE id=?').run(clean(b.mainlandPlate ?? old.mainland_plate,30)||null,clean(b.localPlate ?? old.local_plate,30)||null,vehicleId,installation,usage,nextCardNumber,clean(b.cardExpiresOn ?? old.card_expires_on,20)||null,clean(b.notes ?? old.notes,1000),groupId,clean(b.indicatorCategory ?? old.indicator_category,40)||null,clean(b.port ?? old.port,40)||null,now(),old.id)
         if (cardNumberChanged) {
           db.prepare('UPDATE plate_assets SET card_data=?,card_status=?,card_updated_by=?,card_updated_at=? WHERE id=?').run(JSON.stringify(nextCard),'待核對',user.name,now(),old.id)
-          saveCardVersion(old,nextCard,'待核對',user.name,'修改批文卡編號')
         }
         db.exec('COMMIT')
       } catch (error) { db.exec('ROLLBACK'); throw error }
@@ -213,20 +198,10 @@ const server = http.createServer(async (req, res) => {
       const nextStatus = user.role === 'admin' ? '已核對' : '待核對'
       db.exec('BEGIN IMMEDIATE')
       try {
-        if (old.card_updated_at && !cardVersions(old.id).length && Object.values(cardData(old.card_data)).some(Boolean)) saveCardVersion(old,cardData(old.card_data),old.card_status,old.card_updated_by||'舊版資料','既有版本')
         db.prepare('UPDATE plate_assets SET card_data=?,card_status=?,card_number=?,card_expires_on=?,mainland_plate=?,local_plate=?,card_updated_by=?,card_updated_at=?,updated_at=? WHERE id=?').run(JSON.stringify(proposed),nextStatus,proposed.cardNumber||null,proposed.validTo||null,proposed.mainlandPlate||null,proposed.localPlate||null,user.name,now(),now(),old.id)
-        saveCardVersion(old,proposed,nextStatus,user.name,'手動修改')
         db.exec('COMMIT')
       } catch (error) { db.exec('ROLLBACK'); throw error }
       return json(res, 200, plateDetail(user, old.id))
-    }
-    const versionImageMatch = path.match(/^\/api\/plate-assets\/([^/]+)\/card-versions\/([^/]+)\/image\/(front|back)$/)
-    if (versionImageMatch && req.method === 'GET') {
-      const item=plateFor(user,versionImageMatch[1]); if (!item) return fail(res,404,'兩地牌不存在')
-      const image=one('SELECT i.mime,i.data FROM approval_card_version_images i JOIN approval_card_versions v ON v.id=i.version_id WHERE v.id=? AND v.plate_asset_id=? AND i.side=?',versionImageMatch[2],item.id,versionImageMatch[3])
-      if (!image) return fail(res,404,'版本圖片不存在')
-      res.writeHead(200,{'content-type':image.mime,'cache-control':'private, no-store','x-content-type-options':'nosniff'})
-      return res.end(image.data)
     }
     const cardMatch = path.match(/^\/api\/plate-assets\/([^/]+)\/card\/(front|back)$/)
     const privateImageMatch = path.match(/^\/api\/plate-assets\/([^/]+)\/image\/(card-front|card-back|plate-mainland|plate-local)$/)
@@ -253,10 +228,8 @@ const server = http.createServer(async (req, res) => {
       const proposed=cleanCard({...existing,...Object.fromEntries(Object.entries(recognized).filter(([,v])=>v))})
       db.exec('BEGIN IMMEDIATE')
       try {
-        if (item.card_updated_at && !cardVersions(item.id).length && Object.values(cardData(item.card_data)).some(Boolean)) saveCardVersion(item,cardData(item.card_data),item.card_status,item.card_updated_by||'舊版資料','既有版本')
         db.prepare('INSERT INTO approval_card_images VALUES (?,?,?,?) ON CONFLICT(plate_asset_id,side) DO UPDATE SET mime=excluded.mime,data=excluded.data').run(item.id,side,matched[1],bytes)
         db.prepare('UPDATE plate_assets SET card_data=?,card_status=?,card_number=?,card_expires_on=?,mainland_plate=?,local_plate=?,card_updated_by=?,card_updated_at=?,updated_at=? WHERE id=?').run(JSON.stringify(proposed),'待核對',proposed.cardNumber||null,proposed.validTo||null,proposed.mainlandPlate||null,proposed.localPlate||null,user.name,now(),now(),item.id)
-        saveCardVersion(item,proposed,'待核對',user.name,`上傳${side==='front'?'正面':'背面'}`)
         db.exec('COMMIT')
       } catch (error) { db.exec('ROLLBACK'); throw error }
       return json(res, 200, { side, uploaded: true, recognized, cardData: proposed, needsReview: true })

@@ -18,7 +18,7 @@ const state = {}
 describe('第一階段 API 整合測試', { concurrency:false }, () => {
   before(async () => {
     state.directory = mkdtempSync(join(dirname(fileURLToPath(import.meta.url)),'.phase1-api-'))
-    state.databasePath = join(state.directory,'test.sqlite')
+    state.databasePath = join(state.directory,'test.db')
     state.lookupPort = await freePort()
     state.lookupServer = createHttpServer((req,res) => {
       res.writeHead(200, {'content-type':'application/json'})
@@ -61,6 +61,26 @@ describe('第一階段 API 整合測試', { concurrency:false }, () => {
     assert.equal((await state.request(`/vehicles/${state.vehicleA}`,'GET',undefined,state.adminB)).status,404)
     assert.equal((await state.request(`/company-groups?customerId=${state.customerB}`,'GET',undefined,state.adminA)).status,404)
     for (const route of ['/company-groups','/companies',`/tracked-items?ownerType=plate&ownerId=${state.plateA}`,'/rules','/overview']) assert.equal((await state.request(route,'GET',undefined,state.client)).status,403,route)
+  })
+
+  test('新建、手動修改及上傳批文卡不建立版本記錄', async () => {
+    const cardNumber = `NEW-${randomUUID().slice(0,8)}`
+    const created = await state.request('/plate-assets','POST',{customerId:state.customerA,route:'粵港',cardData:{cardNumber,company:'最新版公司'}},state.adminA)
+    assert.equal(created.status,201)
+    assert.equal(created.body.cardVersions,undefined)
+    const patched = await state.request(`/plate-assets/${created.body.id}`,'PATCH',{cardNumber:`${cardNumber}-PATCH`},state.adminA)
+    assert.equal(patched.status,200)
+    assert.equal(patched.body.cardVersions,undefined)
+    const edited = await state.request(`/plate-assets/${created.body.id}`,'PUT',{cardData:{cardNumber,company:'手動修改公司'}},state.adminA)
+    assert.equal(edited.status,200)
+    assert.equal(edited.body.cardVersions,undefined)
+    const uploaded = await state.request(`/plate-assets/${created.body.id}/card/front`,'POST',{image:'data:image/png;base64,aGVsbG8='},state.adminA)
+    assert.equal(uploaded.status,200)
+    assert.equal((await state.request(`/plate-assets/${created.body.id}`,'GET',undefined,state.adminA)).body.cardVersions,undefined)
+    assert.equal(state.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='approval_card_versions'").get(),undefined)
+    assert.equal(state.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='approval_card_version_images'").get(),undefined)
+    assert.equal(state.db.prepare('SELECT COUNT(*) AS count FROM approval_card_images WHERE plate_asset_id=?').get(created.body.id).count,1)
+    assert.equal(state.db.prepare('SELECT card_data FROM plate_assets WHERE id=?').get(created.body.id).card_data.includes('手動修改公司'),true)
   })
 
   test('公司組及公司新增、修改與驗證', async () => {

@@ -15,8 +15,6 @@ CREATE TABLE IF NOT EXISTS vehicles(id TEXT PRIMARY KEY, customer_id TEXT NOT NU
 CREATE TABLE IF NOT EXISTS plate_assets(id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, route TEXT NOT NULL, mainland_plate TEXT, local_plate TEXT, vehicle_id TEXT, installation_status TEXT NOT NULL DEFAULT '待核對', usage_status TEXT NOT NULL DEFAULT '待核對', card_number TEXT, card_expires_on TEXT, notes TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(vehicle_id) REFERENCES vehicles(id));
 CREATE TABLE IF NOT EXISTS plate_rentals(id TEXT PRIMARY KEY, plate_asset_id TEXT NOT NULL, renter_name TEXT NOT NULL, renter_vehicle_plate TEXT, starts_on TEXT, ends_on TEXT, status TEXT NOT NULL DEFAULT '出租中', notes TEXT, created_at TEXT NOT NULL, FOREIGN KEY(plate_asset_id) REFERENCES plate_assets(id));
 CREATE TABLE IF NOT EXISTS approval_card_images(plate_asset_id TEXT NOT NULL, side TEXT NOT NULL, mime TEXT NOT NULL, data BLOB NOT NULL, PRIMARY KEY(plate_asset_id,side), FOREIGN KEY(plate_asset_id) REFERENCES plate_assets(id));
-CREATE TABLE IF NOT EXISTS approval_card_versions(id TEXT PRIMARY KEY, plate_asset_id TEXT NOT NULL, version_number INTEGER NOT NULL, card_data TEXT NOT NULL, card_status TEXT NOT NULL, updated_by TEXT, created_at TEXT NOT NULL, source TEXT NOT NULL, UNIQUE(plate_asset_id,version_number), FOREIGN KEY(plate_asset_id) REFERENCES plate_assets(id));
-CREATE TABLE IF NOT EXISTS approval_card_version_images(version_id TEXT NOT NULL, side TEXT NOT NULL, mime TEXT NOT NULL, data BLOB NOT NULL, PRIMARY KEY(version_id,side), FOREIGN KEY(version_id) REFERENCES approval_card_versions(id));
 CREATE TABLE IF NOT EXISTS plate_photos(plate_asset_id TEXT NOT NULL, kind TEXT NOT NULL, mime TEXT NOT NULL, data BLOB NOT NULL, PRIMARY KEY(plate_asset_id,kind), FOREIGN KEY(plate_asset_id) REFERENCES plate_assets(id));
 CREATE TABLE IF NOT EXISTS credentials(id TEXT PRIMARY KEY, vehicle_id TEXT NOT NULL, name TEXT NOT NULL, issuer TEXT, number TEXT, expires_on TEXT, status TEXT NOT NULL DEFAULT '待核對', source_id TEXT);
 CREATE TABLE IF NOT EXISTS requests(id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, vehicle_id TEXT, service_code TEXT NOT NULL, route TEXT NOT NULL, title TEXT NOT NULL, description TEXT, status TEXT NOT NULL, stage TEXT NOT NULL, assignee_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
@@ -27,10 +25,27 @@ CREATE INDEX IF NOT EXISTS idx_requests_customer ON requests(customer_id);
 CREATE INDEX IF NOT EXISTS idx_vehicles_customer ON vehicles(customer_id);
 CREATE INDEX IF NOT EXISTS idx_plate_assets_customer ON plate_assets(customer_id);
 CREATE INDEX IF NOT EXISTS idx_plate_rentals_asset ON plate_rentals(plate_asset_id);
-CREATE INDEX IF NOT EXISTS idx_card_versions_asset ON approval_card_versions(plate_asset_id,version_number DESC);
 CREATE INDEX IF NOT EXISTS idx_credentials_vehicle ON credentials(vehicle_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_request ON tasks(request_id);`)
 db.exec('CREATE TABLE IF NOT EXISTS schema_migrations(name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)')
+
+const cardLatestOnlyMigration = 'card-latest-only'
+if (!db.prepare('SELECT name FROM schema_migrations WHERE name=?').get(cardLatestOnlyMigration)) {
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    if (db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get('approval_card_version_images')) db.exec('DELETE FROM approval_card_version_images')
+    if (db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get('approval_card_versions')) db.exec('DELETE FROM approval_card_versions')
+    db.exec('DROP TABLE IF EXISTS approval_card_version_images')
+    db.exec('DROP TABLE IF EXISTS approval_card_versions')
+    db.exec('DROP INDEX IF EXISTS idx_card_versions_asset')
+    db.prepare('INSERT INTO schema_migrations(name,applied_at) VALUES (?,?)').run(cardLatestOnlyMigration, new Date().toISOString())
+    db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
+  }
+  db.exec('VACUUM')
+}
 
 // Apply additive schema changes to existing local databases.
 const userColumns = db.prepare('PRAGMA table_info(users)').all().map(x => x.name)
@@ -120,23 +135,6 @@ if (!db.prepare('SELECT name FROM schema_migrations WHERE name=?').get(approvalR
     db.exec('ROLLBACK')
     throw error
   }
-}
-
-// Preserve cards created before version history was introduced, including both scans.
-const unversionedCards = db.prepare(`SELECT p.* FROM plate_assets p WHERE p.card_updated_at IS NOT NULL
-  AND NOT EXISTS (SELECT 1 FROM approval_card_versions v WHERE v.plate_asset_id=p.id)`).all()
-if (unversionedCards.length) {
-  db.exec('BEGIN IMMEDIATE')
-  try {
-    for (const card of unversionedCards) {
-      const versionId = randomUUID()
-      db.prepare('INSERT INTO approval_card_versions(id,plate_asset_id,version_number,card_data,card_status,updated_by,created_at,source) VALUES (?,?,?,?,?,?,?,?)')
-        .run(versionId, card.id, 1, card.card_data || '{}', card.card_status || '待核對', card.card_updated_by, card.card_updated_at, '既有版本')
-      db.prepare('INSERT INTO approval_card_version_images(version_id,side,mime,data) SELECT ?,side,mime,data FROM approval_card_images WHERE plate_asset_id=?')
-        .run(versionId, card.id)
-    }
-    db.exec('COMMIT')
-  } catch (error) { db.exec('ROLLBACK'); throw error }
 }
 
 export const id = () => randomUUID()

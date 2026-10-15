@@ -3,7 +3,7 @@
     <view v-if="creating" class="file-form"><text class="form-title">登記現有批文卡</text><text class="form-note">建檔已移至批文卡核對流程。尚未取得批文卡，請使用申請代辦。</text><button class="save-file" @click="uni.redirectTo({url:'/pages/plate-create/plate-create'})">前往批文卡建檔</button></view>
     <view v-if="!creating && !plates.length" class="card empty">找不到這個兩地牌檔案。</view>
     <view v-for="p in plates" :key="p.id" class="asset-block">
-      <view class="card-section top-card"><view class="section-heading"><strong>批文卡 · 模擬卡</strong><text>{{ p.card_status || '待核對' }}</text></view><ApprovalCard :key="p.id+':'+(selectedCardVersion[p.id]||'latest')" :data="displayCardData(p)"/><view class="card-version-controls"><text>批文卡檔案</text><text>{{ plateDetail[p.id]?.cardVersions?.length || 0 }} 個版本</text></view><scroll-view scroll-x class="card-version-list"><view class="card-version-items"><button v-for="version in cardVersionOptions(p)" :key="version.id||'latest'" class="card-version-option" :class="{ active:(selectedCardVersion[p.id]||'')===version.id }" @click="selectCardVersion(p,version.id)">{{ version.label }}</button></view></scroll-view><text v-if="selectedCardVersion[p.id]" class="version-note">正在查看舊版；修改及上傳會更新此兩地牌的最新版本。</text><text class="card-hint">按提供的批文卡樣式重繪；內容由上傳或手動編輯更新，需以原件核對。</text><view class="card-actions"><button class="card-action" @click="editCard(p)">修改內容</button><button class="card-action" @click="uploadCard(p)">上傳新批文卡</button></view><view v-if="editingCardId===p.id" class="card-editor"><view v-for="field in cardFields" :key="field.key"><text>{{ field.label }}</text><input v-model="cardDraft[field.key]" :placeholder="field.label"/></view><button @click="saveCard(p)">更新模擬卡</button><button @click="editingCardId=''">取消</button></view></view>
+      <view class="card-section top-card"><view class="section-heading"><strong>批文卡 · 模擬卡</strong><text>{{ p.card_status || '待核對' }}</text></view><ApprovalCard :key="p.id" :data="displayCardData(p)"/><text class="card-hint">按提供的批文卡樣式重繪；內容由上傳或手動編輯更新，需以原件核對。</text><view class="card-actions"><button class="card-action" @click="editCard(p)">修改內容</button><button class="card-action" @click="uploadCard(p)">上傳新批文卡</button></view><view v-if="editingCardId===p.id" class="card-editor"><view v-for="field in cardFields" :key="field.key"><text>{{ field.label }}</text><input v-model="cardDraft[field.key]" :placeholder="field.label"/></view><button @click="saveCard(p)">更新模擬卡</button><button @click="editingCardId=''">取消</button></view></view>
       <view v-if="summary.id" class="summary">
         <view v-if="summary.warnings?.length" class="list-card warn-card"><text class="list-title">{{ summary.warnings.join('、') }}</text><text class="list-sub">牌照仍照常管理，如需處理我們會聯絡你。</text></view>
         <view class="section-head"><text class="section-title">到期項目</text><text class="pill" :class="{due:'amber',overdue:'red',pending:'gray'}[summary.health]">{{ {ok:'正常',due:'快到期',overdue:'已逾期',pending:'資料整理中'}[summary.health] }}</text></view>
@@ -46,17 +46,15 @@ const vehicles=ref([]),detail=ref({}),plates=ref([]),plateDetail=ref({}),plateIm
 const summary=ref({}),showEdit=ref(false)
 const quickActions=[{code:'renewal',name:'續期'},{code:'vehicle_change',name:'換車'},{code:'driver_change',name:'換司機'},{code:'other',name:'其他'}]
 function openRequest(id){uni.navigateTo({url:'/pages/request-detail/request-detail?id='+id})}
-const editingCardId=ref(''),cardDraft=ref({}),selectedCardVersion=ref({}),creating=ref(false),plateForm=ref({}),savingFile=ref(false)
+const editingCardId=ref(''),cardDraft=ref({}),creating=ref(false),plateForm=ref({}),savingFile=ref(false)
 let plateId=''
 const cardFields=[['cardNumber','編號'],['company','商號'],['contractor','內承單位'],['crossing','通行口岸'],['serial','卡面流水號'],['mainlandPlate','內地車牌號'],['localPlate','港澳車牌號'],['driver1','駕駛人 1'],['driver2','駕駛人 2'],['driver3','駕駛人 3'],['currentApproval','現批文號'],['previousApproval','原批文號'],['color','顏色'],['seats','座位／噸位'],['purpose','請予辦理'],['validFrom','有效期開始'],['validTo','有效期結束'],['notes','備註']].map(([key,label])=>({key,label}))
 function vehicleOptions(p){return [{id:'',label:'未綁定'},...vehicles.value.filter(v=>v.customer_id===p.customer_id&&v.route===p.route).map(v=>({id:v.id,label:[v.plate,v.brand,v.model].filter(Boolean).join(' · ')}))]}
 function fillPlateForm(p){plateForm.value={mainlandPlate:p.mainland_plate||'',localPlate:p.local_plate||'',installationStatus:p.installation_status||'待核對',usageStatus:p.usage_status||'待核對',vehicleId:p.vehicle_id||'',cardNumber:p.card_number||'',cardExpiresOn:p.card_expires_on||'',notes:p.notes||''}}
 async function savePlate(p){if(savingFile.value)return;savingFile.value=true;try{const updated=await api('/plate-assets/'+p.id,'PATCH',plateForm.value);plates.value=[updated];plateDetail.value={...plateDetail.value,[p.id]:updated};fillPlateForm(updated);uni.showToast({title:'兩地牌資料已更新',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{savingFile.value=false}}
-function cardVersionOptions(p){const versions=plateDetail.value[p.id]?.cardVersions||[];return [{id:'',label:versions.length?`最新版本 · 第 ${versions[0].number} 版`:'最新版本'},...versions.slice(1).map(v=>({id:v.id,label:`第 ${v.number} 版 · ${v.source} · ${v.createdAt?.slice(0,10)||''}`}))]}
-function selectCardVersion(p,id){selectedCardVersion.value={...selectedCardVersion.value,[p.id]:id}}
-function displayCardData(p){if(editingCardId.value===p.id)return cardDraft.value;const selected=selectedCardVersion.value[p.id];return (selected?plateDetail.value[p.id]?.cardVersions?.find(v=>v.id===selected)?.cardData:null)||plateDetail.value[p.id]?.cardData||{}}
-function editCard(p){selectedCardVersion.value={...selectedCardVersion.value,[p.id]:''};cardDraft.value={...(plateDetail.value[p.id]?.cardData||{})};editingCardId.value=p.id}
-async function saveCard(p){try{const updated=await api('/plate-assets/'+p.id,'PUT',{cardData:cardDraft.value});plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editingCardId.value='';selectedCardVersion.value={...selectedCardVersion.value,[p.id]:''};uni.showToast({title:'模擬卡已更新',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}}
+function displayCardData(p){return editingCardId.value===p.id?cardDraft.value:plateDetail.value[p.id]?.cardData||{}}
+function editCard(p){cardDraft.value={...(plateDetail.value[p.id]?.cardData||{})};editingCardId.value=p.id}
+async function saveCard(p){try{const updated=await api('/plate-assets/'+p.id,'PUT',{cardData:cardDraft.value});plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editingCardId.value='';uni.showToast({title:'模擬卡已更新',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}}
 async function selectedImageData(result){
   // #ifdef H5
   const picked=result.tempFiles?.[0]?.file||result.tempFiles?.[0]
@@ -90,10 +88,6 @@ onShow(load)
 
 <style scoped>
 .card-hint{display:block;color:#7d8f82;font-size:18rpx;line-height:1.5;margin-top:17rpx}.card-actions{display:flex;gap:12rpx;margin-top:15rpx}.card-action{flex:1;background:#edf4ee;color:#275c43;font-size:20rpx;font-weight:750;border-radius:10rpx}.card-editor{display:grid;gap:12rpx;margin-top:18rpx;padding:18rpx;background:#f6f8f6;border-radius:13rpx}.card-editor view text{display:block;color:#6d8174;font-size:18rpx;margin-bottom:5rpx}.card-editor input{height:56rpx;border:1rpx solid #cddbd0;border-radius:8rpx;background:white;padding:0 12rpx;font-size:20rpx}.card-editor button{font-size:20rpx;background:#1c4c3e;color:white}
-</style>
-
-<style scoped>
-.card-version-controls{display:flex;align-items:center;justify-content:space-between;gap:12rpx;margin-top:13rpx;color:#5e7568;font-size:19rpx}.card-version-list{width:100%;margin-top:9rpx}.card-version-items{display:flex;gap:8rpx;width:max-content;padding:1rpx}.card-version-option{display:inline-flex;align-items:center;flex:none;height:38rpx;margin:0;padding:0 14rpx;border:1rpx solid #cbdcd0;border-radius:9rpx;color:#285943;background:#f4f8f5;font-size:18rpx;line-height:1;white-space:nowrap}.card-version-option.active{background:#295a48;border-color:#295a48;color:#fff}.version-note{display:block;margin-top:8rpx;color:#8b7452;font-size:18rpx}
 </style>
 
 <style scoped>
