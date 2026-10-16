@@ -4,6 +4,7 @@ import { useAdminStore } from '../store'
 import FormDialog from './business/FormDialog.vue'
 import Field from './ui/Field.vue'
 import TextInput from './ui/TextInput.vue'
+import PhoneInput from './ui/PhoneInput.vue'
 import Select from './ui/Select.vue'
 import DateInput from './ui/DateInput.vue'
 import Modal from './ui/Modal.vue'
@@ -52,7 +53,7 @@ async function copyWelcome() { try { await navigator.clipboard.writeText(welcome
       <Field label="顯示名稱" required><TextInput v-model="form.name" /></Field>
       <p class="dialog-note">電郵或手機號碼至少填一項。</p>
       <Field label="電郵"><TextInput v-model="form.email" type="email" /></Field>
-      <Field label="手機號碼"><TextInput v-model="form.phone" type="tel" placeholder="例如 +85291234567" /></Field>
+      <Field label="手機號碼"><PhoneInput v-model="form.phone" /></Field>
       <Field label="初始密碼" required><TextInput v-model="form.password" type="password" /></Field>
       <p v-if="formError" class="error" role="alert">{{ formError }}</p>
     </template>

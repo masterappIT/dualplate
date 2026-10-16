@@ -17,8 +17,18 @@
         <text class="sheet-sub">查看你的牌照、公司和辦理進度</text>
       </view>
       <view class="ticket-rule" />
-      <text class="field-label">電郵或手機號碼</text>
-      <input class="field" v-model.trim="email" type="text" placeholder="name@example.com 或 +852 9123 4567" :class="{ invalid: error && !email }" />
+      <view class="segmented login-mode"><view class="seg" :class="{ on: mode === 'phone' }" @click="mode = 'phone'">手機號碼</view><view class="seg" :class="{ on: mode === 'email' }" @click="mode = 'email'">電郵</view></view>
+      <template v-if="mode === 'phone'">
+        <text class="field-label">手機號碼</text>
+        <view class="phone-row">
+          <picker :range="areaCodes" range-key="label" :value="areaIndex" @change="pickArea"><view class="field picker area"><text>{{ areaCodes[areaIndex].label }}</text><text class="chev">›</text></view></picker>
+          <input class="field phone" v-model.trim="phone" type="number" :placeholder="areaCodes[areaIndex].hint" :class="{ invalid: error && !phone }" />
+        </view>
+      </template>
+      <template v-else>
+        <text class="field-label">電郵</text>
+        <input class="field" v-model.trim="email" type="text" placeholder="name@example.com" :class="{ invalid: error && !email }" />
+      </template>
       <text class="field-label">密碼</text>
       <input class="field" v-model="password" password placeholder="輸入密碼" :class="{ invalid: error && !password }" @confirm="login" />
       <text v-if="error" class="error">{{ error }}</text>
@@ -42,16 +52,23 @@ import { api, saveSession } from '../../lib/api'
 import PlateChip from '../../components/PlateChip.vue'
 import StampMark from '../../components/StampMark.vue'
 
-const email = ref(''), password = ref(''), binding = ref(false), bindCode = ref(''), loading = ref(false), error = ref(''), shake = ref(false), done = ref(false)
+const email = ref(''), phone = ref(''), mode = ref('phone'), password = ref(''), binding = ref(false), bindCode = ref(''), loading = ref(false), error = ref(''), shake = ref(false), done = ref(false)
 const top = (uni.getSystemInfoSync().statusBarHeight || 20) + 28
 const instance = getCurrentInstance()
 
+// 手機登入要選區號：香港、澳門 8 位，內地 1 字頭 11 位；記住上次選的區號
+const areaCodes = [{ code: '+852', label: '香港 +852', hint: '8 位手機號碼', pattern: /^\d{8}$/ }, { code: '+853', label: '澳門 +853', hint: '8 位手機號碼', pattern: /^\d{8}$/ }, { code: '+86', label: '內地 +86', hint: '11 位手機號碼', pattern: /^1\d{10}$/ }]
+const areaIndex = ref(Math.max(0, areaCodes.findIndex(item => item.code === uni.getStorageSync('loginArea'))))
+function pickArea(event) { areaIndex.value = Number(event.detail.value); uni.setStorageSync('loginArea', areaCodes[areaIndex.value].code) }
+
 async function login() {
   error.value = ''
-  if (!email.value || !password.value) return fail('請填寫電郵或手機號碼，以及密碼')
+  const area = areaCodes[areaIndex.value], digits = phone.value.replace(/\D/g, '')
+  if (mode.value === 'phone' ? !digits || !password.value : !email.value || !password.value) return fail(mode.value === 'phone' ? '請填寫手機號碼和密碼' : '請填寫電郵和密碼')
+  if (mode.value === 'phone' && !area.pattern.test(digits)) return fail(`${area.label.split(' ')[0]}手機號碼應為 ${area.hint.replace('手機號碼', '').trim()}`)
   loading.value = true
   try {
-    const result = await api('/login', 'POST', { login: email.value, password: password.value })
+    const result = await api('/login', 'POST', { login: mode.value === 'phone' ? `${area.code}${digits}` : email.value, password: password.value })
     if (result.user.role !== 'customer') throw new Error('此帳號請使用管理端登入')
     enter(result)
   } catch (e) { fail(e.message) } finally { loading.value = false }
@@ -146,6 +163,10 @@ onBeforeUnmount(() => { if (raf) (canvas?.cancelAnimationFrame || cancelAnimatio
 .error{display:block;margin-top:8px;color:var(--overdue);font-size:var(--fs-body);font-weight:700}
 .login-button{margin-top:20px;transition:width .25s ease,border-radius .25s ease}
 .login-button.busy{opacity:.85}
+.login-mode{margin-top:16px}
+.phone-row{display:flex;gap:8px}.phone-row picker{flex:none}
+.area{width:128px;display:flex;align-items:center;justify-content:space-between;gap:4px}
+.phone{flex:1;min-width:0;width:auto}
 .help{display:block;margin-top:16px;text-align:center;color:var(--ink-3);font-size:var(--fs-meta)}
 .done{position:absolute;right:16px;top:16px}
 .shake{animation:shake .38s ease}

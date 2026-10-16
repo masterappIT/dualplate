@@ -20,7 +20,7 @@ import { bookkeepingRoutes } from './bookkeeping.js'
 import { reportRoutes } from './reports.js'
 import { renterPublicRoutes, renterAdminRoutes } from './renter-portal.js'
 import { seedDemo } from './demo-seed.js'
-import { passwordProblem, authenticate, createSession, lockedMinutes, recordFailure, clearFailures, clientIp, audit, auditRoutes, logError, health } from './security.js'
+import { passwordProblem, authenticate, createSession, lockedMinutes, recordFailure, clearFailures, loginPhone, PHONE_RULE, clientIp, audit, auditRoutes, logError, health } from './security.js'
 
 const port = Number(process.env.PORT || 4100)
 const allowedOrigins = new Set((process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174').split(','))
@@ -133,8 +133,10 @@ export const server = http.createServer(async (req, res) => {
     if (path === '/api/login' && req.method === 'POST') {
       const body = await parseBody(req)
       // 客戶可用電郵或手機號碼登入（第 15 輪）
-      const login = clean(body.email ?? body.phone ?? body.login, 160)
-      const account = login.includes('@') ? one("SELECT * FROM users WHERE role='customer' AND active=1 AND email=?", login.toLowerCase()) : one("SELECT * FROM users WHERE role='customer' AND active=1 AND phone=?", login.replace(/[\s-]/g, ''))
+      const typed = clean(body.email ?? body.phone ?? body.login, 160)
+      // 手機一律按「+區號號碼」比對，鎖定也用同一個鍵，重設密碼時才清得到
+      const login = typed.includes('@') ? typed.toLowerCase() : loginPhone(typed) || typed.replace(/[\s-]/g, '')
+      const account = login.includes('@') ? one("SELECT * FROM users WHERE role='customer' AND active=1 AND email=?", login) : one("SELECT * FROM users WHERE role='customer' AND active=1 AND phone=?", login)
       const ip = clientIp(req), wait = lockedMinutes('customer', login, ip)
       if (wait) return fail(res, 429, `登入失敗次數過多，請 ${wait} 分鐘後再試`)
       if (!account || !verifyPassword(String(body.password || ''), account.password_hash)) { recordFailure('customer', login, ip); return fail(res, 401, '帳號或密碼不正確') }
@@ -509,14 +511,23 @@ export const server = http.createServer(async (req, res) => {
       const customer = one('SELECT * FROM customers WHERE id=? AND tenant_id=?', customerMatch[1], user.tenant_id)
       if (!customer) return fail(res, 404, '客戶不存在')
       if (customer.is_self) return fail(res, 409, '本公司（自有）客戶不可刪除')
-      return fail(res, 405, '不支援此操作')
+      // 只刪完全空白的客戶（例如建錯或測試用）；有任何業務資料或登入帳號都不准刪，避免失去歷史
+      if (one("SELECT id FROM users WHERE customer_id=? AND role='customer'", customer.id)) return fail(res, 409, '請先刪除這位客戶的登入帳號')
+      const linked = [['plate_assets', '牌照'], ['company_groups', '公司組'], ['companies', '公司'], ['vehicles', '車輛'], ['drivers', '司機'], ['requests', '工單'], ['fee_items', '收費'], ['installment_plans', '分期'], ['customer_billing', '收費設定'], ['quotes', '報價'], ['monthly_reports', '月報'], ['rent_settlements', '租金結算']]
+        .filter(([table]) => one(`SELECT 1 FROM ${table} WHERE customer_id=? LIMIT 1`, customer.id)).map(([, label]) => label)
+      if (linked.length) return fail(res, 409, `客戶名下仍有${linked.join('、')}，不能刪除`)
+      db.prepare("DELETE FROM service_scopes WHERE owner_type='customer' AND owner_id=?").run(customer.id)
+      db.prepare("DELETE FROM tracked_items WHERE owner_type='customer' AND owner_id=?").run(customer.id)
+      db.prepare('DELETE FROM notifications WHERE customer_id=?').run(customer.id)
+      db.prepare('DELETE FROM customers WHERE id=? AND tenant_id=?').run(customer.id, user.tenant_id)
+      return json(res, 200, { ok: true })
     }
     if (path === '/api/customer-users' && req.method === 'POST') {
       if (user.role !== 'admin') return fail(res, 403, '無權限')
       const body = await parseBody(req)
       if (!required(body, ['customerId', 'name', 'password']) || !(required(body, ['email']) || required(body, ['phone']))) return fail(res, 400, '請填寫姓名、密碼，以及電郵或手機號碼')
-      const phone = body.phone ? clean(body.phone, 30).replace(/[\s-]/g, '') : null
-      if (phone && !/^\+?\d{8,15}$/.test(phone)) return fail(res, 400, '手機號碼格式無效')
+      const phone = body.phone ? loginPhone(body.phone) : null
+      if (body.phone && !phone) return fail(res, 400, PHONE_RULE)
       if (phone && one('SELECT id FROM users WHERE phone=?', phone)) return fail(res, 409, '這個手機號碼已被使用')
       if (body.email && one('SELECT id FROM users WHERE email=?', clean(body.email, 160).toLowerCase())) return fail(res, 409, '這個電郵已被使用')
       if (!canAccessCustomer(user, body.customerId)) return fail(res, 404, '客戶不存在')

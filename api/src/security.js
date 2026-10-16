@@ -48,6 +48,13 @@ export function recordFailure(kind, login, ip) {
 }
 export function clearFailures(kind, login) { db.prepare('DELETE FROM login_attempts WHERE key=?').run(`${kind}:${String(login || '').toLowerCase()}`) }
 
+// ── 客戶登入手機：一律存「+區號號碼」；香港 +852、澳門 +853 為 8 位，內地 +86 為 1 字頭 11 位 ──
+export const PHONE_RULE = '手機號碼格式無效（香港、澳門 8 位，內地 11 位）'
+export function loginPhone(value) {
+  const phone = String(value ?? '').replace(/[\s-]/g, '')
+  return /^\+(?:85[23]\d{8}|861\d{10})$/.test(phone) ? phone : ''
+}
+
 // ── 密碼規則：至少 10 位，不可與帳號、電郵、手機號碼相同 ──
 export function passwordProblem(password, account = {}) {
   if (typeof password !== 'string' || password.length < 10) return '密碼至少 10 個字元'

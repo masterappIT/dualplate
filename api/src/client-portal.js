@@ -1,5 +1,6 @@
 import { randomBytes, randomInt, randomUUID } from 'node:crypto'
 import { db } from './db.js'
+import { clearFailures, loginPhone, PHONE_RULE } from './security.js'
 
 // 客戶端補強（docs/tasks/client-enhance-brief.md）：上傳文件、顧問聯絡、微信登入框架、站內通知。
 const now = () => new Date().toISOString()
@@ -150,13 +151,42 @@ export async function portalRoutes(req, res, url, user, h) {
   }
   if (account) {
     if (user.role !== 'admin') return fail(res, 403, '無權限'), true
-    if (method !== 'PATCH') return fail(res, 405, '不支援此操作'), true
+    if (!['PATCH', 'DELETE'].includes(method)) return fail(res, 405, '不支援此操作'), true
     const row = db.prepare("SELECT u.* FROM users u JOIN customers c ON c.id=u.customer_id WHERE u.id=? AND u.role='customer' AND c.tenant_id=?").get(account[1], tenant)
     if (!row) return fail(res, 404, '客戶帳號不存在'), true
+    const oldEmail = row.email?.endsWith('@phone.invalid') ? '' : row.email || ''
+    if (method === 'DELETE') {
+      // 有上傳或工單動態的帳號刪除後歷史會失去操作人，只可停用
+      if (db.prepare('SELECT 1 FROM request_attachments WHERE uploaded_by=? UNION ALL SELECT 1 FROM activities WHERE actor_id=? LIMIT 1').get(row.id, row.id)) return fail(res, 409, '這個帳號已有上傳或操作紀錄，不能刪除，請改用停用'), true
+      db.prepare('DELETE FROM sessions WHERE user_id=?').run(row.id)
+      db.prepare('DELETE FROM wechat_bind_codes WHERE user_id=?').run(row.id)
+      db.prepare('DELETE FROM users WHERE id=?').run(row.id)
+      for (const login of [oldEmail, row.phone]) if (login) clearFailures('customer', login)
+      return json(res, 200, { ok: true }), true
+    }
     const body = await parseBody(req)
-    if (!body || typeof body !== 'object' || Array.isArray(body) || typeof body.active !== 'boolean') return fail(res, 400, '請指定啟用或停用'), true
-    db.prepare('UPDATE users SET active=? WHERE id=?').run(body.active ? 1 : 0, row.id)
-    if (!body.active) db.prepare('DELETE FROM sessions WHERE user_id=?').run(row.id)
+    if (!isObject(body)) return fail(res, 400, '內容無效'), true
+    const has = key => Object.hasOwn(body, key)
+    if (!['active', 'name', 'email', 'phone'].some(has)) return fail(res, 400, '請指定要修改的資料'), true
+    if (has('active') && typeof body.active !== 'boolean') return fail(res, 400, '請指定啟用或停用'), true
+    if (['name', 'email', 'phone'].some(key => has(key) && typeof body[key] !== 'string')) return fail(res, 400, '內容無效'), true
+    const name = has('name') ? body.name.trim() : row.name
+    if (!name) return fail(res, 400, '請填寫顯示名稱'), true
+    if (name.length > 100) return fail(res, 400, '顯示名稱不可超過 100 個字元'), true
+    const email = has('email') ? body.email.trim().toLowerCase() : oldEmail
+    const phone = has('phone') ? loginPhone(body.phone) : row.phone || ''
+    if (has('phone') && body.phone.trim() && !phone) return fail(res, 400, PHONE_RULE), true
+    if (!email && !phone) return fail(res, 400, '電郵和手機號碼至少要保留一項'), true
+    if (email && (email.length > 160 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.endsWith('@phone.invalid'))) return fail(res, 400, '電郵格式無效'), true
+    if (phone && db.prepare('SELECT id FROM users WHERE phone=? AND id<>?').get(phone, row.id)) return fail(res, 409, '這個手機號碼已被使用'), true
+    const storedEmail = email || `${phone}@phone.invalid`
+    if (db.prepare('SELECT id FROM users WHERE email=? AND id<>?').get(storedEmail, row.id)) return fail(res, 409, '這個電郵已被使用'), true
+    const loginChanged = email !== oldEmail || phone !== (row.phone || '')
+    const active = has('active') ? body.active : Boolean(row.active)
+    db.prepare('UPDATE users SET name=?,email=?,phone=?,active=? WHERE id=?').run(name, storedEmail, phone || null, active ? 1 : 0, row.id)
+    // 停用或改了登入帳號：原有登入全部失效，舊帳號的鎖定一併清除
+    if (!active || loginChanged) db.prepare('DELETE FROM sessions WHERE user_id=?').run(row.id)
+    if (loginChanged) for (const login of [oldEmail, row.phone]) if (login) clearFailures('customer', login)
     return json(res, 200, accountView(db.prepare('SELECT * FROM users WHERE id=?').get(row.id))), true
   }
   if (bindCode) {
