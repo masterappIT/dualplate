@@ -9,8 +9,8 @@ export function api(path, method = 'GET', data) {
       header: { authorization: getToken() ? `Bearer ${getToken()}` : '', 'content-type': 'application/json' },
       success(response) {
         if (response.statusCode >= 200 && response.statusCode < 300) return resolve(response.data)
-        if (response.statusCode === 401 && path !== '/login') { clearSession(); uni.navigateTo({ url: '/pages/login/login' }) }
-        reject(new Error(response.data?.error || '操作失敗'))
+        if (response.statusCode === 401 && path !== '/login' && !path.startsWith('/wechat/')) { clearSession(); uni.navigateTo({ url: '/pages/login/login' }) }
+        reject(Object.assign(new Error(response.data?.error || '操作失敗'), { status: response.statusCode, data: response.data }))
       }, fail(error) { reject(new Error(error.errMsg || '網絡連接失敗')) }
     })
   })
@@ -37,3 +37,42 @@ export function privateImage(path) {
     })
   })
 }
+
+// ── 第 15 輪：上傳文件、顧問、通知 ──
+export const MAX_UPLOAD = 5 * 1024 * 1024
+// 選相片（相機或相簿）；回傳 [{ name, path, size }]
+export function pickPhotos() {
+  return new Promise((resolve, reject) => uni.chooseImage({ count: 6, sizeType: ['compressed'], sourceType: ['camera', 'album'],
+    success: r => resolve((r.tempFiles || []).map((f, i) => ({ name: f.name || `相片${i + 1}.jpg`, path: f.path || r.tempFilePaths[i], size: f.size }))),
+    fail: e => /cancel/.test(e.errMsg || '') ? resolve([]) : reject(new Error('未能選擇相片')) }))
+}
+// 選 PDF：小程序從聊天記錄選，H5 從檔案選
+export function pickPdf() {
+  return new Promise((resolve, reject) => {
+    const done = files => resolve(files.map(f => ({ name: f.name || '文件.pdf', path: f.path, size: f.size })))
+    const failed = e => /cancel/.test(e.errMsg || '') ? resolve([]) : reject(new Error('未能選擇文件'))
+    // #ifdef MP-WEIXIN
+    uni.chooseMessageFile({ count: 3, type: 'file', extension: ['pdf'], success: r => done(r.tempFiles), fail: failed })
+    // #endif
+    // #ifndef MP-WEIXIN
+    uni.chooseFile({ count: 3, extension: ['.pdf'], success: r => done(r.tempFiles), fail: failed })
+    // #endif
+  })
+}
+function readBase64(path) {
+  // #ifdef H5
+  return fetch(path).then(r => r.arrayBuffer()).then(buffer => uni.arrayBufferToBase64(buffer))
+  // #endif
+  // #ifndef H5
+  return new Promise((resolve, reject) => uni.getFileSystemManager().readFile({ filePath: path, encoding: 'base64', success: r => resolve(r.data), fail: () => reject(new Error('讀取檔案失敗')) }))
+  // #endif
+}
+export async function uploadAttachment(requestId, file, taskId) {
+  if (file.size && file.size > MAX_UPLOAD) throw new Error(`${file.name} 超過 5 MB`)
+  const data = await readBase64(file.path)
+  return api(`/my/requests/${encodeURIComponent(requestId)}/attachments`, 'POST', { fileName: file.name, data, taskId: taskId || null })
+}
+export const attachmentTone = { 待確認: 'blue', 已確認: '', 需重交: 'red' }
+export const attachmentLabel = { 待確認: '顧問核對中', 已確認: '已收妥', 需重交: '需要重交' }
+export function callAdvisor(phone) { if (phone) uni.makePhoneCall({ phoneNumber: phone.replace(/[\s-]/g, '') }) }
+export function copyText(value, title = '已複製') { if (value) uni.setClipboardData({ data: value, success: () => uni.showToast({ title, icon: 'none' }) }) }

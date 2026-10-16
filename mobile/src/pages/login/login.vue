@@ -17,12 +17,20 @@
         <text class="sheet-sub">查看你的牌照、公司和辦理進度</text>
       </view>
       <view class="ticket-rule" />
-      <text class="field-label">電郵地址</text>
-      <input class="field" v-model.trim="email" type="text" placeholder="name@example.com" :class="{ invalid: error && !email }" />
+      <text class="field-label">電郵或手機號碼</text>
+      <input class="field" v-model.trim="email" type="text" placeholder="name@example.com 或 +852 9123 4567" :class="{ invalid: error && !email }" />
       <text class="field-label">密碼</text>
       <input class="field" v-model="password" password placeholder="輸入密碼" :class="{ invalid: error && !password }" @confirm="login" />
       <text v-if="error" class="error">{{ error }}</text>
       <button class="primary login-button" :class="{ busy: loading }" :disabled="loading" @click="login">{{ loading ? '登入中' : '登入' }}</button>
+      <!-- #ifdef MP-WEIXIN -->
+      <button v-if="!binding" class="secondary wechat-button" :disabled="loading" @click="wechatLogin">微信快速登入</button>
+      <view v-else class="bind">
+        <text class="field-label">首次用微信登入，請輸入顧問給你的 6 位綁定碼</text>
+        <input class="field num" v-model.trim="bindCode" type="number" maxlength="6" placeholder="6 位數字" />
+        <view class="bind-actions"><button class="secondary" @click="binding=false">取消</button><button class="primary" :disabled="loading" @click="bindWechat">綁定並登入</button></view>
+      </view>
+      <!-- #endif -->
       <text class="help">帳戶由你的顧問開通。忘記密碼請聯絡顧問。</text>
       <view v-if="done" class="done"><StampMark text="已登入" tone="jade" play /></view>
     </view>
@@ -34,22 +42,39 @@ import { api, saveSession } from '../../lib/api'
 import PlateChip from '../../components/PlateChip.vue'
 import StampMark from '../../components/StampMark.vue'
 
-const email = ref(''), password = ref(''), loading = ref(false), error = ref(''), shake = ref(false), done = ref(false)
+const email = ref(''), password = ref(''), binding = ref(false), bindCode = ref(''), loading = ref(false), error = ref(''), shake = ref(false), done = ref(false)
 const top = (uni.getSystemInfoSync().statusBarHeight || 20) + 28
 const instance = getCurrentInstance()
 
 async function login() {
   error.value = ''
-  if (!email.value || !password.value) return fail('請填寫電郵及密碼')
+  if (!email.value || !password.value) return fail('請填寫電郵或手機號碼，以及密碼')
   loading.value = true
   try {
-    const result = await api('/login', 'POST', { email: email.value, password: password.value })
+    const result = await api('/login', 'POST', { login: email.value, password: password.value })
     if (result.user.role !== 'customer') throw new Error('此帳號請使用管理端登入')
-    saveSession(result)
-    done.value = true
-    burst()
-    setTimeout(() => uni.switchTab({ url: '/pages/index/index' }), reduced ? 0 : 700)
+    enter(result)
   } catch (e) { fail(e.message) } finally { loading.value = false }
+}
+function enter(result) {
+  saveSession(result)
+  done.value = true
+  burst()
+  setTimeout(() => uni.switchTab({ url: '/pages/index/index' }), reduced ? 0 : 700)
+}
+// 微信登入：已綁定直接進入；未綁定則請客戶輸入顧問給的綁定碼（每次都要新的微信登入碼）
+const wxCode = () => new Promise((resolve, reject) => uni.login({ provider: 'weixin', success: r => resolve(r.code), fail: () => reject(new Error('未能取得微信授權')) }))
+async function wechatLogin() {
+  error.value = ''; loading.value = true
+  try { enter(await api('/wechat/login', 'POST', { code: await wxCode() })) }
+  catch (e) { if (e.data?.needsBinding) binding.value = true; else fail(e.status === 503 ? '微信登入暫未開放，請用電郵或手機號碼登入' : e.message) }
+  finally { loading.value = false }
+}
+async function bindWechat() {
+  error.value = ''
+  if (!/^\d{6}$/.test(bindCode.value)) return fail('請輸入 6 位綁定碼')
+  loading.value = true
+  try { enter(await api('/wechat/bind', 'POST', { code: await wxCode(), bindCode: bindCode.value })) } catch (e) { fail(e.message) } finally { loading.value = false }
 }
 function fail(message) { error.value = message; shake.value = false; setTimeout(() => { shake.value = true }, 10) }
 
@@ -126,4 +151,5 @@ onBeforeUnmount(() => { if (raf) (canvas?.cancelAnimationFrame || cancelAnimatio
 @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-14rpx)}40%{transform:translateX(12rpx)}60%{transform:translateX(-8rpx)}80%{transform:translateX(5rpx)}}
 @media (prefers-reduced-motion:reduce){.shake{animation:none}}
 @media screen and (min-width:780px){.hero{height:46vh}.sheet{width:560px;margin:-80px auto 0}}
+.wechat-button{margin-top:18rpx}.bind{margin-top:10rpx}.bind-actions{display:flex;gap:14rpx;margin-top:18rpx}.bind-actions button{flex:1;margin:0}
 </style>

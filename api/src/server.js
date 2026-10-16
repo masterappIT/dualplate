@@ -4,7 +4,7 @@ import { db, id, now, hashPassword, verifyPassword } from './db.js'
 import { services, sources, inspectionGuidance, planFor } from './catalog.js'
 import { cardData, cleanCard, recognizeCard } from './card.js'
 import { phase1Routes } from './phase1-routes.js'
-import { customerRoutes } from './customer-routes.js'
+import { customerRoutes, requestStatus } from './customer-routes.js'
 import { parseCsv, requiredHeaders } from './plate-import.js'
 import { computeDeadlines } from './rules.js'
 import { plateFacts } from './plate-facts.js'
@@ -533,7 +533,7 @@ export const server = http.createServer(async (req, res) => {
     if (path === '/api/requests' && req.method === 'GET') {
       const customerId = url.searchParams.get('customerId')
       if (['admin', 'staff'].includes(user.role)) return json(res, 200, customerId ? query('SELECT r.*,c.name customer_name,v.plate FROM requests r JOIN customers c ON c.id=r.customer_id LEFT JOIN vehicles v ON v.id=r.vehicle_id WHERE r.customer_id=? AND c.tenant_id=? ORDER BY r.created_at DESC', customerId, user.tenant_id) : query('SELECT r.*,c.name customer_name,v.plate FROM requests r JOIN customers c ON c.id=r.customer_id LEFT JOIN vehicles v ON v.id=r.vehicle_id WHERE c.tenant_id=? ORDER BY r.created_at DESC', user.tenant_id))
-      return json(res, 200, query('SELECT r.*,c.name customer_name,v.plate FROM requests r JOIN customers c ON c.id=r.customer_id LEFT JOIN vehicles v ON v.id=r.vehicle_id WHERE r.customer_id=? ORDER BY r.created_at DESC', user.customer_id))
+      return json(res, 200, query('SELECT r.*,c.name customer_name,v.plate FROM requests r JOIN customers c ON c.id=r.customer_id LEFT JOIN vehicles v ON v.id=r.vehicle_id WHERE r.customer_id=? ORDER BY r.created_at DESC', user.customer_id).map(item => ({ ...item, status: requestStatus(item.status) })))
     }
     if (path === '/api/requests' && req.method === 'POST') {
       const b = await parseBody(req)

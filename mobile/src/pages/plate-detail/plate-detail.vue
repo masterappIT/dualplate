@@ -15,7 +15,7 @@
         <view class="list-card"><text class="list-sub">持牌公司：{{ summary.holder || '待補充' }}</text><text class="list-sub">內承單位：{{ summary.contractor || '待補充' }}</text></view>
         <text class="section-title">需要辦理？</text>
         <view class="actions"><text v-for="a in quickActions" :key="a.code" class="action" @click="startRequest(a.code, summary.id)">{{ a.name }}</text></view>
-        <view v-if="summary.requests?.length"><text class="section-title">辦理記錄</text><view v-for="r in summary.requests" :key="r.id" class="list-card row" @click="openRequest(r.id)"><view class="grow"><text class="list-title">{{ r.title }}</text><text class="list-sub">目前：{{ r.stage==='待內部受理' ? '等待顧問受理' : r.stage }}</text></view><text class="pill" :class="r.status==='待客戶配合'?'amber':r.status==='已完成'?'gray':''">{{ r.status }}</text></view></view>
+        <view v-if="summary.requests?.length"><text class="section-title">辦理記錄</text><view v-for="r in summary.requests" :key="r.id" class="list-card row" @click="openRequest(r.id)"><view class="grow"><text class="list-title">{{ r.title }}</text><text class="list-sub">目前：{{ r.stage==='待內部受理' ? '等待顧問受理' : r.stage }}</text></view><text class="pill" :class="r.status==='需要你提供資料'?'amber':['已完成','已取消'].includes(r.status)?'gray':''">{{ r.status }}</text></view></view>
         <text class="section-title">車牌</text>
       </view>
       <view class="asset-heading"><view><text class="asset-route">{{ p.route }}兩地牌</text><text class="asset-number">{{ p.mainland_plate || '內地車牌待補充' }}</text></view><text class="asset-status">{{ p.installation_status==='待核對' ? '上牌狀態確認中' : p.installation_status }}</text></view>

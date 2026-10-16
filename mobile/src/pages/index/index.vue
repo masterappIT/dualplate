@@ -1,6 +1,6 @@
 <template>
   <view class="page home">
-    <view class="top"><view class="brand"><view class="seal"><text>牌</text></view><text>車牌管家</text></view><text class="link" @click="goMe">{{ user?.name || '登入' }}</text></view>
+    <view class="top"><view class="brand"><view class="seal"><text>牌</text></view><text>車牌管家</text></view><view class="bell" @click="goNotices" aria-label="通知"><image class="bell-icon" src="/static/bell.svg" /><text v-if="data.unreadNotifications" class="bell-dot num">{{ data.unreadNotifications > 99 ? '99+' : data.unreadNotifications }}</text></view></view>
     <view class="hero guilloche">
       <text class="hero-kicker">委託人</text>
       <text class="hero-name">{{ data.customerName || user?.name || '歡迎' }}</text>
@@ -35,10 +35,12 @@
     <view v-if="data.activeRequests.length">
       <view class="section-head"><text class="section-title">辦理中</text><text class="link" @click="goMe">全部 ›</text></view>
       <view v-for="item in data.activeRequests.slice(0,3)" :key="item.id" class="list-card" @click="openRequest(item.id)">
-        <view class="row"><text class="list-title">{{ item.title }}</text><text class="pill" :class="item.status==='待客戶配合'?'amber':''">{{ item.status }}</text></view>
+        <view class="row"><text class="list-title">{{ item.title }}</text><text class="pill" :class="item.status==='需要你提供資料'?'amber':''">{{ item.status }}</text></view>
         <text class="list-sub">{{ item.plate || '未指定牌照' }} · 目前：{{ item.stage==='待內部受理' ? '等待顧問受理' : item.stage }}</text>
       </view>
     </view>
+
+    <AdvisorCard :advisor="data.advisor" />
 
     <view class="quick">
       <view class="quick-item" @click="goPlates('')"><text class="quick-mark">牌</text><text>我的牌照</text></view>
@@ -52,11 +54,13 @@ import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { api, getUser, openPlate, startRequest } from '../../lib/api'
 import DueDate from '../../components/DueDate.vue'
+import AdvisorCard from '../../components/AdvisorCard.vue'
 const user=ref(getUser())
-const data=ref({customerName:'',counts:{pending:0,ok:0,due:0,overdue:0},plates:[],deadlines:[],todos:[],activeRequests:[]})
+const data=ref({unreadNotifications:0,advisor:null,customerName:'',counts:{pending:0,ok:0,due:0,overdue:0},plates:[],deadlines:[],todos:[],activeRequests:[]})
 async function load(){user.value=getUser();if(!user.value)return uni.navigateTo({url:'/pages/login/login'});try{data.value=await api('/my/overview')}catch(e){uni.showToast({title:e.message,icon:'none'})}}
 function goPlates(filter){uni.setStorageSync('plateFilter',filter||'');uni.switchTab({url:'/pages/vehicles/vehicles'})}
 function goCompanies(){uni.switchTab({url:'/pages/companies/companies'})}
+function goNotices(){uni.navigateTo({url:'/pages/notifications/notifications'})}
 function goMe(){uni.switchTab({url:'/pages/me/me'})}
 function goDeadlines(){uni.navigateTo({url:'/pages/deadlines/deadlines'})}
 function openRequest(id){uni.navigateTo({url:'/pages/request-detail/request-detail?id='+id})}
@@ -78,4 +82,6 @@ onShow(load)
 .hero .note-green{color:#9FD8B5}.hero .note-amber{color:var(--plate-yellow)}.hero .note-red{color:#F4A39A}
 .grow{flex:1;min-width:0}.pending-note{display:block;margin-top:12rpx;color:var(--ink-3);font-size:22rpx;text-align:center}.calm .list-title{font-size:25rpx}
 .quick{display:grid;grid-template-columns:repeat(3,1fr);gap:14rpx;margin-top:34rpx}.quick-item{display:flex;flex-direction:column;align-items:center;gap:10rpx;background:var(--card);border:1rpx solid var(--rule);border-radius:var(--r-card);padding:24rpx 0;font-size:23rpx;font-weight:750;color:var(--ink)}.quick-mark{width:56rpx;height:56rpx;border-radius:50%;border:2rpx solid var(--jade);color:var(--jade);display:flex;align-items:center;justify-content:center;font-weight:900}
+.bell{position:relative;width:64rpx;height:64rpx;border-radius:50%;background:var(--card);border:1rpx solid var(--rule);display:flex;align-items:center;justify-content:center}.bell-icon{width:34rpx;height:34rpx}
+.bell-dot{position:absolute;top:-8rpx;right:-10rpx;min-width:32rpx;height:32rpx;padding:0 8rpx;border-radius:99rpx;background:var(--plate-yellow);color:var(--jade-deep);font-size:19rpx;font-weight:900;line-height:32rpx;text-align:center;border:2rpx solid var(--paper)}
 </style>

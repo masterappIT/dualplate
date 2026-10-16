@@ -55,6 +55,12 @@
       }
     },
     {
+      "path": "pages/notifications/notifications",
+      "style": {
+        "navigationBarTitleText": "通知"
+      }
+    },
+    {
       "path": "pages/login/login",
       "style": {
         "navigationStyle": "custom",

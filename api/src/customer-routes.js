@@ -11,7 +11,9 @@ const levelRank = { overdue: 0, due: 1, upcoming: 2, ok: 3 }
 const publicDeadline = item => ({ handledBy: item.handler === 'client' ? 'you' : 'us', name: item.name, ownerType: item.ownerType, ownerId: item.ownerId, ownerLabel: item.ownerLabel, dueOn: item.dueOn, daysLeft: item.daysLeft, level: item.level, detail: item.method === 'expiry' ? '' : item.detail })
 const plateLabel = plate => `${plate.mainland_plate || '內地車牌待補'} · ${plate.local_plate || '港澳車牌待補'}`
 const companyStatus = company => company.status || '存續'
-const requestStatus = status => ({ '待開始': '已收到', '新要求': '已收到', '進行中': '辦理中', '待收件': '辦理中', '待客戶提供': '需要你提供資料', '待客戶配合': '需要你提供資料', '已完成': '已完成', '已取消': '已取消' }[status] || status)
+// 更新紀錄裡的內部狀態字眼換成客戶看得懂的說法
+const customerWords = text => String(text || '').replace(/待客戶提供|待客戶配合|待開始|新要求|待收件/g, word => requestStatus(word))
+export const requestStatus = status => ({ '待開始': '已收到', '新要求': '已收到', '進行中': '辦理中', '待收件': '辦理中', '待客戶提供': '需要你提供資料', '待客戶配合': '需要你提供資料', '已完成': '已完成', '已取消': '已取消' }[status] || status)
 
 export async function customerRoutes(req, res, url, user, h) {
   const { json, fail, query, one, plateFor } = h
@@ -26,7 +28,7 @@ export async function customerRoutes(req, res, url, user, h) {
     const clientTodos = tasks.filter(task => (task.owner === 'client' || task.status === '待客戶配合') && !['已完成', '不適用'].includes(task.status)).map(task => ({ id: task.id, title: task.title, owner: 'client', status: task.status, documents: task.documents }))
     const vehicle = item.vehicle_id ? one('SELECT * FROM vehicles WHERE id=? AND customer_id=?', item.vehicle_id, user.customer_id) : null
     const plateAsset = item.plate_asset_id ? plateFor(user, item.plate_asset_id) : null
-    return json(res, 200, { ...item, status: requestStatus(item.status), activities: query('SELECT a.*,u.name actor_name FROM activities a LEFT JOIN users u ON u.id=a.actor_id WHERE a.request_id=? ORDER BY a.created_at DESC', item.id), tasks, clientTodos, vehicle, plateAsset, plan: service ? planFor(service, item.route) : null, inspectionGuidance: [] }), true
+    return json(res, 200, { ...item, status: requestStatus(item.status), activities: query('SELECT a.*,u.name actor_name FROM activities a LEFT JOIN users u ON u.id=a.actor_id WHERE a.request_id=? ORDER BY a.created_at DESC', item.id).map(activity => ({ ...activity, detail: customerWords(activity.detail) })), tasks, clientTodos, vehicle, plateAsset, plan: service ? planFor(service, item.route) : null, inspectionGuidance: [] }), true
   }
   if (!path.startsWith('/api/my/')) return false
   if (user.role !== 'customer') { fail(res, 403, '此功能只供客戶使用'); return true }
@@ -143,7 +145,7 @@ export async function customerRoutes(req, res, url, user, h) {
     const own = all.filter(item => plateOf(item) === plate.id || (item.ownerType === 'company' && companies.some(company => company.id === item.ownerId && company.group_id && company.group_id === plate.group_id)))
     const requests = query('SELECT id,title,status,stage,updated_at FROM requests WHERE customer_id=? AND plate_asset_id=? ORDER BY updated_at DESC', customer.id, plate.id)
     const crossing = crossingSummary(customer.tenant_id, plate.id)
-    return json(res, 200, { ...summary, crossing: { enabled: crossing.enabled, lastCrossedOn: crossing.lastCrossedOn, nextDueOn: crossing.nextDueOn, days: crossing.days }, deadlines: visible(own).sort((a, b) => String(a.dueOn).localeCompare(String(b.dueOn))), requests: requests.map(item => ({ id: item.id, title: item.title, status: item.status, stage: item.stage, updatedAt: item.updated_at })) }), true
+    return json(res, 200, { ...summary, crossing: { enabled: crossing.enabled, lastCrossedOn: crossing.lastCrossedOn, nextDueOn: crossing.nextDueOn, days: crossing.days }, deadlines: visible(own).sort((a, b) => String(a.dueOn).localeCompare(String(b.dueOn))), requests: requests.map(item => ({ id: item.id, title: item.title, status: requestStatus(item.status), stage: item.stage, updatedAt: item.updated_at })) }), true
   }
   return fail(res, 404, '找不到此頁'), true
 }

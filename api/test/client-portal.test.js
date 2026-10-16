@@ -140,3 +140,9 @@ test('單筆與全部標記已讀，別人的通知不可標記', async () => {
   assert.equal((await request('/my/notifications/read', 'POST', {}, 'client')).status, 400)
 })
 test('管理員不能讀客戶通知接口', async () => assert.equal((await request('/my/notifications', 'GET')).status, 403))
+test('客戶看到的工單狀態和更新紀錄不出現內部字眼', async () => {
+  const list = (await request('/requests', 'GET', undefined, 'client')).body
+  assert.ok(list.every(item => !['待客戶提供', '待客戶配合', '待開始', '新要求', '進行中'].includes(item.status)))
+  const detail = (await request(`/requests/${state.request}`, 'GET', undefined, 'client')).body
+  assert.ok(detail.activities.every(item => !/待客戶提供|待客戶配合/.test(item.detail)))
+})
