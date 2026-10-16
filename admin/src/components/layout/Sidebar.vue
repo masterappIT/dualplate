@@ -21,7 +21,7 @@ function select(id: string) { navigate(id); emit('navigate') }
     <div class="brand"><div class="brand-icon">牌</div><div><strong>車牌管家</strong><small>管理端</small></div></div>
     <div class="nav-group-title">工作空間</div>
     <span ref="thumb" class="nav-thumb" aria-hidden="true" />
-    <button v-for="nav in navigation" :key="nav.id" type="button" class="nav-item" :class="{ active: active === nav.id }" :title="nav.name" @click="select(nav.id)"><component :is="nav.icon" class="nav-symbol" :size="19" :stroke-width="1.8" /><span>{{ nav.name }}</span><span v-if="nav.id === 'business' && newCount" class="nav-count">{{ newCount }}</span></button>
+    <button v-for="nav in navigation.filter(item => !item.adminOnly || account?.role === 'admin')" :key="nav.id" type="button" class="nav-item" :class="{ active: active === nav.id }" :title="nav.name" @click="select(nav.id)"><component :is="nav.icon" class="nav-symbol" :size="19" :stroke-width="1.8" /><span>{{ nav.name }}</span><span v-if="nav.id === 'business' && newCount" class="nav-count">{{ newCount }}</span></button>
     <div class="sidebar-bottom"><div class="source-mini"><ShieldCheck :size="17" /> 業務資訊依官方來源核對</div><button class="profile" @click="logout"><Avatar :name="account?.name" /><span>{{ account?.name }}<small>{{ account?.role === 'admin' ? '管理者' : '員工' }} · 退出登入</small></span><LogOut :size="16" class="logout-icon" /></button></div>
   </aside>
 </template>

@@ -19,6 +19,10 @@ import {
   BriefcaseBusiness,
   Settings2,
   Table2,
+  KeyRound,
+  ReceiptText,
+  Calculator,
+  FileSpreadsheet,
 } from "@lucide/vue";
 import { api, save, clear, user } from "./api";
 import { router } from './router';
@@ -28,6 +32,11 @@ const navigation = [
   { id: "customers", name: "客戶", icon: UsersRound },
   { id: "plates", name: "牌照", icon: Table2 },
   { id: "business", name: "業務", icon: BriefcaseBusiness },
+  // 出租、收費、報帳只限管理者（後端同樣限制）；月報員工可看
+  { id: "rentals", name: "出租與租金", icon: KeyRound, adminOnly: true },
+  { id: "fees", name: "收費", icon: ReceiptText, adminOnly: true },
+  { id: "filings", name: "報帳報稅", icon: Calculator, adminOnly: true },
+  { id: "reports", name: "月報", icon: FileSpreadsheet },
   { id: "settings", name: "設定", icon: Settings2 },
 ];
 const account = ref(user()),
@@ -404,7 +413,7 @@ function navigate(id) {
   error.value = "";
   notice.value = "";
 }
-const viewPath = { dashboard: '/today', customers: '/customers', plates: '/plates', business: '/business', settings: '/settings', 'new-request': '/requests/new' };
+const viewPath = { dashboard: '/today', customers: '/customers', plates: '/plates', business: '/business', rentals: '/rentals', fees: '/fees', filings: '/filings', reports: '/reports', settings: '/settings', 'new-request': '/requests/new' };
 let syncingRoute = false;
 const routeReady = ref(false);
 router.isReady().then(() => { routeReady.value = true; });
@@ -425,7 +434,7 @@ watch([() => router.currentRoute.value.fullPath, account, routeReady], async () 
     } else if (name === 'plate-detail' && !await openPlate({ id: params.id })) throw new Error('找不到牌照');
     else if (name === 'vehicle-detail' && !await openVehicle({ id: params.id })) throw new Error('找不到車輛');
     else if (name === 'request-detail' && !await openRequest({ id: params.id })) throw new Error('找不到工單');
-    view.value = name === 'today' ? 'dashboard' : ['customer-detail', 'plate-detail', 'vehicle-detail', 'request-detail'].includes(name) ? name : name || 'dashboard';
+    view.value = name === 'today' ? 'dashboard' : name === 'report-detail' ? 'reports' : ['customer-detail', 'plate-detail', 'vehicle-detail', 'request-detail'].includes(name) ? name : name || 'dashboard';
   } catch (cause) { showError(cause); view.value = 'dashboard'; await router.replace('/today'); }
   finally { syncingRoute = false; }
 }, { immediate: true });
