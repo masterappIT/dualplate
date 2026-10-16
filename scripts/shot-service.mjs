@@ -3,10 +3,12 @@
 //
 // 用法（負責人）：node scripts/shot-service.mjs
 // Codex 要截圖時：在 .review/shot-requests.txt 每行寫一個請求，格式
-//   名稱|網址路徑|寬|高|端
+//   名稱|網址路徑|寬|高|端|點擊（可選）
 //   例：today-1366|/#/today|1366|860|admin
 //       plates-390|/#/plates|390|844|admin
 //       home-390|/#/pages/index/index|390|844|mobile
+//       matrix-1366|/#/customers/<id>|1366|860|admin|委託範圍矩陣   ← 先點擊文字為「委託範圍矩陣」的按鈕（或 CSS 選擇器）再截圖，用來檢查彈窗、抽屜、浮條
+//   點擊欄可用 > 串接多步，例如：委託範圍矩陣>.matrix-cell
 // 服務會輸出 .review/shots/<名稱>.png 和 <名稱>.txt（主控台錯誤、頁面是否橫向溢出），
 // 處理完的請求移到 .review/shot-done.txt。Codex 之後用看圖工具打開 png 檢查。
 import { spawn } from 'node:child_process'
@@ -33,7 +35,7 @@ process.on('exit', () => chrome.kill())
 process.on('SIGINT', () => process.exit(0))
 await sleep(2500)
 
-async function shoot({ name, path, width, height, kind }) {
+async function shoot({ name, path, width, height, kind, clicks = [] }) {
   const target = await (await fetch(`http://127.0.0.1:9333/json/new?about:blank`, { method: 'PUT' })).json()
   const ws = new WebSocket(target.webSocketDebuggerUrl)
   await new Promise(resolve => ws.addEventListener('open', resolve, { once: true }))
@@ -55,6 +57,13 @@ async function shoot({ name, path, width, height, kind }) {
     : `uni.setStorageSync('token', ${JSON.stringify(session.token)}); uni.setStorageSync('user', ${JSON.stringify(session.user)})`
   await send('Runtime.evaluate', { expression: store })
   await send('Page.navigate', { url: origin + path }); await sleep(3500)
+  for (const step of clicks) {
+    // 先試 CSS 選擇器，找不到再按可見文字找按鈕或連結
+    const expression = `(() => { const q = ${JSON.stringify(step)}; let el = null; try { el = document.querySelector(q) } catch {} if (!el) el = [...document.querySelectorAll('button, a, [role=button], .text-button')].find(n => n.textContent.trim() === q || n.getAttribute('aria-label') === q); if (!el) return 'not-found'; el.scrollIntoView({ block: 'center' }); el.click(); return 'ok' })()`
+    const result = (await send('Runtime.evaluate', { expression, returnByValue: true })).result?.result?.value
+    if (result !== 'ok') errors.push(`找不到要點擊的元素：${step}`)
+    await sleep(1800)
+  }
   const overflow = (await send('Runtime.evaluate', { expression: 'JSON.stringify([document.documentElement.scrollWidth, innerWidth])', returnByValue: true })).result?.result?.value
   const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
   writeFileSync(join(shots, `${name}.png`), Buffer.from(shot.result.data, 'base64'))
@@ -69,9 +78,9 @@ while (true) {
     const lines = readFileSync(queue, 'utf8').split('\n').map(line => line.trim()).filter(Boolean)
     writeFileSync(queue, '')
     for (const line of lines) {
-      const [name, path, width, height, kind = 'admin'] = line.split('|')
+      const [name, path, width, height, kind = 'admin', click = ''] = line.split('|')
       if (!/^[\w.-]{1,60}$/.test(name || '') || !String(path).startsWith('/') || !origins[kind]) { appendFileSync(done, `略過（格式錯誤）：${line}\n`); continue }
-      try { await shoot({ name, path, width: Number(width) || 1366, height: Number(height) || 860, kind }); appendFileSync(done, `完成：${line}\n`) }
+      try { await shoot({ name, path, width: Number(width) || 1366, height: Number(height) || 860, kind, clicks: click ? click.split('>').map(item => item.trim()).filter(Boolean) : [] }); appendFileSync(done, `完成：${line}\n`) }
       catch (error) { appendFileSync(done, `失敗：${line}：${error.message}\n`) }
     }
   }
