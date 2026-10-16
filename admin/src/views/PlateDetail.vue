@@ -71,6 +71,7 @@
       </div>
     </details>
   </section>
+  <PlateDrivers ref="plateDrivers" :plate-id="selectedPlate.id" :customer-id="selectedPlate.customer_id" @saved="showSuccess" />
   <ExpiryPanel
     owner-type="plate"
     :owner-id="selectedPlate.id"
@@ -193,7 +194,7 @@
   <div v-else class="panel empty" role="status">正在載入牌照資料…</div>
 </template>
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { user } from '../api'
 import ServiceScope from '../components/ui/ServiceScope.vue'
 import CrossingRecords from '../components/ui/CrossingRecords.vue'
@@ -206,6 +207,7 @@ import Field from '../components/ui/Field.vue';
 import TextInput from '../components/ui/TextInput.vue';
 import Select from '../components/ui/Select.vue';
 import DateInput from '../components/ui/DateInput.vue';
+import PlateDrivers from '../components/business/PlateDrivers.vue'
 const {
   selectedPlate,
   view,
@@ -231,6 +233,8 @@ const {
   showError,
 } = useAdminStore();
 const isAdmin = user()?.role === 'admin'
+const plateDrivers = ref(null)
+watch(() => selectedPlate.value?.cardData, (current, previous) => { if (current && previous && current !== previous) plateDrivers.value?.load() })
 async function crossingSaved(message) { showSuccess(message); await refresh() }
 async function transferSaved(message) { showSuccess(message); await refresh(); view.value = 'plates' }
 const vehicleOptions = computed(() => [{ value: '', label: '未綁定' }, ...vehicles.value.filter(vehicle => vehicle.customer_id === selectedPlate.value?.customer_id && vehicle.route === selectedPlate.value?.route).map(vehicle => ({ value: vehicle.id, label: `${vehicle.plate} · ${vehicle.brand || ''} ${vehicle.model || ''}` }))]);

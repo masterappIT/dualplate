@@ -141,7 +141,7 @@ defineExpose({ expandAll, collapseAll })
           </tr>
         </template>
         <tr v-else-if="!flatRows.length">
-          <td :colspan="colspan" style="height: auto"><EmptyState :title="emptyText" /></td>
+          <td :colspan="colspan" style="height: auto"><slot name="empty"><EmptyState :title="emptyText" /></slot></td>
         </tr>
         <template v-else>
           <tr
@@ -175,7 +175,7 @@ defineExpose({ expandAll, collapseAll })
     </table>
     <div v-if="!tree" class="table-cards" :aria-busy="loading">
       <div v-if="loading && !data.length" class="empty-state">載入中…</div>
-      <EmptyState v-else-if="!flatRows.length" :title="emptyText" />
+      <slot v-else-if="!flatRows.length" name="empty"><EmptyState :title="emptyText" /></slot>
       <article v-for="item in flatRows" v-else :key="item.row[rowKey]" class="table-card">
         <label v-if="selectable" class="table-card-select"><Checkbox :model-value="selected.includes(item.row[rowKey])" @update:model-value="toggleRow(item.row[rowKey])" /> 選取</label>
         <div v-for="col in columns" :key="col.key" class="table-card-field"><strong>{{ col.title }}</strong><div><slot :name="`cell-${col.key}`" :row="item.row" :depth="item.depth">{{ item.row[col.key] ?? '—' }}</slot></div></div>

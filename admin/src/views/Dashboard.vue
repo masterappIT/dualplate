@@ -20,7 +20,7 @@
       <template #cell-customer="{ row }">{{ row.customerName || row.request?.customer_name || row.customer_name || '—' }}</template>
       <template #cell-due="{ row }"><DueDate v-if="row.ruleCode" :date="row.dueOn" :editable="row.method === 'expiry' && row.ruleCode !== 'approval'" label="到期日" :on-save="value => saveDate(row, value)" /><span v-else>—</span></template>
       <template #cell-status="{ row }"><Tag :tone="row.ruleCode ? ({ danger: 'danger', amber: 'warning', muted: 'neutral' }[tone(row.level)] || 'neutral') : 'info'">{{ row.ruleCode ? label(row.level) : row.request ? '待客戶提供' : row.status }}</Tag><Tag v-if="row.handler === 'outsourced'" tone="warning">外包：{{ row.providerName }}</Tag></template>
-      <template #cell-action="{ row }"><div class="row-actions"><template v-if="row.ruleCode"><button v-if="row.ruleCode === 'crossing_90'" class="text-button" @click="crossingPlate = row.ownerId; crossingOpen = true">已過關</button><button v-else-if="row.ruleCode === 'approval'" class="text-button" @click="openPlateById(row.ownerId)">修改批文卡</button><button v-else-if="row.completable" class="text-button" @click="complete(row, $event)">已辦好</button><button class="text-button" @click="createRequestFromDeadline(row)">開工單</button></template><button v-else class="text-button" @click="openRequest(row.request || row)">查看工單 →</button></div></template>
+      <template #cell-action="{ row }"><div class="row-actions"><template v-if="row.ruleCode"><button v-if="row.ruleCode === 'crossing_90'" class="text-button" @click="crossingPlate = row.ownerId; crossingOpen = true">已過關</button><button v-else-if="row.ruleCode === 'approval'" class="text-button" @click="openPlateById(row.ownerId)">修改批文卡</button><button v-else-if="row.completable" class="text-button" @click="complete(row, $event)">已辦好</button><button v-if="row.ownerType === 'driver'" class="text-button" @click="openDriverCustomer(row)">查看司機</button><button v-else class="text-button" @click="createRequestFromDeadline(row)">開工單</button></template><button v-else class="text-button" @click="openRequest(row.request || row)">查看工單 →</button></div></template>
     </DataTable>
   </section>
   <StampMark v-if="stamp" :key="stamp.key" class="stamp-float" :style="{ left: stamp.x + 'px', top: stamp.y + 'px' }" text="已辦好" play />
@@ -47,7 +47,8 @@ import Tag from '../components/ui/Tag.vue'
 import FilterBar from '../components/business/FilterBar.vue'
 import { useAdminStore } from '../store'
 import { api } from '../api'
-const { view, customers, todayTab, todayCustomerId, todayOwnership, todayCounts, todayDeadlines, saveTrackedItem, createRequestFromDeadline, openPlateById, openRequest, showSuccess, showError } = useAdminStore()
+const { view, customers, customerTab, openCustomer, todayTab, todayCustomerId, todayOwnership, todayCounts, todayDeadlines, saveTrackedItem, createRequestFromDeadline, openPlateById, openRequest, showSuccess, showError } = useAdminStore()
+function openDriverCustomer(item) { const customer = customers.value.find(entry => entry.id === item.customerId); if (!customer) return showError(new Error('找不到司機所屬客戶')); openCustomer(customer); customerTab.value = 'vehicles' }
 const dashboardView = useViewMode('dashboard', 'table', ['table', 'calendar'], 'table')
 const selectedDate = ref(''), selectedMonth = ref('')
 const yearDeadlines = ref([])
