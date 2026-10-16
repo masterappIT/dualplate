@@ -220,7 +220,8 @@ export async function phase1Routes(req, res, url, user, h) {
     const tracked = new Map(query('SELECT * FROM tracked_items WHERE tenant_id=?', tenant).map(item => [`${item.owner_type}:${item.owner_id}:${item.code}`, item]))
     const completions = new Set(query('SELECT * FROM rule_completions WHERE tenant_id=?', tenant).map(item => `${item.code}:${item.owner_id}:${item.period}`))
     const { rent, deadlines: rentDeadlines } = rentOverview(tenant)
-    const deadlines = [...computeDeadlines({ rules: rules(), owners, tracked, completions, scopes: scopeMap(tenant), windowDays: days }).filter(item => item.level !== 'ok'), ...rentDeadlines, ...filingDeadlines(tenant)]
+    // 司機證件未填日期時只在司機列表顯示「待錄入」，不計入今日工作（大部分司機不會三種證件都有）
+    const deadlines = [...computeDeadlines({ rules: rules(), owners, tracked, completions, scopes: scopeMap(tenant), windowDays: days }).filter(item => item.level !== 'ok' && !(item.ownerType === 'driver' && item.level === 'missing')), ...rentDeadlines, ...filingDeadlines(tenant)]
     // Items the client handles themselves are listed (for the client view) but never counted as our work.
     const ours = deadlines.filter(item => item.handler !== 'client')
     const counts = Object.fromEntries(['overdue','due','missing','upcoming'].map(level => [level, ours.filter(item => item.level === level).length]))

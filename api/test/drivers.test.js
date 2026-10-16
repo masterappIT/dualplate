@@ -151,3 +151,10 @@ test('不存在的牌照或司機回 404', async () => {
   assert.equal((await request(`/drivers/${randomUUID()}`)).status, 404)
   assert.equal((await request(`/plates/${state.plateB}/drivers`, 'PUT', { drivers: [{ driverId: randomUUID(), role: '主' }] })).status, 404)
 })
+
+test('司機證件未填日期不計入今日工作的待錄入', async () => {
+  const fresh = (await request('/drivers', 'POST', { customerId: state.customer, name: '新司機丙' })).body.id
+  const items = ((await request('/overview?days=90')).body.deadlines || []).filter(item => item.ownerId === fresh)
+  assert.equal(items.length, 0)
+  assert.ok((await request(`/drivers/${fresh}`)).body.documents.every(item => item.expiresOn === null))
+})
