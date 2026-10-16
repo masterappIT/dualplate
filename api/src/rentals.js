@@ -2,6 +2,7 @@ import { db, id, now } from './db.js'
 import { businessToday } from './rules.js'
 import { scopeMap } from './entrustment.js'
 import { sniff } from './client-portal.js'
+import { rentCommission } from './fees.js'
 
 // 出租合約與每月租金（docs/tasks/rentals-brief.md 第 A 輪）。金額一律以「分」為單位的整數，不做匯率換算。
 // 對外（客戶端、承租方）一律稱「車輛使用安排／使用費」；管理端內部用「出租」。
@@ -265,6 +266,7 @@ export async function rentalRoutes(req, res, url, user, { json, fail, parseBody 
   if (invoiceMatch[2] === 'unreceive') {
     if (!invoice.received_on) return fail(res, 409, '這期尚未登記收款'), true
     db.prepare('UPDATE rent_invoices SET received_on=NULL, received_amount=NULL, received_by=NULL, confirmed_by=NULL WHERE id=?').run(invoice.id)
+    rentCommission(tenant, contractFor(tenant, invoice.contract_id), invoice, false)
     db.prepare('DELETE FROM rent_invoice_proofs WHERE invoice_id=?').run(invoice.id)
     return json(res, 200, invoiceView(db.prepare('SELECT * FROM rent_invoices WHERE id=?').get(invoice.id))), true
   }
@@ -282,6 +284,8 @@ export async function rentalRoutes(req, res, url, user, { json, fail, parseBody 
     proof = { data, mime }
   }
   db.prepare('UPDATE rent_invoices SET received_on=?, received_amount=?, received_by=?, confirmed_by=?, notes=? WHERE id=?').run(body.receivedOn, body.receivedAmount, receivedBy, user.id, clean(body.notes, 300) || invoice.notes, invoice.id)
+  // 代收租金入帳時自動產生租金管理費（冪等）
+  rentCommission(tenant, contractFor(tenant, invoice.contract_id), db.prepare('SELECT * FROM rent_invoices WHERE id=?').get(invoice.id), true)
   if (proof) db.prepare('INSERT INTO rent_invoice_proofs(invoice_id,mime,data,uploaded_at) VALUES (?,?,?,?) ON CONFLICT(invoice_id) DO UPDATE SET mime=excluded.mime, data=excluded.data, uploaded_at=excluded.uploaded_at').run(invoice.id, proof.mime, proof.data, now())
   return json(res, 200, invoiceView(db.prepare('SELECT * FROM rent_invoices WHERE id=?').get(invoice.id))), true
 }

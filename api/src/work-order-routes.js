@@ -1,6 +1,7 @@
 import { db, id, now, hashPassword } from './db.js'
 import { services, planFor } from './catalog.js'
 import { notify } from './client-portal.js'
+import { checkRequestFees, recordRequestFees, expectedFees } from './fees.js'
 
 const statuses = ['待開始', '進行中', '待客戶提供', '已完成', '已取消']
 const taskStatuses = ['待辦', '進行中', '已完成', '不適用']
@@ -182,6 +183,8 @@ export async function workOrderRoutes(req, res, url, user, h) {
     if (!catalogService && body.serviceCode !== 'custom') return fail(res, 400, '業務類型與路線不相符'), true
     const assigneeId = body.assigneeId || user.id; if (!staffUser(tenant, assigneeId)) return fail(res, 400, '負責員工不存在或已停用'), true
     if (body.priority !== undefined && !['normal', 'urgent'].includes(body.priority)) return fail(res, 400, '優先度無效'), true
+    const quote = body.quoteId === undefined || body.quoteId === null ? null : db.prepare("SELECT * FROM quotes WHERE id=? AND tenant_id=? AND customer_id=?").get(String(body.quoteId), tenant, customer.id)
+    if (body.quoteId !== undefined && body.quoteId !== null && (!quote || quote.status !== '已接受' || quote.request_id)) return fail(res, 400, '報價不存在、未接受或已開過工單'), true
     const template = body.templateId ? templateFor(tenant, body.templateId, true) : currentTemplate(tenant, body.serviceCode, body.route); if (!template || template.service_code !== body.serviceCode || template.route !== body.route) return fail(res, 400, '業務範本不存在或已停用'), true
     const service = catalogService || { code: 'custom', name: template.name }
     const steps = parseSteps(template), dueOn = body.dueOn === undefined ? addDays(new Date().toISOString().slice(0, 10), taskDays(steps)) : body.dueOn
@@ -190,13 +193,15 @@ export async function workOrderRoutes(req, res, url, user, h) {
     if (body.plateAssetId !== undefined && body.plateAssetId !== null && (!db.prepare('SELECT id FROM plate_assets WHERE id=? AND customer_id=? AND route=?').get(body.plateAssetId, customer.id, body.route))) return fail(res, 400, '牌照與客戶或路線不相符'), true
     const requestId = id(), initialStatus = steps[0]?.owner === 'client' ? '待客戶提供' : '待開始'; db.prepare('INSERT INTO requests(id,customer_id,vehicle_id,plate_asset_id,service_code,route,title,description,status,stage,assignee_id,created_at,updated_at,due_on,template_id,priority) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(requestId, customer.id, body.vehicleId || null, body.plateAssetId || null, body.serviceCode, body.route, clean(body.title || service.name, 160), clean(body.description, 4000), initialStatus, steps[0]?.title || service.name, assigneeId, now(), now(), dueOn, template.id, body.priority || 'normal')
     createTasks(requestId, steps, user.id)
+    // 由已接受的報價開單：連結報價，結案時帶入預計收費
+    if (quote) db.prepare('UPDATE quotes SET request_id=?, updated_at=? WHERE id=?').run(requestId, now(), quote.id)
     return json(res, 201, requestFor(tenant, requestId)), true
   }
   if (requestMatch && method === 'GET') {
     const request = ensureScope(user, requestFor(tenant, requestMatch[1])); if (!request) return fail(res, 404, '工單不存在'), true
     updateRequestStatus(request.id)
     const template = request.template_id ? templateFor(tenant, request.template_id) : null
-    return json(res, 200, { ...requestFor(tenant, request.id), tasks: db.prepare('SELECT * FROM tasks WHERE request_id=? ORDER BY sort,rowid').all(request.id).map(stepPayload), activities: db.prepare('SELECT a.*,u.name actor_name FROM activities a LEFT JOIN users u ON u.id=a.actor_id WHERE a.request_id=? ORDER BY a.created_at DESC').all(request.id), template: template ? templatePayload(template) : null, plan: (service => service ? planFor(service, request.route) : null)(services.find(entry => entry.code === request.service_code)), clientTodos: db.prepare("SELECT id,title,owner,status,documents_json,sort FROM tasks WHERE request_id=? AND owner='client' AND status NOT IN ('已完成','不適用') ORDER BY sort,rowid").all(request.id).map(stepPayload) }), true
+    return json(res, 200, { ...requestFor(tenant, request.id), ...(user.role === 'admin' ? { expectedFees: expectedFees(request.id) } : {}), tasks: db.prepare('SELECT * FROM tasks WHERE request_id=? ORDER BY sort,rowid').all(request.id).map(stepPayload), activities: db.prepare('SELECT a.*,u.name actor_name FROM activities a LEFT JOIN users u ON u.id=a.actor_id WHERE a.request_id=? ORDER BY a.created_at DESC').all(request.id), template: template ? templatePayload(template) : null, plan: (service => service ? planFor(service, request.route) : null)(services.find(entry => entry.code === request.service_code)), clientTodos: db.prepare("SELECT id,title,owner,status,documents_json,sort FROM tasks WHERE request_id=? AND owner='client' AND status NOT IN ('已完成','不適用') ORDER BY sort,rowid").all(request.id).map(stepPayload) }), true
   }
   if (requestMatch && method === 'PATCH') {
     const request = ensureScope(user, requestFor(tenant, requestMatch[1])); if (!request) return fail(res, 404, '工單不存在'), true
@@ -211,11 +216,16 @@ export async function workOrderRoutes(req, res, url, user, h) {
       if (unfinished) return json(res, 409, { error: `仍有 ${unfinished} 個步驟未完成或未標記不適用`, unfinished }), true
       if (!body.skipDeadlineUpdate && body.deadlineUpdates !== undefined && updateTrackedItems(tenant, request, body.deadlineUpdates, user.id) === null) return fail(res, 400, '到期更新資料無效'), true
       if (body.skipDeadlineUpdate !== undefined && typeof body.skipDeadlineUpdate !== 'boolean') return fail(res, 400, '略過更新欄位無效'), true
+      // 本單收費（只限管理者；略過即不產生）。資料錯誤時整個結案不進行。
+      if (body.fees !== undefined && user.role !== 'admin') return fail(res, 403, '只有管理者可記錄收費'), true
+      const feeProblem = body.skipFees ? null : checkRequestFees(body.fees)
+      if (feeProblem) return fail(res, 400, feeProblem), true
     }
     const nextStatusValue = body.status || request.status
     db.prepare('UPDATE requests SET status=?,stage=COALESCE(?,stage),assignee_id=COALESCE(?,assignee_id),due_on=COALESCE(?,due_on),priority=COALESCE(?,priority),completed_at=?,cancelled_reason=?,updated_at=? WHERE id=?').run(nextStatusValue, body.stage || null, body.assigneeId || null, body.dueOn || null, body.priority || null, nextStatusValue === '已完成' ? now() : null, nextStatusValue === '已取消' ? clean(body.cancelledReason, 500) : null, now(), request.id)
     db.prepare('INSERT INTO activities VALUES (?,?,?,?,?,?)').run(id(), request.id, user.id, 'status', `${nextStatusValue}${body.note ? ` · ${clean(body.note, 1000)}` : ''}`, now())
     if (nextStatusValue !== request.status) notifyStatus(request.id, nextStatusValue)
+    if (body.status === '已完成' && request.status !== '已完成' && !body.skipFees && body.fees) recordRequestFees(tenant, request, body.fees, user.id)
     return json(res, 200, requestFor(tenant, request.id)), true
   }
   if (taskMatch && method === 'PATCH') {
