@@ -21,6 +21,8 @@ import {
   Table2,
 } from "@lucide/vue";
 import { api, save, clear, user } from "./api";
+import { router } from './router';
+import { pushToast } from './composables/toast';
 const navigation = [
   { id: "dashboard", name: "今日工作", icon: CalendarClock },
   { id: "customers", name: "客戶", icon: UsersRound },
@@ -85,11 +87,6 @@ watch(selectedPlate, async (plate) => {
     plateGroups.value = await api(
       "/company-groups?customerId=" + encodeURIComponent(plate.customer_id),
     );
-    Object.assign(plateForm.value, {
-      groupId: plate.group_id || "",
-      indicatorCategory: plate.indicator_category || "",
-      port: plate.port || "",
-    });
   } catch (e) {
     showError(e);
   }
@@ -127,7 +124,8 @@ async function saveTrackedItem(item) {
     await api('/tracked-items', 'PUT', { ownerType: item.ownerType, ownerId: item.ownerId, code: item.code, expiresOn: item.expiresOn || '', notes: item.notes || '' })
     await refresh()
     showSuccess('到期日期已儲存')
-  } catch (error) { showError(error); await refresh() }
+    return true
+  } catch (error) { showError(error); await refresh(); return false }
 }
 
 async function saveBulkDates() {
@@ -236,15 +234,15 @@ const focusTitle = computed(() =>
   newCount.value
     ? `有 ${newCount.value} 項新要求等待受理`
     : activeCount.value
-      ? `有 ${activeCount.value} 個案件正在辦理`
-      : "案件隊列已處理完成",
+      ? `有 ${activeCount.value} 個工單正在辦理`
+      : "工單隊列已處理完成",
 );
 const focusDescription = computed(() =>
   newCount.value
     ? "請先核對客戶提交的業務類型、路線與資料，再安排下一步。"
     : activeCount.value
       ? "逐項更新辦理節點，讓客戶在用戶端看到準確進度。"
-      : "可查看車輛牌證日期，或為客戶建立新的代辦案件。",
+      : "可查看車輛牌證日期，或為客戶建立新的代辦工單。",
 );
 const statusTone = (status) =>
   status === "新要求" ? "amber" : status === "已完成" ? "gray" : "";
@@ -356,59 +354,87 @@ async function refresh() {
       clear();
       account.value = null;
       error.value = "登入已失效，請重新登入";
+      router.replace({ path: '/login', query: { redirect: router.currentRoute.value.fullPath } });
     } else error.value = e.message;
   }
 }
-async function login() {
-  if (loggingIn.value) return;
+async function login(options = {}) {
+  if (loggingIn.value) return false;
   error.value = "";
   if (!loginForm.value.username || !loginForm.value.password) {
     error.value = "請輸入管理員帳號和密碼";
-    return;
+    return false;
   }
   loggingIn.value = true;
   try {
     const result = await api("/admin/login", "POST", loginForm.value);
     if (result.user.role !== "admin") throw new Error("此帳號不是管理員");
-    save(result);
+    await options.onAuthenticated?.();
+    save(result, options.remember !== false);
     account.value = result.user;
     loginForm.value.password = "";
     await refresh();
+    return true;
   } catch (e) {
     error.value = e.message;
+    return false;
   } finally {
     loggingIn.value = false;
   }
 }
 function logout() {
+  const redirect = router.currentRoute.value.fullPath;
   clear();
   account.value = null;
-  view.value = "dashboard";
+  router.replace({ path: '/login', query: { redirect } });
 }
 function navigate(id) {
+  if (id === 'sources' || id === 'rules') {
+    router.push(`/settings/${id}`);
+    error.value = "";
+    notice.value = "";
+    return;
+  }
   const aliases = { overview: "dashboard", companies: "customers", requests: "business", vehicles: "plates", rules: "settings", sources: "settings" };
   const target = aliases[id] || (navigation.some(item => item.id === id) ? id : 'dashboard');
   if (target === 'customers' && id === 'companies' && selectedCustomer.value) { customerTab.value = 'companies'; view.value = 'customer-detail' }
   else view.value = target;
-  if (typeof window !== 'undefined' && window.location.hash.slice(1) !== id) window.location.hash = `#${id}`;
   error.value = "";
   notice.value = "";
 }
-if (typeof window !== 'undefined') {
-  const initial = window.location.hash.slice(1);
-  if (initial) navigate(initial);
-  window.addEventListener('hashchange', () => {
-    const target = window.location.hash.slice(1);
-    if (target && target !== view.value && !(target === 'sources' && view.value === 'settings') && !(target === 'rules' && view.value === 'settings')) navigate(target);
-  });
-}
+const viewPath = { dashboard: '/today', customers: '/customers', plates: '/plates', business: '/business', settings: '/settings', 'new-request': '/requests/new' };
+let syncingRoute = false;
+const routeReady = ref(false);
+router.isReady().then(() => { routeReady.value = true; });
+watch([view, () => selectedCustomer.value?.id, () => selectedPlate.value?.id, () => selectedVehicle.value?.id, () => selected.value?.id], ([target]) => {
+  if (syncingRoute) return;
+  const path = viewPath[target] || (target === 'customer-detail' && selectedCustomer.value && `/customers/${selectedCustomer.value.id}`) || (target === 'plate-detail' && selectedPlate.value && `/plates/${selectedPlate.value.id}`) || (target === 'vehicle-detail' && selectedVehicle.value && `/vehicles/${selectedVehicle.value.id}`) || (target === 'request-detail' && selected.value && `/requests/${selected.value.id}`);
+  if (path && router.currentRoute.value.path !== path && !(target === 'settings' && router.currentRoute.value.path.startsWith('/settings/'))) router.push(path);
+});
+watch([() => router.currentRoute.value.fullPath, account, routeReady], async () => {
+  const { name, params } = router.currentRoute.value;
+  if (!account.value || !routeReady.value || name === 'login') return;
+  syncingRoute = true;
+  try {
+    await refresh();
+    if (name === 'customer-detail') {
+      selectedCustomer.value = customers.value.find(item => String(item.id) === String(params.id)) || null;
+      if (!selectedCustomer.value) throw new Error('找不到客戶');
+    } else if (name === 'plate-detail' && !await openPlate({ id: params.id })) throw new Error('找不到牌照');
+    else if (name === 'vehicle-detail' && !await openVehicle({ id: params.id })) throw new Error('找不到車輛');
+    else if (name === 'request-detail' && !await openRequest({ id: params.id })) throw new Error('找不到工單');
+    view.value = name === 'today' ? 'dashboard' : ['customer-detail', 'plate-detail', 'vehicle-detail', 'request-detail'].includes(name) ? name : name || 'dashboard';
+  } catch (cause) { showError(cause); view.value = 'dashboard'; await router.replace('/today'); }
+  finally { syncingRoute = false; }
+}, { immediate: true });
 function showSuccess(message) {
   error.value = "";
-  notice.value = message;
+  pushToast(message);
 }
 function showError(e) {
   notice.value = "";
   error.value = e.message || "操作失敗，請稍後重試";
+  pushToast(error.value, 'danger');
 }
 async function openRequest(r) {
   try {
@@ -419,8 +445,10 @@ async function openRequest(r) {
       note: "",
     };
     view.value = "request-detail";
+    return true;
   } catch (e) {
     showError(e);
+    return false;
   }
 }
 function openCustomer(c) {
@@ -439,15 +467,17 @@ async function createRequestFromDeadline(item) {
     const request = await api("/requests", "POST", { customerId: item.customerId, vehicleId: vehicle?.id || null, plateAssetId: plate?.id || null, route: plate?.route || vehicle?.route || "粵港", serviceCode, title: `${item.name}代辦`, description: `由今日工作建立；對象：${item.ownerLabel}` });
     await refresh();
     await openRequest(request);
-    showSuccess("案件已建立");
+    showSuccess("工單已建立");
   } catch (error) { showError(error) }
 }
 async function openVehicle(v) {
   try {
     selectedVehicle.value = await api("/vehicles/" + v.id);
     view.value = "vehicle-detail";
+    return true;
   } catch (e) {
     showError(e);
+    return false;
   }
 }
 async function openPlate(p) {
@@ -462,11 +492,16 @@ async function openPlate(p) {
       cardNumber: selectedPlate.value.card_number || "",
       cardExpiresOn: selectedPlate.value.card_expires_on || "",
       notes: selectedPlate.value.notes || "",
+      groupId: selectedPlate.value.group_id || "",
+      indicatorCategory: selectedPlate.value.indicator_category || "",
+      port: selectedPlate.value.port || "",
     };
     cardDraft.value = { ...(selectedPlate.value.cardData || {}) };
     view.value = "plate-detail";
+    return true;
   } catch (e) {
     showError(e);
+    return false;
   }
 }
 async function saveCard() {
@@ -609,7 +644,7 @@ async function saveRequest() {
     await api("/requests/" + selected.value.id, "PATCH", editRequest.value);
     await refresh();
     await openRequest(selected.value);
-    showSuccess("案件進度已儲存");
+    showSuccess("工單進度已儲存");
   } catch (e) {
     showError(e);
   }
@@ -648,7 +683,7 @@ async function createRequest() {
     };
     await refresh();
     await openRequest(r);
-    showSuccess("案件已建立");
+    showSuccess("工單已建立");
   } catch (e) {
     showError(e);
   }

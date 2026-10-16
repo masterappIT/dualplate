@@ -1,11 +1,24 @@
 <template>
-  <div class="page-heading"><div><div class="eyebrow">CUSTOMERS</div><h1>客戶</h1><p>一張表掌握客戶、牌照、公司組與下一個到期事項。</p></div><button class="button primary" @click="modal = 'customer'">＋ 新增客戶</button></div>
-  <section class="panel table-panel"><div class="panel-head"><div><h2>客戶列表</h2><p>狀態燈沿用到期健康判斷。</p></div><input v-model="customerSearch" class="table-search" placeholder="搜尋客戶名稱或類型" /></div>
-    <div class="table-wrap"><table><thead><tr><th>客戶</th><th>類型</th><th>牌照數</th><th>公司組數</th><th>狀態</th><th>下一個到期</th><th></th></tr></thead><tbody><tr v-for="customer in customerRows" :key="customer.id" @click="openCustomer(customer)"><td><strong>{{ customer.name }}</strong><small>{{ customer.phone || '未填電話' }}</small></td><td>{{ customer.kind }}</td><td>{{ customer.plateCount }}</td><td>{{ customer.groupCount }}</td><td><span class="health-state"><i class="health-dot" :class="`health-${customer.health}`"></i>{{ healthLabel(customer.health) }}</span></td><td>{{ customer.nextDue }}</td><td>→</td></tr></tbody></table><div v-if="!customerRows.length" class="empty">尚未找到符合條件的客戶</div></div>
-  </section>
+  <ListPage title="客戶" desc="一張表掌握客戶、牌照、公司組與下一個到期事項。" table-title="客戶列表" :list="list" :columns="columns" :min-width="760">
+    <template #actions><Button variant="primary" @click="modal = 'customer'">＋ 新增客戶</Button></template>
+    <template #search><Field label="搜尋客戶"><TextInput v-model="customerSearch" placeholder="搜尋客戶名稱或類型" /></Field></template>
+    <template #cell-name="{ row }"><HoverCard><button class="text-button" @click="openCustomer(row)"><strong>{{ row.name }}</strong></button><template #card><strong>{{ row.name }}</strong><p>{{ row.kind }} · {{ row.plateCount }} 個牌照 · {{ row.groupCount }} 個公司組</p><p>電話：{{ row.phone || '未填' }}</p></template></HoverCard><small>{{ row.phone || '未填電話' }}</small></template>
+    <template #cell-health="{ row }"><span class="health-state"><i class="health-dot" :class="`health-${row.health}`" />{{ healthLabel(row.health) }}</span></template>
+    <template #cell-nextDue="{ row }"><DueDate :date="row.nextDue === '—' ? null : row.nextDue" /></template>
+    <template #cell-action="{ row }"><button class="text-button" @click="openCustomer(row)">查看 →</button></template>
+  </ListPage>
 </template>
 <script setup>
+import ListPage from '../components/business/ListPage.vue'
+import Button from '../components/ui/Button.vue'
+import Field from '../components/ui/Field.vue'
+import TextInput from '../components/ui/TextInput.vue'
+import DueDate from '../components/ui/DueDate.vue'
+import HoverCard from '../components/ui/HoverCard.vue'
+import { useListPage } from '../composables/list'
 import { useAdminStore } from '../store'
-const { modal, customerSearch, customerRows, openCustomer } = useAdminStore()
+const { modal, customerSearch, customerRows, openCustomer, refresh } = useAdminStore()
+const list = useListPage(customerRows, refresh)
+const columns = [{ key: 'name', title: '客戶' }, { key: 'kind', title: '類型' }, { key: 'plateCount', title: '牌照數' }, { key: 'groupCount', title: '公司組數' }, { key: 'health', title: '狀態' }, { key: 'nextDue', title: '下一個到期' }, { key: 'action', title: '操作', className: 'col-actions' }]
 const healthLabel = health => ({ red: '有逾期', amber: '需注意', green: '目前正常' }[health] || health)
 </script>

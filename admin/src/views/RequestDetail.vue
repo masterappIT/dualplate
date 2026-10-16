@@ -2,11 +2,10 @@
   <div class="page-heading">
     <div>
       <button class="back" @click="view = 'business'">← 返回業務</button>
-      <div class="eyebrow">CASE DETAIL</div>
       <h1>{{ selected.title }}</h1>
       <p>
         {{ selected.route }} · {{ customerName(selected.customer_id) }} ·
-        {{ selected.vehicle?.plate || "未指定車輛" }}
+        <PlateChip v-if="selected.vehicle?.plate" :plate="selected.vehicle.plate" :route="selected.route" /><span v-else>未指定車輛</span>
       </p>
     </div>
     <span
@@ -17,6 +16,7 @@
   </div>
   <div class="detail-grid">
     <div>
+      <section class="panel"><div class="panel-head"><div><h2>工單摘要</h2><p>客戶、路線與關聯車輛。</p></div></div><KeyValue :items="[{ label: '客戶', value: customerName(selected.customer_id) }, { label: '路線', value: selected.route }, { label: '車輛', value: selected.vehicle?.plate || '未指定' }, { label: '目前階段', value: selected.stage }]" /></section>
       <section class="panel">
         <div class="panel-head">
           <div>
@@ -25,36 +25,11 @@
           </div>
         </div>
         <div class="form-grid">
-          <div>
-            <label>案件狀態</label
-            ><select v-model="editRequest.status">
-              <option>新要求</option>
-              <option>待資格核實</option>
-              <option>待報價／授權</option>
-              <option>待收件</option>
-              <option>辦理中</option>
-              <option>待客戶配合</option>
-              <option>待交付</option>
-              <option>已完成</option>
-              <option>暫停</option>
-            </select>
-          </div>
-          <div>
-            <label>目前階段</label
-            ><select v-model="editRequest.stage">
-              <option>待內部受理</option>
-              <option v-for="stage in selected.plan?.stages" :key="stage">
-                {{ stage }}
-              </option>
-            </select>
-          </div>
+          <Field label="工單狀態"><Select v-model="editRequest.status" :options="statusOptions" /></Field>
+          <Field label="目前階段"><Select v-model="editRequest.stage" :options="stageOptions" /></Field>
         </div>
-        <label>更新說明</label
-        ><textarea
-          v-model="editRequest.note"
-          placeholder="記錄客戶配合、官方回覆或下一步安排"
-        ></textarea
-        ><button class="button primary" @click="saveRequest">儲存進度</button>
+        <Field label="更新說明"><TextInput v-model="editRequest.note" multiline placeholder="記錄客戶配合、官方回覆或下一步安排" /></Field>
+        <Button variant="primary" @click="saveRequest">儲存進度</Button>
       </section>
       <section class="panel">
         <div class="panel-head">
@@ -93,7 +68,7 @@
         <div class="panel-head">
           <div>
             <h2>更新紀錄</h2>
-            <p>客戶可看到與其案件相關的進度</p>
+            <p>客戶可看到與其工單相關的進度</p>
           </div>
         </div>
         <div v-for="a in selected.activities" :key="a.id" class="activity-row">
@@ -112,7 +87,7 @@
         <div class="panel-head">
           <div>
             <h2>關聯兩地牌</h2>
-            <p>案件與現有兩地牌分開管理</p>
+            <p>工單與現有兩地牌分開管理</p>
           </div>
         </div>
         <button
@@ -122,12 +97,12 @@
         >
           查看批文卡 {{ selected.plateAsset.card_number }} →</button
         ><template v-else-if="selected.service_code === 'new_application'"
-          ><p class="description">取得正式批文卡後，從此案件建立兩地牌檔案。</p>
+          ><p class="description">取得正式批文卡後，從此工單建立兩地牌檔案。</p>
           <button class="button primary full" @click="openPlateFromRequest">
             批文卡已取得 · 建立檔案
           </button></template
         >
-        <p v-else class="description">此案件尚未關聯兩地牌檔案。</p>
+        <p v-else class="description">此工單尚未關聯兩地牌檔案。</p>
       </section>
       <section class="panel">
         <div class="panel-head">
@@ -194,7 +169,14 @@
   </div>
 </template>
 <script setup>
+import { computed } from 'vue'
 import { useAdminStore } from "../store";
+import Field from '../components/ui/Field.vue'
+import Select from '../components/ui/Select.vue'
+import TextInput from '../components/ui/TextInput.vue'
+import Button from '../components/ui/Button.vue'
+import PlateChip from '../components/ui/PlateChip.vue'
+import KeyValue from '../components/ui/KeyValue.vue'
 const {
   view,
   selected,
@@ -210,4 +192,6 @@ const {
   sources,
   openInspectionForm,
 } = useAdminStore();
+const statusOptions = ['新要求', '待資格核實', '待報價／授權', '待收件', '辦理中', '待客戶配合', '待交付', '已完成', '暫停']
+const stageOptions = computed(() => ['待內部受理', ...(selected.value?.plan?.stages || [])])
 </script>

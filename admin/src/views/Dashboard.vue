@@ -1,45 +1,45 @@
 <template>
-  <div class="page-heading">
-    <div><div class="eyebrow">TODAY / WORK QUEUE</div><h1>今日工作</h1><p>按優先順序處理到期項目、業務與待客戶提供資料。</p></div>
-    <button class="button primary" @click="view = 'new-request'">＋ 開工單</button>
-  </div>
+  <PageHeader title="今日工作" desc="按優先順序處理到期項目、業務與待客戶提供資料。"><Button variant="primary" @click="view = 'new-request'">＋ 開工單</Button></PageHeader>
   <div class="metrics">
-    <button class="metric metric-action" @click="todayTab = 'due'"><span class="metric-label">已逾期</span><strong>{{ todayCounts.overdue }}</strong><small>立即跟進</small></button>
-    <button class="metric metric-action" @click="todayTab = 'due'"><span class="metric-label">7 天內要辦</span><strong>{{ todayCounts.due }}</strong><small>到期項目</small></button>
-    <button class="metric metric-action" @click="todayTab = 'missing'"><span class="metric-label">待錄入資料</span><strong>{{ todayCounts.missing }}</strong><small>補上日期或資料</small></button>
-    <button class="metric metric-action" @click="todayTab = 'active'"><span class="metric-label">進行中業務</span><strong>{{ todayCounts.active }}</strong><small>未完成案件</small></button>
+    <StatCard label="已逾期" tone="danger" :value="todayCounts.overdue" hint="立即跟進" :active="todayTab === 'due' && todayStatus === 'overdue'" @click="choose('due', 'overdue')" />
+    <StatCard label="7 天內要辦" tone="warning" :value="todayCounts.due" hint="到期項目" :active="todayTab === 'due' && todayStatus === 'due'" @click="choose('due', 'due')" />
+    <StatCard label="待錄入資料" tone="neutral" :value="todayCounts.missing" hint="補上日期或資料" :active="todayTab === 'missing'" @click="choose('missing')" />
+    <StatCard label="進行中業務" tone="info" :value="todayCounts.active" hint="未完成工單" :active="todayTab === 'active'" @click="choose('active')" />
   </div>
   <section class="panel">
-    <div class="panel-head"><div><h2>工作隊列</h2><p>日期可直接錄入；批文卡有效期請回到批文卡修改。</p></div><select v-model="todayCustomerId"><option value="">全部客戶</option><option v-for="customer in customers" :key="customer.id" :value="customer.id">{{ customer.name }}</option></select></div>
-    <div class="tabs"><button v-for="tab in tabs" :key="tab.id" class="tab" :class="{ active: todayTab === tab.id }" @click="todayTab = tab.id">{{ tab.name }}</button></div>
-    <label class="queue-filter">狀態篩選<select v-model="todayStatus"><option value="">全部狀態</option><option value="overdue">已逾期</option><option value="due">需處理</option><option value="missing">待錄入</option><option value="新要求">新要求</option><option value="辦理中">辦理中</option><option value="待客戶配合">待客戶配合</option></select></label>
-    <div v-if="!visibleRows.length" class="empty">目前沒有符合條件的工作</div>
-    <div v-for="item in visibleRows" :key="item.id || `${item.ruleCode}:${item.ownerId}`" class="today-row">
-      <template v-if="item.ruleCode">
-        <div><strong>{{ item.name }}</strong><small>{{ item.ownerLabel }} · {{ item.customerName }}</small></div>
-        <span class="badge" :class="tone(item.level)">{{ label(item.level) }}</span>
-        <label v-if="item.method === 'expiry' && item.ruleCode !== 'approval'" class="inline-date"><span>到期日</span><input :value="item.dueOn || ''" type="date" @change="saveDate(item, $event.target.value)" /></label>
-        <button v-else-if="item.ruleCode === 'approval'" class="text-button" @click="openPlateById(item.ownerId)">到批文卡修改 ↗</button>
-        <button v-else-if="item.completable" class="button" @click="complete(item)">已辦好</button>
-        <button class="button" @click="createRequestFromDeadline(item)">開工單</button>
-      </template>
-      <template v-else-if="item.request">
-        <div><strong>{{ item.title }}</strong><small>{{ item.request?.customer_name || '客戶' }} · {{ item.request?.title }}</small></div><span class="badge amber">待客戶提供</span><span>請補交所需資料</span><button class="text-button" @click="openRequest(item.request)">查看案件 →</button>
-      </template>
-      <template v-else><div><strong>{{ item.title }}</strong><small>{{ item.customer_name }} · {{ item.stage }}</small></div><span class="badge amber">{{ item.status }}</span><span>進行中業務</span><button class="text-button" @click="openRequest(item)">查看案件 →</button></template>
-    </div>
+    <div class="panel-head"><div><h2>工作隊列</h2><p>日期可直接錄入；批文卡有效期請回到批文卡修改。</p></div></div>
+    <FilterBar><Segmented v-model="todayTab" :options="tabs" label="工作隊列分類" /><label>客戶<select v-model="todayCustomerId"><option value="">全部客戶</option><option v-for="customer in customers" :key="customer.id" :value="customer.id">{{ customer.name }}</option></select></label><label>狀態<select v-model="todayStatus"><option value="">全部狀態</option><option value="overdue">已逾期</option><option value="due">需處理</option><option value="missing">待錄入</option><option value="新要求">新要求</option><option value="辦理中">辦理中</option><option value="待客戶配合">待客戶配合</option></select></label></FilterBar>
+    <DataTable :columns="columns" :data="visibleRows" row-key="_key" :min-width="880" empty-text="目前沒有符合條件的工作，請調整篩選或新增工單">
+      <template #cell-title="{ row }"><strong>{{ row.ruleCode ? row.name : row.title }}</strong><small v-if="row.request">{{ row.request.title }}</small><small v-else-if="!row.ruleCode">{{ row.stage }}</small></template>
+      <template #cell-owner="{ row }"><PlateChip v-if="row.ruleCode && row.ownerType === 'plate'" :plate="row.ownerLabel" :route="row.route" /><span v-else>{{ row.ruleCode ? row.ownerLabel : row.request?.title || '工單' }}</span></template>
+      <template #cell-customer="{ row }">{{ row.customerName || row.request?.customer_name || row.customer_name || '—' }}</template>
+      <template #cell-due="{ row }"><DueDate v-if="row.ruleCode" :date="row.dueOn" :editable="row.method === 'expiry' && row.ruleCode !== 'approval'" label="到期日" :on-save="value => saveDate(row, value)" /><span v-else>—</span></template>
+      <template #cell-status="{ row }"><Tag :tone="row.ruleCode ? ({ danger: 'danger', amber: 'warning', muted: 'neutral' }[tone(row.level)] || 'neutral') : 'info'">{{ row.ruleCode ? label(row.level) : row.request ? '待客戶提供' : row.status }}</Tag></template>
+      <template #cell-action="{ row }"><div class="row-actions"><template v-if="row.ruleCode"><button v-if="row.ruleCode === 'approval'" class="text-button" @click="openPlateById(row.ownerId)">修改批文卡</button><button v-else-if="row.completable" class="text-button" @click="complete(row)">已辦好</button><button class="text-button" @click="createRequestFromDeadline(row)">開工單</button></template><button v-else class="text-button" @click="openRequest(row.request || row)">查看工單 →</button></div></template>
+    </DataTable>
   </section>
 </template>
 <script setup>
 import { ref, computed } from 'vue'
+import StatCard from '../components/ui/StatCard.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
+import Button from '../components/ui/Button.vue'
+import Segmented from '../components/ui/Segmented.vue'
+import DueDate from '../components/ui/DueDate.vue'
+import PlateChip from '../components/ui/PlateChip.vue'
+import DataTable from '../components/ui/DataTable.vue'
+import Tag from '../components/ui/Tag.vue'
+import FilterBar from '../components/business/FilterBar.vue'
 import { useAdminStore } from '../store'
 import { api } from '../api'
 const { view, customers, todayTab, todayCustomerId, todayCounts, todayDeadlines, saveTrackedItem, createRequestFromDeadline, openPlateById, openRequest, showSuccess, showError } = useAdminStore()
 const todayStatus = ref('')
-const visibleRows = computed(() => todayDeadlines.value.filter(item => !todayStatus.value || (item.ruleCode ? item.level : item.status) === todayStatus.value))
-const tabs = [{ id: 'due', name: '到期待辦' }, { id: 'active', name: '進行中業務' }, { id: 'missing', name: '待錄入' }, { id: 'customer', name: '待客戶提供' }]
+function choose(tab, status = '') { todayTab.value = tab; todayStatus.value = status }
+const visibleRows = computed(() => todayDeadlines.value.filter(item => !todayStatus.value || (item.ruleCode ? item.level : item.status) === todayStatus.value).map((item, index) => ({ ...item, _key: `${item.id || item.ruleCode || 'row'}:${item.ownerId || index}` })))
+const columns = [{ key: 'title', title: '事項', minWidth: 160 }, { key: 'owner', title: '對象', minWidth: 130 }, { key: 'customer', title: '客戶', minWidth: 120 }, { key: 'due', title: '到期', minWidth: 140, align: 'right' }, { key: 'status', title: '狀態', minWidth: 80 }, { key: 'action', title: '操作', className: 'col-actions', minWidth: 150 }]
+const tabs = [{ value: 'due', label: '到期待辦' }, { value: 'active', label: '進行中業務' }, { value: 'missing', label: '待錄入' }, { value: 'customer', label: '待客戶提供' }]
 const label = level => ({ overdue: '已逾期', due: '需處理', missing: '待錄入' }[level] || level)
 const tone = level => ({ overdue: 'danger', due: 'amber', missing: 'muted' }[level] || '')
-async function saveDate(item, expiresOn) { await saveTrackedItem({ ...item, code: item.ruleCode, expiresOn }) }
+async function saveDate(item, expiresOn) { return saveTrackedItem({ ...item, code: item.ruleCode, expiresOn }) }
 async function complete(item) { try { await api('/rule-completions', 'POST', { ruleCode: item.ruleCode, ownerId: item.ownerId, period: item.period }); await useAdminStore().refresh(); showSuccess('本期已標記完成') } catch (error) { showError(error) } }
 </script>

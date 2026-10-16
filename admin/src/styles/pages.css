@@ -1,0 +1,97 @@
+/* 登入：腳手架左右格局與動畫節奏，改為實心綠色。 */
+.login { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(400px, 1fr); min-height: 100dvh; padding: 14px; background: var(--canvas); }
+.login:not(.is-entrance-ready) .login-brand, .login:not(.is-entrance-ready) .hero-line, .login:not(.is-entrance-ready) .cap-item, .login:not(.is-entrance-ready) .login-card, .login:not(.is-entrance-ready) .login-plate, .login:not(.is-entrance-ready) .login-dial { opacity: 0; }
+.login-canvas { position: relative; isolation: isolate; display: flex; flex-direction: column; min-height: calc(100dvh - 28px); padding: 34px 40px 28px; overflow: hidden; border-radius: var(--r-panel); background: var(--sidebar); color: var(--canvas-ink); }
+.login-canvas::after { content: ''; position: absolute; inset: 0; z-index: 0; background: url('./guilloche.svg') repeat; background-size: 360px 180px; opacity: .05; pointer-events: none; }
+.canvas-grid { position: absolute; inset: 0; z-index: 0; background-image: linear-gradient(var(--canvas-line) 1px, transparent 1px), linear-gradient(90deg, var(--canvas-line) 1px, transparent 1px); background-size: 56px 56px; }
+.login-canvas .neural-net { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.login-brand { display: flex; align-items: center; gap: 12px; position: relative; z-index: 1; }
+.login-brand strong, .login-brand small { display: block; }
+.login-brand small { color: var(--canvas-secondary); }
+.login-brand .brand-mark { display: grid; place-items: center; width: 44px; height: 44px; border: 3px double var(--canvas-secondary); border-radius: 50%; font-size: 16px; line-height: 1; font-weight: 700; text-align: center; }
+.canvas-main { position: relative; z-index: 1; flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 32px; padding: 40px 0 24px; }
+.canvas-copy { display: grid; gap: 18px; }
+.login-title { color: var(--canvas-ink); font-size: 36px; line-height: 1.2; margin: 0; }
+.login-lead { color: var(--canvas-secondary); margin: 0; font-size: 16px; }
+.login-dial { position: relative; width: clamp(200px, 21vw, 300px); aspect-ratio: 1; }
+.login-dial svg { width: 100%; height: 100%; }
+.dial-tick { stroke: var(--canvas-line); stroke-width: .7; }
+.dial-tick.is-major { stroke-width: 1.1; }
+.dial-tick.is-on { stroke: var(--canvas-tick); }
+.dial-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 6px; }
+.dial-time { font-size: 26px; font-variant-numeric: tabular-nums; }
+.dial-date { font-size: 12px; color: var(--canvas-secondary); }
+.canvas-plates { position: relative; z-index: 1; display: flex; gap: 14px; flex-wrap: wrap; }
+.login-plate { border: 1px solid var(--canvas-line); background: var(--sidebar-active); border-radius: var(--r-card); }
+.login-plate.is-health { display: grid; grid-template-columns: auto auto; align-content: center; align-items: center; gap: 6px 10px; padding: 14px 18px; }
+.login-plate.is-health > span:first-child, .login-plate.is-health small { grid-column: 1 / -1; }
+.login-plate small { color: var(--canvas-secondary); }
+.health-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--status-overdue); }
+.health-dot.is-ok { background: var(--canvas-tick); }
+.cap-list { list-style: none; margin: 0; padding: 14px 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 220px)); gap: 12px 20px; flex: 1; }
+.cap-item strong, .cap-item small { display: block; }
+.login-side { display: grid; place-items: center; padding: 32px clamp(20px, 4vw, 64px); perspective: 1200px; }
+.login-side .login-card { width: 100%; max-width: 420px; padding: 0; border: 1px solid var(--border); border-radius: var(--r-card); background: var(--surface); box-shadow: var(--e2); transform-style: preserve-3d; }
+.login-side .login-card .field-label { margin: 0; color: var(--ink); font-size: 14px; font-weight: 600; }.login-side .login-card .checkbox { display: inline-flex; justify-self: start; align-items: center; white-space: nowrap; font-weight: 400; }
+.login-side .login-card .input-shell input { border: 0; border-radius: 0; padding: 0; height: 40px; background: transparent; }
+.login-side .login-card .field-error { color: var(--status-overdue); font-size: 12px; }
+.login-side .login-card .btn { width: 100%; }
+.login-card-inner { padding: 32px; }
+.login-card-inner h2 { font-size: 22px; margin: 0; }
+.login-card-inner p { color: var(--ink-muted); margin: 6px 0 0; }
+.login-form { display: grid; gap: 16px; margin-top: 24px; }
+.login-form .input-shell { min-height: 42px; }
+.login-submit-slot { display: flex; justify-content: center; min-height: 46px; }
+.success-orb { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 999px; background: var(--primary); color: var(--surface); }
+.success-orb circle, .success-orb path { fill: none; stroke: currentColor; stroke-width: 2.5; }
+@media (max-width: 1180px) { .canvas-main { grid-template-columns: 1fr; } .login-dial { display: none; } }
+@media (max-width: 819px) { .login { grid-template-columns: minmax(0, 1fr); padding: 0; } .login-canvas { min-height: 220px; padding: 20px 24px; border-radius: 0; } .canvas-main { padding: 24px 0 0; }.canvas-plates, .login-dial { display: none; }.login-title { font-size: 22px; }.login-lead { font-size: 14px; }.login-side { min-height: calc(100dvh - 220px); padding: 24px 16px; } .login-card-inner { padding: 24px; } }
+
+/* 業務頁統一使用證件紙面與實心材質。 */
+body { background: var(--canvas); color: var(--ink); font-family: var(--font-body); }
+.sidebar { background: var(--sidebar); }
+.nav-item.active { background: var(--sidebar-active); }
+.panel, .customer-card, .source-card { background: var(--surface); border-color: var(--border); border-radius: var(--r-card); box-shadow: var(--e1); }
+.button.primary { background: var(--primary); border-color: var(--primary); }
+.page-heading .eyebrow { display: none; }
+.page-heading h1 { font-size: 22px; }
+.panel-head h2 { font-size: 16px; }
+.page-heading:has(.plate-chip) { position: relative; isolation: isolate; overflow: hidden; }.page-heading:has(.plate-chip)::before { content: ''; position: absolute; inset: 0; z-index: -1; background: url('./guilloche.svg') repeat; background-size: 360px 180px; opacity: .05; pointer-events: none; }
+.table-wrap { max-width: 100%; overflow-x: auto; }
+.table-wrap th, .table-wrap td { height: var(--row-h); }
+.mobile-menu { display: none; border: 0; background: none; color: var(--ink); }
+/* 批文卡僅遷移外層容器樣式，卡片組件及預覽交互不變。 */
+.approval-admin-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr); gap: 28px; align-items: start; }
+.card-form-grid { max-height: 800px; overflow: auto; margin-bottom: 18px; }
+.card-field-status { display: inline-block; margin-left: 8px; color: var(--status-due); font-size: 12px; font-weight: 650; }
+.card-field-status.failed { color: var(--status-overdue); }
+.preview-note { font-size: 12px; color: var(--ink-muted); margin: 12px 0; }
+.scan-details { border-top: 1px solid var(--border); margin-top: 26px; padding-top: 18px; }
+.scan-details summary { cursor: pointer; font-weight: 650; margin-bottom: 16px; }
+@media (max-width: 1100px) { .approval-admin-grid { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .modal { max-width: calc(100vw - 24px) !important; }.page-heading { min-width: 0; }.page-heading h1 { overflow-wrap: anywhere; }.heading-actions { display: flex; flex-wrap: wrap; }.request-form { min-width: 0; }.form-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; } }
+
+.page-heading { display: flex; justify-content: space-between; align-items: end; gap: 16px; margin-bottom: 20px; min-width: 0; }
+.page-heading h1 { margin: 4px 0; color: var(--ink); }.page-heading p { margin: 0; color: var(--ink-2); }.heading-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.button { display: inline-flex; align-items: center; justify-content: center; min-height: var(--control-h); padding: 0 12px; border: 1px solid var(--border); border-radius: var(--r-control); background: var(--surface); color: var(--ink); font-weight: 600; white-space: nowrap; }.button.primary { color: var(--surface); }.button:hover, .btn:hover { border-color: var(--primary); }.button:disabled { opacity: .5; cursor: not-allowed; }
+.back, .text-button, .phase-link { border: 0; background: transparent; color: var(--primary); padding: 4px 0; font-weight: 600; text-decoration: none; }.text-button:hover, .back:hover, .phase-link:hover { text-decoration: underline; }.row-actions { display: inline-flex; align-items: center; gap: 12px; white-space: nowrap; }
+.panel { min-width: 0; padding: 20px; margin-bottom: 16px; border: 1px solid var(--border); border-radius: var(--r-card); }.panel-head { margin-bottom: 16px; }.panel-head h2 { margin: 0; }.panel-head p { margin: 4px 0 0; color: var(--ink-2); font-size: 12px; }.grid-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 24px 0; }.stat-card { min-width: 0; }.stat-card:focus-visible { outline-color: var(--plate-yellow); }
+.filter-bar { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }.filter-bar label { display: grid; gap: 4px; min-width: 160px; max-width: 240px; }.filter-bar select { width: 100%; }.filter-bar .segmented { margin-right: auto; }
+.badge { display: inline-flex; align-items: center; align-self: center; justify-self: start; flex: none; width: fit-content; padding: 3px 8px; border-radius: var(--r-control); background: var(--status-ok-bg); color: var(--status-ok); font-size: 12px; white-space: nowrap; }.badge.amber, .badge.warning { background: var(--status-due-bg); color: var(--status-due); }.badge.danger { background: var(--status-overdue-bg); color: var(--status-overdue); }.badge.muted, .badge.gray { background: var(--status-muted-bg); color: var(--status-muted); }.badge.success { background: var(--status-ok-bg); color: var(--status-ok); }
+.customer-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 0; padding: 12px 16px; margin: 0 0 16px; border: 1px solid var(--border); border-radius: var(--r-card); background: var(--surface); }.customer-summary > span { display: inline-flex; align-items: baseline; gap: 4px; padding: 4px 16px; border-right: 1px solid var(--border); white-space: nowrap; }.customer-summary > span:last-child { border: 0; }.customer-summary strong { font-variant-numeric: tabular-nums; }
+.record-row, .task-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-height: var(--row-h); padding: 10px 0; border-top: 1px solid var(--border); }.record-row > div:first-child, .task-main { flex: 1; min-width: 160px; }.record-row strong, .task-main strong { display: block; }.record-row small, .task-main small { display: block; color: var(--ink-2); font-size: 12px; }.list-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: var(--row-h); padding: 8px 0; border: 0; border-top: 1px solid var(--border); background: transparent; color: var(--ink); text-align: left; }.list-main { flex: 1; min-width: 0; }.list-main strong, .list-main small { display: block; }.list-main small { color: var(--ink-2); font-size: 12px; }.list-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--r-control); background: var(--jade-soft); color: var(--jade); }
+.empty { padding: 24px; text-align: center; color: var(--ink-2); }.table-panel { overflow: hidden; }.table-wrap table:not(.table) { min-width: 850px; width: 100%; border-collapse: collapse; }.table-wrap th, .table-wrap td { padding: 8px 12px; border-bottom: 1px solid var(--border); text-align: left; }.table-wrap th { color: var(--ink-2); font-size: 12px; }.table-wrap td { font-size: 13px; }.table-wrap td:has(.due-date) { font-variant-numeric: tabular-nums; }
+.customer-grid, .source-grid, .company-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }.customer-card, .source-card, .company-card { display: grid; gap: 8px; min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: var(--r-card); background: var(--surface); text-align: left; }.customer-card p, .source-card p { margin: 0; color: var(--ink-2); }.company-group-block, .rule-group { min-width: 0; margin-top: 20px; }.company-group-block h3, .rule-group h3 { margin: 0 0 12px; font-size: 16px; }.company-card-actions, .form-actions, .import-steps { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }.description, .dialog-note, .guidance { color: var(--ink-2); }.error { color: var(--status-overdue); }.inline-date { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rule-group .table-wrap { width: 100%; }.rule-group .table th:first-child, .rule-group .table td:first-child { min-width: 170px; }.rule-group .table th:nth-child(2), .rule-group .table td:nth-child(2) { min-width: 240px; }.rule-group .table th:nth-child(3), .rule-group .table td:nth-child(3) { min-width: 220px; }
+.missing-note { color: var(--status-muted); }
+.filter-bar select, .panel select, .panel input:not([type='checkbox']):not([type='file']), .panel textarea { min-height: var(--control-h); max-width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--r-control); background: var(--surface); color: var(--ink); }.filter-bar select:focus-visible, .panel select:focus-visible, .panel input:focus-visible { border-color: var(--plate-yellow); }.panel .input-shell input { padding: 0; border: 0; background: transparent; }.panel .date-input { font-variant-numeric: tabular-nums; }
+.panel .input-shell input:not([type='checkbox']):not([type='file']) { padding: 0; border: 0; background: transparent; }
+.detail-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }.detail-grid > * { min-width: 0; }.task-number { display: grid; place-items: center; flex: none; width: 28px; height: 28px; border: 1px solid var(--border); border-radius: 50%; font-variant-numeric: tabular-nums; }.task-number.done { border-color: var(--status-ok); color: var(--status-ok); }.activity-row { display: flex; gap: 12px; padding: 12px 0; border-top: 1px solid var(--border); }.activity-dot { width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--status-progress); }.activity-row strong, .activity-row small { display: block; }.activity-row small { color: var(--ink-2); font-size: 12px; }
+.company-card-title, .company-card-actions, .source-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }.company-card > span, .lookup-result > span { display: block; }.company-status { display: inline-flex; width: fit-content; padding: 2px 8px; border-radius: var(--r-control); background: var(--status-ok-bg); color: var(--status-ok); }.company-status.warning { background: var(--status-due-bg); color: var(--status-due); }.company-status.dissolved, .company-dissolved { color: var(--status-overdue); }.group-plates { border-top: 1px dashed var(--rule); padding-top: 12px; }.lookup-box, .lookup-result { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border); background: var(--canvas); }.source-code, .source-foot { color: var(--ink-2); font-size: 12px; }.source-card h2 { margin: 0; font-size: 16px; }
+.workspace-message { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; margin-bottom: 16px; border: 1px solid var(--status-overdue); border-radius: var(--r-control); background: var(--status-overdue-bg); }.workspace-message button { border: 0; background: transparent; color: inherit; }.health-state { display: inline-flex; align-items: center; gap: 6px; }.health-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }.health-red { background: var(--status-overdue); }.health-amber { background: var(--status-due); }.health-green { background: var(--status-ok); }
+.deadline-row, .health-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }.deadline-head { color: var(--ink-2); font-size: 12px; }.deadline-field { min-width: 0; }.deadline-operation, .record-right { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }.deadline-label, .rule-source-note { color: var(--ink-2); font-size: 12px; }.phase-filters, .company-status-list { display: flex; gap: 8px; flex-wrap: wrap; }.source-link { display: grid; gap: 4px; color: var(--primary); }.source-link small { color: var(--ink-2); }.health-button { display: inline-flex; align-items: center; gap: 8px; border: 0; background: transparent; color: var(--ink); }.expiry-edit input { max-width: 180px; }.badge.large { padding: 6px 12px; }.metric-action { text-align: left; }.metric-label { color: var(--ink-2); font-size: 12px; }
+@media (max-width: 600px) { .deadline-row, .health-row { grid-template-columns: 1fr 1fr; }.deadline-head { display: none; }.expiry-edit input { width: 100%; max-width: none; } }
+@media (max-width: 900px) { .detail-grid { grid-template-columns: 1fr; } }
+.card-upload-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }.card-upload-grid > div { min-width: 0; }.card-upload-grid strong { display: block; }.card-image { max-width: 100%; }.card-placeholder { display: grid; place-items: center; min-height: 160px; border: 1px dashed var(--border); background: var(--canvas); }.card-upload-grid input { max-width: 100%; }
+@media (max-width: 900px) { .grid-two { grid-template-columns: 1fr; }.metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .workspace { padding: 16px; }.page-head, .page-heading { align-items: start; flex-direction: column; }.page-head-side, .page-actions { width: 100%; flex-wrap: wrap; }.page-actions .btn { flex: 0 1 auto; }.metrics { margin-top: 16px; }.panel { padding: 16px; }.customer-grid, .source-grid, .company-columns, .card-upload-grid { grid-template-columns: 1fr; }.customer-summary > span { width: 50%; border-right: 0; }.filter-bar label { flex: 1 1 160px; }.filter-bar .segmented { width: 100%; }.heading-actions { width: 100%; }.table-wrap:not(.has-mobile-cards) { overflow-x: auto; } }

@@ -2,8 +2,7 @@
   <div class="page-heading">
     <div>
       <button class="back" @click="view = 'plates'">← 返回牌照</button>
-      <div class="eyebrow">VEHICLE PROFILE</div>
-      <h1>{{ selectedVehicle.plate }}</h1>
+      <h1><PlateChip :plate="selectedVehicle.plate" :route="selectedVehicle.route" /></h1>
       <p>
         {{ selectedVehicle.route }} · {{ selectedVehicle.origin }} ·
         {{ selectedVehicle.type }} ·
@@ -24,25 +23,14 @@
       </div>
     </div>
     <div class="form-grid">
-      <label
-        >港澳首次註冊日期<input
-          v-model="vehicleForm.firstRegisteredOn"
-          type="date" /></label
-      ><label
-        >來源地<select v-model="vehicleForm.origin">
-          <option v-for="area in ['香港', '澳門', '內地']" :key="area">
-            {{ area }}
-          </option>
-        </select></label
-      ><label>車牌<input v-model="vehicleForm.plate" /></label
-      ><label>廠牌<input v-model="vehicleForm.brand" /></label
-      ><label>型號<input v-model="vehicleForm.model" /></label
-      ><label>車架號<input v-model="vehicleForm.vin" /></label
-      ><label
-        >製造年份<input
-          v-model.number="vehicleForm.manufacturedYear"
-          type="number" /></label
-      ><label>備註<input v-model="vehicleForm.notes" /></label>
+      <Field label="港澳首次註冊日期"><DateInput v-model="vehicleForm.firstRegisteredOn" label="港澳首次註冊日期" /></Field>
+      <Field label="來源地"><Select v-model="vehicleForm.origin" :options="['香港', '澳門', '內地']" /></Field>
+      <Field label="車牌" required><TextInput v-model="vehicleForm.plate" /></Field>
+      <Field label="廠牌"><TextInput v-model="vehicleForm.brand" /></Field>
+      <Field label="型號"><TextInput v-model="vehicleForm.model" /></Field>
+      <Field label="車架號"><TextInput v-model="vehicleForm.vin" /></Field>
+      <Field label="製造年份"><TextInput v-model="vehicleForm.manufacturedYear" type="number" /></Field>
+      <Field label="備註"><TextInput v-model="vehicleForm.notes" /></Field>
     </div>
     <button class="button primary" @click="saveVehicle">儲存車輛</button>
   </section>
@@ -115,6 +103,11 @@
 <script setup>
 import { useAdminStore } from "../store";
 import ExpiryPanel from "../components/ExpiryPanel.vue";
+import PlateChip from '../components/ui/PlateChip.vue';
+import Field from '../components/ui/Field.vue';
+import DateInput from '../components/ui/DateInput.vue';
+import Select from '../components/ui/Select.vue';
+import TextInput from '../components/ui/TextInput.vue';
 const {
   view,
   selectedVehicle,

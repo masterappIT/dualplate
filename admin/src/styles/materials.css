@@ -1,0 +1,3 @@
+.m-surface, .m-float, .m-pill { background: var(--surface); border: 1px solid var(--border); box-shadow: var(--e1); }
+.m-float { box-shadow: var(--e2); }
+.m-groove { background: var(--canvas); border: 1px solid var(--border); }

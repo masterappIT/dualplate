@@ -2,10 +2,9 @@
   <div class="page-heading">
     <div>
       <button class="back" @click="view = 'plates'">← 返回牌照</button>
-      <div class="eyebrow">PLATE RECORD</div>
       <h1>
-        {{ selectedPlate.mainland_plate || "內地號牌待補充" }} ·
-        {{ selectedPlate.local_plate || "港／澳號牌待補充" }}
+        <PlateChip :plate="selectedPlate.mainland_plate" /> ·
+        <PlateChip :plate="selectedPlate.local_plate" :route="selectedPlate.route" />
       </h1>
       <p>
         {{ selectedPlate.route }} ·
@@ -25,56 +24,15 @@
         </div>
       </div>
       <div class="form-grid">
-        <div>
-          <label>內地車牌</label><input v-model="plateForm.mainlandPlate" />
-        </div>
-        <div>
-          <label>港／澳車牌</label><input v-model="plateForm.localPlate" />
-        </div>
-        <div>
-          <label>上牌狀態</label
-          ><select v-model="plateForm.installationStatus">
-            <option>待核對</option>
-            <option>未上牌</option>
-            <option>已上牌</option>
-          </select>
-        </div>
-        <div>
-          <label>使用狀態</label
-          ><select v-model="plateForm.usageStatus">
-            <option>待核對</option>
-            <option>自用</option>
-            <option disabled>出租中（由出租記錄更新）</option>
-            <option>暫停使用</option>
-          </select>
-        </div>
-        <div>
-          <label>綁定車輛</label
-          ><select v-model="plateForm.vehicleId">
-            <option value="">未綁定</option>
-            <option
-              v-for="v in vehicles.filter(
-                (v) =>
-                  v.customer_id === selectedPlate.customer_id &&
-                  v.route === selectedPlate.route,
-              )"
-              :key="v.id"
-              :value="v.id"
-            >
-              {{ v.plate }} · {{ v.brand }} {{ v.model }}
-            </option>
-          </select>
-        </div>
-        <div>
-          <label>批文卡號</label><input v-model="plateForm.cardNumber" />
-        </div>
-        <div>
-          <label>批文卡有效期</label
-          ><input v-model="plateForm.cardExpiresOn" type="date" />
-        </div>
+        <Field label="內地車牌"><TextInput v-model="plateForm.mainlandPlate" /></Field>
+        <Field label="港／澳車牌"><TextInput v-model="plateForm.localPlate" /></Field>
+        <Field label="上牌狀態"><Select v-model="plateForm.installationStatus" :options="['待核對', '未上牌', '已上牌']" /></Field>
+        <Field label="使用狀態"><Select v-model="plateForm.usageStatus" :options="[{ value: '待核對', label: '待核對' }, { value: '自用', label: '自用' }, { value: '出租中', label: '出租中（由出租記錄更新）', disabled: true }, { value: '暫停使用', label: '暫停使用' }]" /></Field>
+        <Field label="綁定車輛"><Select v-model="plateForm.vehicleId" :options="vehicleOptions" /></Field>
+        <Field label="批文卡號"><TextInput v-model="plateForm.cardNumber" /></Field>
+        <Field label="批文卡有效期"><DateInput v-model="plateForm.cardExpiresOn" label="批文卡有效期" /></Field>
       </div>
-      <label>備註</label><textarea v-model="plateForm.notes"></textarea
-      ><button class="button primary" @click="savePlate">儲存兩地牌</button>
+      <Field label="備註"><TextInput v-model="plateForm.notes" multiline /></Field><button class="button primary" @click="savePlate">儲存兩地牌</button>
     </section>
     <section class="panel">
       <div class="panel-head">
@@ -134,56 +92,9 @@
       >
     </div>
     <div class="form-grid">
-      <label
-        >公司組<select v-model="plateForm.groupId">
-          <option value="">未分組</option>
-          <option
-            v-for="group in plateGroups"
-            :key="group.id"
-            :value="group.id"
-          >
-            {{ group.name }}
-          </option>
-        </select></label
-      ><label
-        >指標類別<select v-model="plateForm.indicatorCategory">
-          <option value="">未設定</option>
-          <option
-            v-for="category in [
-              '投資類',
-              '資格類',
-              '人才類',
-              '投資高新企業類',
-              '捐贈類',
-              '其他',
-            ]"
-            :key="category"
-          >
-            {{ category }}
-          </option>
-        </select></label
-      ><label
-        >口岸<select v-model="plateForm.port">
-          <option value="">未設定</option>
-          <option
-            v-for="port in [
-              '深圳灣',
-              '港珠澳大橋',
-              '蓮塘／香園圍',
-              '落馬洲',
-              '皇崗',
-              '文錦渡',
-              '沙頭角',
-              '拱北',
-              '橫琴',
-              '其他',
-            ]"
-            :key="port"
-          >
-            {{ port }}
-          </option>
-        </select></label
-      >
+      <Field label="公司組"><Select v-model="plateForm.groupId" :options="groupOptions" /></Field>
+      <Field label="指標類別"><Select v-model="plateForm.indicatorCategory" :options="['未設定', '投資類', '資格類', '人才類', '投資高新企業類', '捐贈類', '其他'].map(value => ({ value: value === '未設定' ? '' : value, label: value }))" /></Field>
+      <Field label="口岸"><Select v-model="plateForm.port" :options="['未設定', '深圳灣', '港珠澳大橋', '蓮塘／香園圍', '落馬洲', '皇崗', '文錦渡', '沙頭角', '拱北', '橫琴', '其他'].map(value => ({ value: value === '未設定' ? '' : value, label: value }))" /></Field>
     </div>
     <button class="button primary" @click="savePlate">儲存指標資料</button>
   </section>
@@ -276,9 +187,15 @@
   </section>
 </template>
 <script setup>
+import { computed } from 'vue'
 import { useAdminStore } from "../store";
 import ApprovalCard from "../components/ApprovalCard.vue";
 import ExpiryPanel from "../components/ExpiryPanel.vue";
+import PlateChip from '../components/ui/PlateChip.vue';
+import Field from '../components/ui/Field.vue';
+import TextInput from '../components/ui/TextInput.vue';
+import Select from '../components/ui/Select.vue';
+import DateInput from '../components/ui/DateInput.vue';
 const {
   selectedPlate,
   view,
@@ -300,47 +217,6 @@ const {
   showSuccess,
   showError,
 } = useAdminStore();
+const vehicleOptions = computed(() => [{ value: '', label: '未綁定' }, ...vehicles.value.filter(vehicle => vehicle.customer_id === selectedPlate.value?.customer_id && vehicle.route === selectedPlate.value?.route).map(vehicle => ({ value: vehicle.id, label: `${vehicle.plate} · ${vehicle.brand || ''} ${vehicle.model || ''}` }))]);
+const groupOptions = computed(() => [{ value: '', label: '未分組' }, ...plateGroups.value.map(group => ({ value: group.id, label: group.name }))]);
 </script>
-<style scoped>
-.approval-admin-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
-  gap: 28px;
-  align-items: start;
-}
-.card-form-grid {
-  max-height: 800px;
-  overflow: auto;
-  margin-bottom: 18px;
-}
-.card-field-status {
-  display: inline-block;
-  margin-left: 8px;
-  color: #9a6500;
-  font-size: 12px;
-  font-weight: 650;
-}
-.card-field-status.failed {
-  color: #9a3f00;
-}
-.preview-note {
-  font-size: 12px;
-  color: #66778a;
-  margin: 12px 0;
-}
-.scan-details {
-  border-top: 1px solid #dce3ea;
-  margin-top: 26px;
-  padding-top: 18px;
-}
-.scan-details summary {
-  cursor: pointer;
-  font-weight: 650;
-  margin-bottom: 16px;
-}
-@media (max-width: 1100px) {
-  .approval-admin-grid {
-    grid-template-columns: 1fr;
-  }
-}
-</style>
