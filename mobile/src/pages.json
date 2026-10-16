@@ -61,6 +61,12 @@
       }
     },
     {
+      "path": "pages/billing/billing",
+      "style": {
+        "navigationBarTitleText": "帳單"
+      }
+    },
+    {
       "path": "pages/login/login",
       "style": {
         "navigationStyle": "custom",

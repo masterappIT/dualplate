@@ -29,7 +29,7 @@
           <view><text>內地車牌</text><strong>{{ selectedPlate.mainland_plate || '尚未上牌' }}</strong></view>
           <view><text>{{ selectedPlate.route==='粵澳' ? '澳門' : '香港' }}車牌</text><strong>{{ selectedPlate.local_plate || '尚未上牌' }}</strong></view>
           <view><text>上牌狀態</text><strong>{{ !selectedPlate.installation_status || selectedPlate.installation_status==='待核對' ? '確認中' : selectedPlate.installation_status }}</strong></view>
-          <view><text>使用狀態</text><strong>{{ !selectedPlate.usage_status || selectedPlate.usage_status==='待核對' ? '確認中' : selectedPlate.usage_status }}</strong></view>
+          <view><text>使用狀態</text><strong>{{ !selectedPlate.usage_status || selectedPlate.usage_status==='待核對' ? '確認中' : selectedPlate.usage_status==='出租中' ? '使用安排中' : selectedPlate.usage_status }}</strong></view>
         </view>
         <button class="open-file" @click="openPlate(selectedPlate)">查看牌照詳情　›</button>
         <text class="file-guidance">可查看到期項目、使用情況，並一鍵申請辦理。</text>
@@ -45,9 +45,9 @@ import ApprovalCard from '../../components/ApprovalCard.vue'
 const plates=ref([]),summaries=ref([]),details=ref({}),selectedPlateId=ref(''),flipped=ref(false),mode=ref(uni.getStorageSync('plateView')||'cards'),keyword=ref(''),filter=ref('')
 const healthLabel={ok:'正常',due:'快到期',overdue:'已逾期',pending:'資料整理中'},healthTone={ok:'',due:'amber',overdue:'red',pending:'gray'},noteTone={overdue:'note-red',due:'note-amber',upcoming:'note-green',ok:'note-gray'}
 const idle=p=>p.installationStatus==='未上牌'||p.usageStatus==='暫停使用'
-const usageText=p=>p.rental?`出租給 ${p.rental.renter}`:idle(p)?'空置':p.usageStatus==='自用'?'自用':'使用狀況確認中'
+const usageText=p=>p.rental?`使用安排：${p.rental.renter}`:idle(p)?'空置':p.usageStatus==='自用'?'自用':'使用狀況確認中'
 const tests={attention:p=>['due','overdue'].includes(p.health),rented:p=>!!p.rental,self:p=>p.usageStatus==='自用'&&!p.rental,idle}
-const filters=computed(()=>[{id:'',name:'全部',count:summaries.value.length},{id:'attention',name:'需注意'},{id:'rented',name:'出租中'},{id:'self',name:'自用'},{id:'idle',name:'空置'}].map(f=>f.id?{...f,count:summaries.value.filter(tests[f.id]).length}:f))
+const filters=computed(()=>[{id:'',name:'全部',count:summaries.value.length},{id:'attention',name:'需注意'},{id:'rented',name:'使用安排中'},{id:'self',name:'自用'},{id:'idle',name:'空置'}].map(f=>f.id?{...f,count:summaries.value.filter(tests[f.id]).length}:f))
 const visible=computed(()=>{const word=keyword.value.trim().toLowerCase();return summaries.value.filter(p=>(!filter.value||tests[filter.value](p))&&(!word||[p.mainlandPlate,p.localPlate,p.holder,p.contractor,p.cardNumber].join(' ').toLowerCase().includes(word)))})
 const selectedPlate=computed(()=>plates.value.find(p=>p.id===selectedPlateId.value))
 function addPlate(){uni.navigateTo({url:'/pages/plate-create/plate-create'})}

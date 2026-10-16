@@ -216,3 +216,4 @@ test('客戶帳單只看到自己的、不含作廢，並按幣種列出未收',
   assert.equal((await request('/my/fees', 'GET', undefined, 'other-client')).body.items.filter(item => item.kind !== 'annual').length, 0)
   assert.equal((await request('/my/fees')).status, 403)
 })
+test('客戶帳單不出現「租金」字眼', async () => assert.ok(!JSON.stringify((await request('/my/fees', 'GET', undefined, 'client')).body).includes('租金')))

@@ -13,6 +13,7 @@
     <text class="section-title">其他</text>
     <view class="list-card row" @click="goNotices"><text class="list-title">通知</text><view class="row"><text v-if="unread" class="pill amber num">{{ unread }} 則未讀</text><text class="link">›</text></view></view>
     <view class="list-card row" @click="goDeadlines"><text class="list-title">到期提醒</text><text class="link">›</text></view>
+    <view class="list-card row" @click="goBilling"><text class="list-title">帳單</text><view class="row"><text v-if="unpaid" class="pill amber">有未付款項</text><text class="link">›</text></view></view>
     <view class="list-card row" @click="logout"><text class="list-title">退出登入</text><text class="link">›</text></view>
   </view>
 </template>
@@ -21,13 +22,14 @@ import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { api, getUser, clearSession, startRequest } from '../../lib/api'
 import AdvisorCard from '../../components/AdvisorCard.vue'
-const user=ref(getUser()),requests=ref([]),loaded=ref(false),advisor=ref(null),unread=ref(0)
+const user=ref(getUser()),requests=ref([]),loaded=ref(false),advisor=ref(null),unread=ref(0),unpaid=ref(false)
 // 只用手機號碼開通的帳戶，電郵是系統佔位，不顯示
 const account=computed(()=>{const email=user.value?.email||'';return email.endsWith('@phone.invalid')?'以手機號碼登入':email})
-async function load(){user.value=getUser();if(!user.value)return uni.navigateTo({url:'/pages/login/login'});try{const [list,overview]=await Promise.all([api('/requests'),api('/my/overview')]);requests.value=list;advisor.value=overview.advisor;unread.value=overview.unreadNotifications||0}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
+async function load(){user.value=getUser();if(!user.value)return uni.navigateTo({url:'/pages/login/login'});try{const [list,overview]=await Promise.all([api('/requests'),api('/my/overview')]);requests.value=list;advisor.value=overview.advisor;unread.value=overview.unreadNotifications||0;api('/my/fees').then(r=>{unpaid.value=Object.keys(r.outstanding||{}).length>0}).catch(()=>{})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
 function openRequest(id){uni.navigateTo({url:'/pages/request-detail/request-detail?id='+id})}
 function newRequest(){startRequest('')}
 function goNotices(){uni.navigateTo({url:'/pages/notifications/notifications'})}
+function goBilling(){uni.navigateTo({url:'/pages/billing/billing'})}
 function goDeadlines(){uni.navigateTo({url:'/pages/deadlines/deadlines'})}
 function logout(){uni.showModal({title:'退出登入',content:'確定要退出嗎？',success:result=>{if(result.confirm){clearSession();uni.navigateTo({url:'/pages/login/login'})}}})}
 onShow(load)
