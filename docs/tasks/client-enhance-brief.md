@@ -2,7 +2,18 @@
 
 先讀 `AGENTS.md`、`docs/design-system.md`、`docs/v1-plan.md` 第六節分工。本任務在第 14 輪（工單改版）驗收後進行；文中「案件」即「工單」，「節點」即工單「步驟」，「待客戶配合」即 `owner=client` 的未完成步驟（第 14 輪的 `clientTodos`）。
 
-**分工（2026-10-16 更新）**：本任務的**後端 API、資料表、管理端畫面由你（Codex）做**；**客戶端 `mobile/` 頁面由負責人親自做**，你不要改 `mobile/`。`api/src/customer-routes.js` 本任務允許你修改以加入下列客戶 API，改動須逐行在報告說明。每個客戶 API 的請求與回應格式請在報告列出，供負責人接上手機頁面。
+**分工（2026-10-16 再更新）**：**後端 API、資料表、測試和客戶端 `mobile/` 已由負責人完成**（`api/src/client-portal.js`、`api/test/client-portal.test.js`，提交 4dc4d9f、fbc59bf、8d737dd）。**你（Codex）只做管理端畫面**，不改 `api/`、不改 `mobile/`；發現後端問題寫進報告「疑慮」，不要自行改。
+
+### 你要做的管理端部分（逐項對應下文編號）
+
+| 編號 | 畫面 | 使用的 API |
+|---|---|---|
+| A（§1） | 工單詳情加「客戶上傳的文件」區塊：列表（檔名、步驟、大小、上傳時間、狀態）；相片點擊彈窗預覽、PDF 新分頁打開；「確認收妥」「要求重交」（要求重交用 `App.vue` 的 `modal` 模式填原因，不可用 `prompt()`）；全部已確認時顯示「客戶文件已齊」提示 | `GET /api/requests/:id/attachments` → `[{id,taskId,fileName,mime,size,status,reviewNote,createdAt}]`；`GET .../:aid/file`（需帶登入令牌，用 blob 取得再顯示）；`PATCH .../:aid {status:'已確認'|'需重交', reviewNote}` → `{...,allConfirmed}` |
+| B（§2） | 客戶詳情加「顧問」編輯（姓名、電話、微信號），只限管理員；員工只讀 | `GET/PUT /api/customers/:id/advisor {name,phone,wechat}`（電話格式錯誤 400、員工 403） |
+| C（§3） | 「開通客戶登入」可填電郵**或**手機號碼（至少一項）；客戶帳號列表顯示手機號碼；為客戶帳號「產生微信綁定碼」按鈕（只限管理員），顯示 6 位碼與 10 分鐘有效 | `POST /api/customer-users {customerId,name,password,email?,phone?}`（重複 409）；`POST /api/customer-users/:userId/wechat-bind-code` → `{code,expiresInMinutes}` |
+| D（§4） | 開通成功後顯示可複製轉發的文字（登入網址或小程序名稱、帳號、首次登入步驟），一鍵複製 | — |
+
+客戶端與後端的行為描述保留在下文供你理解全貌；客戶看到的狀態用語見 `api/src/customer-routes.js` 的 `requestStatus`。
 
 ## 1. 客戶在手機上傳文件
 
@@ -45,7 +56,7 @@
 
 具名、一情況一測試：上傳格式與大小限制；客戶只能上傳到自己的案件；員工確認／要求重交；手機號碼登入；手機號碼重複被拒；微信登入的已綁定、未綁定、綁定碼過期、未設定環境變數；通知產生不重複、已讀、跨客戶不可見；跨租戶 404。
 
-`cd api && npm test`、`cd admin && npm run check`、`cd admin && npm run build`、`cd mobile && npm run build:h5` 全部通過；測試數量不得減少。
+後端測試已由負責人寫好（`api/test/client-portal.test.js`）。你只需確保 `cd api && npm test`（目前 208 項）、`cd admin && npm run check`、`cd admin && npm run build` 全部通過，測試數量不得減少；畫面用截圖服務檢查桌面與 390px，彈窗用點擊欄。
 
 ## 6. 驗收方式
 
@@ -53,4 +64,4 @@
 
 ## 限制
 
-遵守 `AGENTS.md`。不新增 npm 依賴；不改 `mobile/`。
+遵守 `AGENTS.md`。不新增 npm 依賴；不改 `mobile/`、`api/`。

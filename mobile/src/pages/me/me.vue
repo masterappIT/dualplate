@@ -3,7 +3,7 @@
     
     <text class="page-title">{{ user?.name || '我的' }}</text>
     <text class="subtle">{{ account }}</text>
-    <AdvisorCard :advisor="advisor" />
+    <AdvisorCard v-if="loaded" :advisor="advisor" placeholder />
     <view class="section-head"><text class="section-title">辦理記錄</text><text class="link" @click="newRequest">申請辦理 ›</text></view>
     <view v-for="item in requests" :key="item.id" class="list-card" @click="openRequest(item.id)">
       <view class="row"><text class="list-title">{{ item.title }}</text><text class="pill" :class="item.status==='需要你提供資料'?'amber':['已完成','已取消'].includes(item.status)?'gray':''">{{ item.status }}</text></view>

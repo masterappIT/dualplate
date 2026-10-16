@@ -1,5 +1,5 @@
 <template>
-  <!-- 你的顧問：一鍵致電或複製微信號；沒有設定時不顯示，避免空殼卡片 -->
+  <!-- 你的顧問：一鍵致電或複製微信號；沒有設定時首頁不顯示，「我的」頁顯示整理中 -->
   <view v-if="advisor && (advisor.name || advisor.phone || advisor.wechat)" class="card advisor">
     <view class="who-row">
       <view class="badge"><text>{{ (advisor.name || '顧').slice(0, 1) }}</text></view>
@@ -15,10 +15,11 @@
       <button v-if="advisor.wechat" class="secondary act" @click="copyText(advisor.wechat, '微信號已複製')">複製微信號</button>
     </view>
   </view>
+  <view v-else-if="placeholder" class="card advisor empty-advisor"><text class="caption">你的顧問</text><text class="meta">顧問資料整理中，稍後會在這裡顯示聯絡方式。</text></view>
 </template>
 <script setup>
 import { callAdvisor, copyText } from '../lib/api'
-defineProps({ advisor: { type: Object, default: null } })
+defineProps({ advisor: { type: Object, default: null }, placeholder: Boolean })
 </script>
 <style scoped>
 .advisor{margin-top:18rpx}.who-row{display:flex;align-items:center;gap:20rpx}.grow{flex:1;min-width:0}
