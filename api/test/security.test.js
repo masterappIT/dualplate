@@ -173,3 +173,13 @@ test('客戶讀自己的牌照、車輛、工單只看到自己的', async () =>
   for (const path of ['/plate-assets', '/vehicles', '/requests']) { const result = await request(path, 'GET', undefined, token); assert.equal(result.status, 200); assert.ok(result.body.every(item => !item.customer_id || item.customer_id === state.customer), path) }
 })
 test('管理人員呼叫客戶接口一律 403', async () => { for (const path of clientRoutes) assert.equal((await request(path)).status, 403, path) })
+test('公司名稱可由管理者修改，員工不可', async () => {
+  assert.equal((await request('/tenant', 'PUT', { name: '  ' })).status, 400)
+  assert.equal((await request('/tenant', 'PUT', { name: '示範代辦有限公司' })).body.name, '示範代辦有限公司')
+  assert.equal((await request('/tenant')).body.name, '示範代辦有限公司')
+})
+test('操作記錄寫出具體動作名稱', async () => {
+  await request(`/customers/${state.customer}/advisor`, 'PUT', { name: '顧問甲' })
+  const [latest] = (await request('/audit-logs')).body
+  assert.equal(latest.action, '顧問設定')
+})

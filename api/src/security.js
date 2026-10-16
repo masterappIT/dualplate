@@ -80,6 +80,14 @@ export function audit(req, res, user, path) {
   }
 }
 const entityLabels = { customers: '客戶', companies: '公司', 'company-groups': '公司組', 'plate-assets': '牌照', plates: '牌照', vehicles: '車輛', 'tracked-items': '到期日', 'service-scopes': '委託範圍', 'plate-transfers': '轉讓', requests: '工單', 'work-orders': '工單', tasks: '工單步驟', fees: '收費', 'rental-contracts': '出租合約', 'rent-invoices': '租金', reports: '月報', filings: '報帳', 'accounting-firms': '會計公司', drivers: '司機', staff: '員工', 'customer-users': '客戶帳號', me: '本人帳號', rules: '到期規則', 'rule-completions': '完成記錄', quotes: '報價', 'installment-plans': '分期' }
+// 操作名稱：路徑最後一段是動作時用動作名，否則按方法
+const actionWords = { confirm: '確認', recalculate: '重算', correct: '產生更正版', send: '發出', accept: '接受', terminate: '終止', receive: '登記收款', unreceive: '撤銷收款', void: '作廢', payments: '記收款', 'reset-password': '重設密碼', link: '產生連結', attachments: '上傳文件', receipt: '上傳回執', 'wechat-bind-code': '產生綁定碼', 'sync-from-card': '按批文卡同步', crossings: '記錄過關', 'crossing-reminder': '過關提醒設定', password: '修改密碼', billing: '年費設定', advisor: '顧問設定', 'filing-setup': '報帳設定', batch: '批量設定', bulk: '批量更新', login: '登入' }
+function actionOf(row) {
+  const parts = row.path.replace(/^\/api\//, '').split('/').filter(part => !/^[0-9a-f-]{20,}$/i.test(part))
+  const tail = parts.length > 1 ? parts.at(-1) : null
+  if (tail && actionWords[tail]) return row.method === 'DELETE' && tail === 'link' ? '作廢連結' : actionWords[tail]
+  return { POST: '新增', PATCH: '修改', PUT: '設定', DELETE: '刪除' }[row.method] || row.method
+}
 export function auditRoutes(req, res, url, user, { json, fail, parseBody }) {
   const path = url.pathname
   if (path === '/api/audit-logs') {
@@ -88,7 +96,20 @@ export function auditRoutes(req, res, url, user, { json, fail, parseBody }) {
     const { entity, userId, from, to } = Object.fromEntries(url.searchParams)
     const limit = Math.min(500, Number(url.searchParams.get('limit')) || 200)
     const rows = db.prepare(`SELECT * FROM audit_logs WHERE tenant_id=? ${entity ? 'AND entity=?' : ''} ${userId ? 'AND user_id=?' : ''} ${from ? 'AND created_at>=?' : ''} ${to ? 'AND created_at<?' : ''} ORDER BY created_at DESC LIMIT ?`).all(user.tenant_id, ...[entity, userId, from, to].filter(Boolean), limit)
-    return json(res, 200, rows.map(row => ({ id: row.id, userId: row.user_id, userName: row.user_name || '', role: row.role, action: { POST: '新增或執行', PATCH: '修改', PUT: '設定', DELETE: '刪除' }[row.method] || row.method, method: row.method, path: row.path, entity: row.entity, entityLabel: entityLabels[row.entity] || row.entity, entityId: row.entity_id, summary: JSON.parse(row.summary_json || 'null'), ip: row.ip, createdAt: row.created_at }))), true
+    return json(res, 200, rows.map(row => ({ id: row.id, userId: row.user_id, userName: row.user_name || '', role: row.role, action: actionOf(row), method: row.method, path: row.path, entity: row.entity, entityLabel: entityLabels[row.entity] || row.entity, entityId: row.entity_id, summary: JSON.parse(row.summary_json || 'null'), ip: row.ip, createdAt: row.created_at }))), true
+  }
+  // 公司資料：名稱用在報價單等對外文件
+  if (path === '/api/tenant') {
+    if (req.method === 'GET') return json(res, 200, { name: db.prepare('SELECT name FROM tenants WHERE id=?').get(user.tenant_id)?.name || '' }), true
+    if (user.role !== 'admin') return fail(res, 403, '只有管理者可修改公司資料'), true
+    if (req.method !== 'PUT') return fail(res, 405, '不支援此操作'), true
+    return (async () => {
+      const body = await parseBody(req)
+      const name = typeof body.name === 'string' ? body.name.trim().slice(0, 80) : ''
+      if (!name) return fail(res, 400, '請填寫公司名稱'), true
+      db.prepare('UPDATE tenants SET name=? WHERE id=?').run(name, user.tenant_id)
+      return json(res, 200, { name }), true
+    })()
   }
   if (path === '/api/me/password') {
     if (req.method !== 'POST') return fail(res, 405, '不支援此操作'), true

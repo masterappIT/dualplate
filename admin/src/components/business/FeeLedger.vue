@@ -14,6 +14,8 @@ import Tag from '../ui/Tag.vue'
 const props = defineProps({ customerId: { type: String, default: '' } })
 const { customers, showSuccess } = useAdminStore()
 const kinds = { annual: '年費', service: '代辦費', gov_fee: '政府規費', advance: '代墊', rent_commission: '租金管理費' }
+// 手動新增不可選租金管理費（由系統在代收使用費入帳時自動產生）
+const manualKinds = Object.fromEntries(Object.entries(kinds).filter(([kind]) => kind !== 'rent_commission'))
 const currencies = ['HKD', 'RMB', 'MOP']
 const filters = ref({ customerId: '', kind: '', status: '', overdue: false })
 const data = ref({ items: [], totals: { amount: {}, paid: {}, outstanding: {} } })
@@ -71,7 +73,9 @@ async function save() {
       if (!form.value.paidOn || !form.value.method?.trim()) throw new Error('請填寫收款日期及方式。')
       validateProof()
       const proof = proofFile.value ? await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('未能讀取收款憑證。')); reader.readAsDataURL(proofFile.value) }) : undefined
-      if (await action(`/fees/${target.value.id}/payments`, 'POST', { ...form.value, amount: positive(form.value.amount), proof }, '收款已記錄')) stamp.value = true
+      // 收足才蓋「已收款」印章；部分收款只顯示提示
+      const paysOff = positive(form.value.amount) >= (target.value?.outstanding || 0)
+      if (await action(`/fees/${target.value.id}/payments`, 'POST', { ...form.value, amount: positive(form.value.amount), proof }, paysOff ? '收款已記錄，已全數收妥' : '已記錄部分收款')) stamp.value = paysOff
     } else if (dialog.value === 'void') {
       if (!form.value.reason?.trim()) throw new Error('請填寫作廢原因。')
       await action(`/fees/${target.value.id}/void`, 'POST', { reason: form.value.reason }, '收費已作廢')
@@ -136,7 +140,7 @@ async function saveBilling() {
   <div v-if="stamp" class="fee-stamp"><StampMark text="已收款" :play="stamp" /><Button size="sm" variant="text" @click="stamp = false">關閉</Button></div>
   <Modal :open="!!dialog" :title="{ fee: '新增收費', edit: '編輯收費', payment: '記收款', void: '作廢收費', billing: '年費設定', plan: '新增分期', revoke: '撤銷收款' }[dialog]" @close="dialog = ''">
     <template v-if="dialog === 'fee' || dialog === 'plan'"><Field v-if="!customerId" label="客戶" required><select v-model="form.customerId"><option v-for="customer in eligibleCustomers" :key="customer.id" :value="customer.id">{{ customer.name }}</option></select></Field></template>
-    <template v-if="dialog === 'fee' || dialog === 'edit'"><Field v-if="dialog === 'fee'" label="類別"><select v-model="form.kind"><option v-for="(name, kind) in kinds" v-show="kind !== 'rent_commission'" :key="kind" :value="kind">{{ name }}</option></select></Field><Field label="描述" required><input v-model="form.description" /></Field><Field label="金額（元）" required><input v-model="form.amount" inputmode="decimal" /></Field><Field label="幣種"><select v-model="form.currency"><option v-for="currency in currencies" :key="currency">{{ currency }}</option></select></Field><Field label="到期日"><input v-model="form.dueOn" type="date" /></Field><Field label="備註"><input v-model="form.notes" /></Field></template>
+    <template v-if="dialog === 'fee' || dialog === 'edit'"><Field v-if="dialog === 'fee'" label="類別"><select v-model="form.kind"><option v-for="(name, kind) in manualKinds" :key="kind" :value="kind">{{ name }}</option></select></Field><Field label="描述" required><input v-model="form.description" /></Field><Field label="金額（元）" required><input v-model="form.amount" inputmode="decimal" /></Field><Field label="幣種"><select v-model="form.currency"><option v-for="currency in currencies" :key="currency">{{ currency }}</option></select></Field><Field label="到期日"><input v-model="form.dueOn" type="date" /></Field><Field label="備註"><input v-model="form.notes" /></Field></template>
     <template v-else-if="dialog === 'payment'"><p>{{ target.description }} · 尚未收 {{ rentMoney(target.outstanding, target.currency) }}</p><Field label="收款日期" required><input v-model="form.paidOn" type="date" /></Field><Field label="金額（元）" required><input v-model="form.amount" inputmode="decimal" /></Field><Field label="收款方式" required><input v-model="form.method" placeholder="轉帳、現金等" /></Field><Field label="收款憑證（可選，JPG、PNG 或 PDF，最多 5 MB）"><input type="file" accept="image/jpeg,image/png,application/pdf" @change="proofFile = $event.target.files[0]" /></Field></template>
     <p v-else-if="dialog === 'revoke'">確認撤銷 {{ paymentTarget && rentMoney(paymentTarget.payment.amount, paymentTarget.item.currency) }} 的收款記錄？</p>
     <Field v-else-if="dialog === 'void'" label="作廢原因" required><input v-model="form.reason" /></Field>

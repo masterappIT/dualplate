@@ -117,3 +117,8 @@ test('報告內容不出現「租金」字眼', async () => {
   const text = JSON.stringify((await request(`/my/reports/${latest.id}`, 'GET', undefined, 'client')).body)
   assert.ok(text.includes('代收服務費')); assert.ok(!text.includes('租金'))
 })
+test('沒有任何內容的客戶不產生空白月報', async () => {
+  const empty = randomUUID()
+  state.db.prepare('INSERT INTO customers(id,name,kind,tenant_id) VALUES (?,?,?,?)').run(empty, '新客戶空白', '個人', 'default')
+  assert.equal((await request(`/reports?customerId=${empty}`)).body.length, 0)
+})

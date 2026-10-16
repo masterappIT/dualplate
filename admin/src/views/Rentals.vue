@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api, privateFile, rentCents, rentMoney } from '../api'
+import { api, privateFile, rentCents, rentMoney, user } from '../api'
 import { useAdminStore } from '../store'
 import { confirm } from '../composables/confirm'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -16,10 +16,12 @@ import Tag from '../components/ui/Tag.vue'
 import DataTable from '../components/ui/DataTable.vue'
 import FormDialog from '../components/business/FormDialog.vue'
 import Segmented from '../components/ui/Segmented.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 import RenterLink from '../components/business/RenterLink.vue'
 import RentalDesk from '../components/business/RentalDesk.vue'
 
 const route = useRoute(), router = useRouter()
+const isAdmin = user()?.role === 'admin'
 const { customers, plates, companyRecords, refresh, showSuccess, showError } = useAdminStore()
 // 合約／承租方憑證／代收結算／合約範本
 const deskTab = ref(route.query.tab && ['uploads', 'settlement', 'template'].includes(route.query.tab) ? route.query.tab : 'contracts')
@@ -130,7 +132,9 @@ onMounted(load)
 </script>
 
 <template>
-  <PageHeader title="出租與租金" desc="合約、每期應收款與收款記錄。"><Button variant="primary" @click="newContract">＋ 新增合約</Button></PageHeader>
+  <PageHeader title="出租與租金" desc="合約、每期應收款與收款記錄。"><Button v-if="isAdmin" variant="primary" @click="newContract">＋ 新增合約</Button></PageHeader>
+  <EmptyState v-if="!isAdmin" title="出租與租金只限管理者" desc="如需查看，請聯絡管理者。" />
+  <template v-else>
   <Segmented v-model="deskTab" class="rental-tabs" :options="[{ label: '合約', value: 'contracts' }, { label: '承租方憑證', value: 'uploads' }, { label: '代收結算', value: 'settlement' }, { label: '合約範本', value: 'template' }]" label="出租功能" />
   <RentalDesk v-if="deskTab !== 'contracts'" :tab="deskTab" @saved="showSuccess" @error="showError" @changed="load" />
   <template v-else>
@@ -175,6 +179,7 @@ onMounted(load)
     <Field label="收款日期" required><DateInput v-model="receipt.receivedOn" label="收款日期" /></Field><Field :label="`收款金額（${selected?.currency} 元）`" required><TextInput v-model="receipt.amount" type="number" /></Field><Field label="收款方"><Select v-model="receipt.receivedBy" :options="['代辦公司', '客戶']" /></Field><Field label="轉帳憑證（JPG／PNG／PDF，最多 5 MB）"><input type="file" accept="image/jpeg,image/png,application/pdf" @change="readProof" /></Field><Field label="備註"><TextInput v-model="receipt.notes" multiline /></Field><p v-if="formError" class="error" role="alert">{{ formError }}</p>
   </FormDialog>
   <FormDialog :open="dialog === 'terminate'" title="終止合約" layout="stack" :saving="busy" submit-text="確認終止" @close="dialog = ''" @submit="terminate"><Field label="終止日期" required><DateInput v-model="termination.endedOn" label="終止日期" /></Field><Field label="終止原因" required><TextInput v-model="termination.reason" multiline /></Field><p v-if="formError" class="error" role="alert">{{ formError }}</p></FormDialog>
+  </template>
 </template>
 <style scoped>
 .rental-filters,.rental-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.rental-filters{padding:16px 0}.rental-filters :deep(.field){width:min(220px,100%)}.rental-actions{justify-content:flex-end}.panel :deep(.plate-chip){max-width:100%;white-space:normal;overflow-wrap:anywhere}

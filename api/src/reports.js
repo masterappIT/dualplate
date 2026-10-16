@@ -59,7 +59,10 @@ function ensureReports(tenantId) {
   const period = previousMonth()
   for (const customer of db.prepare('SELECT id FROM customers WHERE tenant_id=? AND COALESCE(is_self,0)=0').all(tenantId)) {
     if (db.prepare('SELECT 1 FROM monthly_reports WHERE customer_id=? AND period=?').get(customer.id, period)) continue
-    db.prepare("INSERT OR IGNORE INTO monthly_reports(id,tenant_id,customer_id,period,version,status,snapshot_json,created_at,updated_at) VALUES (?,?,?,?,1,'草稿',?,?,?)").run(id(), tenantId, customer.id, period, JSON.stringify(computeReport(tenantId, customer.id, period)), now(), now())
+    const report = computeReport(tenantId, customer.id, period)
+    // 這個月沒有任何工作、使用費、收費、報帳和結算時不產生空白報告（例如月中才成為客戶）
+    if (!report.completed.length && !report.usage.items.length && !report.charges.items.length && !report.filings.length && !Object.values(report.net.net).some(Boolean)) continue
+    db.prepare("INSERT OR IGNORE INTO monthly_reports(id,tenant_id,customer_id,period,version,status,snapshot_json,created_at,updated_at) VALUES (?,?,?,?,1,'草稿',?,?,?)").run(id(), tenantId, customer.id, period, JSON.stringify(report), now(), now())
   }
 }
 const reportView = (row, withSnapshot = true) => {
