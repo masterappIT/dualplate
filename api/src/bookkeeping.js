@@ -92,7 +92,8 @@ export async function bookkeepingRoutes(req, res, url, user, { json, fail, parse
   const bulkSetup = path === '/api/companies/filing-setup'
   const setupMatch = bulkSetup ? null : path.match(/^\/api\/companies\/([^/]+)\/filing-setup$/)
   if (!firmMatch && !filingMatch && !calendarMatch && !setupMatch && !bulkSetup) return false
-  if (user.role !== 'admin') return fail(res, 403, '報帳報稅只限管理者'), true
+  const staffRead = user.role === 'staff' && method === 'GET' && (path === '/api/filings' || path === '/api/filings/matrix') && url.searchParams.has('customerId') && Boolean(url.searchParams.get('customerId'))
+  if (user.role !== 'admin' && !staffRead) return fail(res, 403, '報帳報稅只限管理者'), true
 
   if (firmMatch) {
     const checkFirm = body => !isObject(body) ? '內容無效' : (body.name !== undefined || !firmMatch[1]) && (typeof body.name !== 'string' || !body.name.trim()) ? '請填寫會計公司名稱' : ['contact', 'phone', 'email', 'notes'].some(key => body[key] !== undefined && body[key] !== null && typeof body[key] !== 'string') ? '會計公司資料格式無效' : body.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email) ? '電郵格式無效' : null
@@ -163,6 +164,9 @@ export async function bookkeepingRoutes(req, res, url, user, { json, fail, parse
     return json(res, 200, { period, dueOn: body.dueOn, custom: true }), true
   }
 
+  if ((path === '/api/filings' || path === '/api/filings/matrix') && (url.searchParams.getAll('customerId').length > 1 || [...url.searchParams.keys()].some(key => key.startsWith('customerId[')))) return fail(res, 400, '客戶篩選無效'), true
+  const customerId = url.searchParams.get('customerId') || ''
+  if ((path === '/api/filings' || path === '/api/filings/matrix') && customerId && !db.prepare('SELECT id FROM customers WHERE id=? AND tenant_id=?').get(customerId, tenant)) return fail(res, 404, '找不到客戶'), true
   ensureFilings(tenant)
   if (filingMatch[1] === 'bulk') {
     if (method !== 'POST') return fail(res, 405, '不支援此操作'), true
@@ -191,7 +195,7 @@ export async function bookkeepingRoutes(req, res, url, user, { json, fail, parse
   if (!filingMatch[1]) {
     if (method !== 'GET') return fail(res, 405, '不支援此操作'), true
     const { period, companyId, firmId, status } = Object.fromEntries(url.searchParams)
-    let rows = db.prepare(`SELECT p.* FROM filing_periods p JOIN companies co ON co.id=p.company_id WHERE p.tenant_id=? ${period ? 'AND p.period=?' : ''} ${companyId ? 'AND p.company_id=?' : ''} ${firmId ? 'AND co.accounting_firm_id=?' : ''} ORDER BY p.period DESC, co.name`).all(tenant, ...[period, companyId, firmId].filter(Boolean)).map(filingView)
+    let rows = db.prepare(`SELECT p.* FROM filing_periods p JOIN companies co ON co.id=p.company_id WHERE p.tenant_id=? ${period ? 'AND p.period=?' : ''} ${companyId ? 'AND p.company_id=?' : ''} ${firmId ? 'AND co.accounting_firm_id=?' : ''} ${customerId ? 'AND co.customer_id=?' : ''} ORDER BY p.period DESC, co.name`).all(tenant, ...[period, companyId, firmId, customerId].filter(Boolean)).map(filingView)
     if (status === '需處理') rows = rows.filter(row => row.level === 'due'); else if (status === '已逾期') rows = rows.filter(row => row.level === 'overdue'); else if (status === '缺回執') rows = rows.filter(row => row.missingReceipt); else if (status) rows = rows.filter(row => row.status === status)
     return json(res, 200, rows), true
   }
@@ -200,8 +204,9 @@ export async function bookkeepingRoutes(req, res, url, user, { json, fail, parse
     const months = Number(url.searchParams.get('months') || 6)
     if (!Number.isInteger(months) || months < 1 || months > 24) return fail(res, 400, '月數須為 1–24'), true
     const current = today().slice(0, 7), columns = Array.from({ length: months }, (_, index) => addMonths(current, index - months + 1))
-    const companies = db.prepare("SELECT co.id, co.name, co.status, co.filing_cycle, c.name customer_name, f.name firm_name FROM companies co JOIN customers c ON c.id=co.customer_id LEFT JOIN accounting_firms f ON f.id=co.accounting_firm_id WHERE co.tenant_id=? AND co.jurisdiction='內地' AND co.id IN (SELECT company_id FROM filing_periods) ORDER BY c.name, co.name").all(tenant)
-    return json(res, 200, { months: columns, rows: companies.map(company => ({ companyId: company.id, companyName: company.name, customerName: company.customer_name, firmName: company.firm_name || '', filingCycle: company.filing_cycle, cells: columns.map(month => { const row = db.prepare('SELECT * FROM filing_periods WHERE company_id=? AND period=?').get(company.id, month); return row ? { filingId: row.id, period: month, status: filingStatus(row), level: filingLevel(row), missingReceipt: !row.closed_reason && Boolean(row.filed_on) && !hasReceipt(row.id) } : { period: month, status: null } }) })) }), true
+    const firmId = url.searchParams.get('firmId') || ''
+    const companies = db.prepare(`SELECT co.id, co.name, co.customer_id, co.status, co.filing_cycle, c.name customer_name, f.name firm_name FROM companies co JOIN customers c ON c.id=co.customer_id LEFT JOIN accounting_firms f ON f.id=co.accounting_firm_id WHERE co.tenant_id=? AND co.jurisdiction='內地' AND co.id IN (SELECT company_id FROM filing_periods) ${customerId ? 'AND co.customer_id=?' : ''} ${firmId ? 'AND co.accounting_firm_id=?' : ''} ORDER BY c.name, co.name`).all(tenant, ...[customerId, firmId].filter(Boolean))
+    return json(res, 200, { months: columns, rows: companies.map(company => ({ companyId: company.id, companyName: company.name, customerId: company.customer_id, customerName: company.customer_name, firmName: company.firm_name || '', filingCycle: company.filing_cycle, cells: columns.map(month => { const row = db.prepare('SELECT * FROM filing_periods WHERE company_id=? AND period=?').get(company.id, month); return row ? { filingId: row.id, period: month, status: filingStatus(row), level: filingLevel(row), missingReceipt: !row.closed_reason && Boolean(row.filed_on) && !hasReceipt(row.id) } : { period: month, status: null } }) })) }), true
   }
   const filing = db.prepare('SELECT * FROM filing_periods WHERE id=? AND tenant_id=?').get(filingMatch[1], tenant)
   if (!filing) return fail(res, 404, '報帳期數不存在'), true

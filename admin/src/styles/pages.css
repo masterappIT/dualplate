@@ -142,7 +142,8 @@ body { background: var(--canvas); color: var(--ink); font-family: var(--font-bod
 
 /* 報帳報稅：進度矩陣沿用委託矩陣的格線，公司欄放客戶與會計公司 */
 .filing-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.filing-head .select { min-width: 200px; max-width: 260px; }
+.filing-filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.filing-filters .select-trigger { width: 200px; max-width: 240px; }
 .filing-tabs { margin: 16px 0; }
 .filing-notice, .filing-actions, .filing-setup-batch { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .filing-notice { margin: 0 16px 16px; }
@@ -159,7 +160,10 @@ body { background: var(--canvas); color: var(--ink); font-family: var(--font-bod
 }
 .filing-matrix .scope-matrix-row { grid-template-columns: 240px repeat(var(--months, 6), minmax(92px, 1fr)); }
 .filing-matrix { min-width: 0; }
+.filing-customer-group { position: sticky; left: 0; z-index: 1; width: max-content; max-width: min(100%, 360px); padding: 8px 12px; background: var(--paper); font-weight: 700; }
 .filing-matrix .scope-matrix-row > div[role='cell'] { justify-content: center; }
+/* 狀態標籤保持一行（不拆字、不截斷）；窄螢幕欄寬不足時矩陣在框內左右捲動，公司欄固定在左 */
+.filing-matrix .tag { white-space: nowrap; }
 .filing-owner { flex-direction: column; align-items: flex-start !important; gap: 2px; }
 .filing-owner span, .cell-sub { color: var(--ink-2); font-size: 12px; }
 .filing-none { color: var(--ink-3); font-size: 12px; }
@@ -173,10 +177,14 @@ body { background: var(--canvas); color: var(--ink); font-family: var(--font-bod
 .filing-step.off { opacity: .55; }
 .filing-receipt { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .filing-receipt span { color: var(--ink-2); font-size: 13px; margin-right: auto; }
+.filing-date-row { display: flex; align-items: end; gap: 8px; }
+.filing-date-row .field { flex: 1; min-width: 0; display: grid; }
+.filing-date-row .btn, .filing-date-toggle .btn { justify-self: start; width: auto; }
+.filing-date-toggle { display: flex; justify-content: flex-start; }
 .firm-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
 .firm-add { margin-top: 16px; }
 .drawer-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
-@media (max-width: 720px) { .filing-matrix .scope-matrix-row { grid-template-columns: 116px repeat(var(--months, 3), minmax(68px, 1fr)); } .filing-head { flex-direction: column; } .filing-head .select { max-width: none; width: 100%; } .filing-actions { flex-wrap: wrap; } }
+@media (max-width: 720px) { .filing-matrix { min-width: max-content; } .filing-matrix .scope-matrix-row { grid-template-columns: 116px repeat(var(--months, 3), minmax(108px, 1fr)); } .filing-matrix .scope-matrix-row > div:first-child { position: sticky; left: 0; z-index: 1; background: var(--surface); } .filing-matrix .scope-matrix-head > div:first-child { background: var(--paper); } .filing-head { flex-direction: column; } .filing-filters { width: 100%; } .filing-filters .select-trigger { width: 160px; max-width: calc(50vw - 32px); } .filing-actions { flex-wrap: wrap; } }
 
 .hint { margin: 8px 0; color: var(--ink-2); font-size: 13px; }
 /* 月報：A4 證件感版面；列印時只留報告本身 */

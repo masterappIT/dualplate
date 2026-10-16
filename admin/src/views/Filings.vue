@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { api, user, privateFile, rentCents } from '../api'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -23,7 +23,7 @@ const emit = defineEmits(['saved', 'error'])
 const route = useRoute()
 const isAdmin = user()?.role === 'admin'
 const matrix = ref({ months: [], rows: [] }), filings = ref([]), firms = ref([]), loading = ref(true), loadError = ref('')
-const firmFilter = ref(''), focus = ref(''), tab = ref('work'), selected = ref([]), bulkAction = ref('docs_received'), bulkSaving = ref(false)
+const firmFilter = ref(''), customerFilter = ref(''), focus = ref(''), tab = ref('work'), selected = ref([]), bulkAction = ref('docs_received'), bulkSaving = ref(false)
 const setupOpen = ref(false), setupSelected = ref([]), setupFirm = ref(''), setupCycle = ref('monthly'), setupSaving = ref(false), setupError = ref(''), setupRows = ref([]), setupRowSaving = ref('')
 const claimOpen = ref(null), claimZero = ref(false), claimTax = ref(''), claimSaving = ref(false), claimError = ref('')
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Hong_Kong' }).format(new Date())
@@ -34,19 +34,25 @@ function cellTone(cell) { if (!cell?.status) return null; if (['公司已註銷'
 function cellText(cell) { if (cell.status === '公司已註銷') return '已註銷'; if (cell.status === '啟用前已處理') return cell.status; if (cell.level === 'overdue') return '已逾期'; if (cell.missingReceipt) return '缺回執'; return cell.status }
 function nextStep(row) { if (row.filedOn) return row.zeroFiling || row.paidOn ? null : steps[3]; if (row.sentToFirmOn) return steps[2]; if (row.docsReceivedOn) return steps[1]; return steps[0] }
 const firmOptions = computed(() => [{ label: '全部會計公司', value: '' }, ...firms.value.map(item => ({ label: item.name, value: item.id }))])
+const customerOptions = computed(() => [{ label: '全部客戶', value: '' }, ...[...new Map(filings.value.map(item => [item.customerId, item.customerName])).entries()].filter(([id]) => id).sort((a, b) => a[1].localeCompare(b[1], 'zh-Hant')).map(([value, label]) => ({ value, label }))])
 const setupFirmOptions = computed(() => [{ label: '未指定', value: '' }, ...firms.value.map(item => ({ label: item.name, value: item.id }))])
 const cycleOptions = [{ label: '每月', value: 'monthly' }, { label: '每季（小規模納稅人）', value: 'quarterly' }]
 const bulkCycleOptions = computed(() => setupSelected.value.some(id => setupRows.value.find(row => row.id === id)?.taxpayerType === '一般納稅人') ? [cycleOptions[0], { ...cycleOptions[1], disabled: true }] : cycleOptions)
-const filteredFilings = computed(() => filings.value.filter(item => !firmFilter.value || item.firmId === firmFilter.value))
+const filteredFilings = computed(() => filings.value.filter(item => (!firmFilter.value || item.firmId === firmFilter.value) && (!customerFilter.value || item.customerId === customerFilter.value)))
 const counts = computed(() => ({ due: filteredFilings.value.filter(item => item.level === 'due').length, overdue: filteredFilings.value.filter(item => item.level === 'overdue').length, receipt: filteredFilings.value.filter(item => item.missingReceipt).length, filed: filteredFilings.value.filter(item => item.period === today.slice(0, 7) && ['已申報', '已完成'].includes(item.status)).length }))
 const work = computed(() => filteredFilings.value.filter(item => !item.closedReason && item.status !== '已完成' && nextStep(item)).filter(item => focus.value === 'due' ? item.level === 'due' : focus.value === 'overdue' ? item.level === 'overdue' : focus.value === 'receipt' ? item.missingReceipt : true).sort((a, b) => a.dueOn.localeCompare(b.dueOn) || ({ overdue: 0, due: 1, upcoming: 2, ok: 3 })[a.level] - ({ overdue: 0, due: 1, upcoming: 2, ok: 3 })[b.level]))
 function stepTone(row) { return row.status === '未開始' ? 'neutral' : row.status === '已完成' ? 'ok' : 'info' }
 const unassigned = computed(() => matrix.value.rows.filter(row => !row.firmName).length)
-const rows = computed(() => matrix.value.rows.filter(row => (!firmFilter.value || firms.value.find(item => item.id === firmFilter.value)?.name === row.firmName) && (focus.value !== 'filed' || row.cells.some(cell => cell.period === today.slice(0, 7) && ['已申報', '已完成'].includes(cell.status)))))
+const rows = computed(() => matrix.value.rows.filter(row => (!firmFilter.value || firms.value.find(item => item.id === firmFilter.value)?.name === row.firmName) && (!customerFilter.value || row.customerId === customerFilter.value) && (focus.value !== 'filed' || row.cells.some(cell => cell.period === today.slice(0, 7) && ['已申報', '已完成'].includes(cell.status)))))
+const customerGroups = computed(() => { const groups = []; for (const row of rows.value) { let group = groups.find(item => item.id === row.customerId); if (!group) { group = { id: row.customerId, name: row.customerName, rows: [] }; groups.push(group) } group.rows.push(row) } return groups })
 watch(tab, value => { if (value === 'work' && focus.value === 'filed') focus.value = '' })
+watch([customerFilter, firmFilter, work], () => { const visible = new Set(work.value.map(row => row.id)); selected.value = selected.value.filter(id => visible.has(id)) })
 const narrow = ref(typeof window !== 'undefined' && window.innerWidth < 720)
 const trackedMonths = computed(() => { const months = matrix.value.months; const first = months.findIndex(month => matrix.value.rows.some(row => row.cells.some(cell => cell.period === month && cell.status))); return first < 0 ? months.slice(-1) : months.slice(first) })
 const shownMonths = computed(() => narrow.value ? trackedMonths.value.slice(-3) : trackedMonths.value)
+// 窄螢幕矩陣在框內左右捲動，打開時捲到最新月份
+const matrixScroll = ref(null)
+watch([tab, shownMonths, matrixScroll], () => nextTick(() => { if (narrow.value && matrixScroll.value) matrixScroll.value.scrollLeft = matrixScroll.value.scrollWidth }))
 const firstTracked = computed(() => matrix.value.rows.flatMap(row => row.cells).filter(cell => cell.status).map(cell => cell.period).sort()[0] || '')
 const columns = [{ key: 'company', title: '公司', minWidth: 200 }, { key: 'period', title: '期數' }, { key: 'status', title: '目前步驟' }, { key: 'dueOn', title: '截止', minWidth: 140 }, { key: 'action', title: '操作', minWidth: 210 }]
 const setupColumns = [{ key: 'company', title: '公司', minWidth: 160 }, { key: 'customer', title: '客戶' }, { key: 'firm', title: '會計公司', minWidth: 150 }, { key: 'cycle', title: '申報週期', minWidth: 140 }, { key: 'action', title: '操作' }]
@@ -56,10 +62,13 @@ async function load() {
   try {
     const [m, list, f] = await Promise.all([api('/filings/matrix?months=6'), api('/filings'), api('/accounting-firms')])
     matrix.value = m; filings.value = list; firms.value = f
+    const requested = String(route.query.customer || '')
+    if (requested && !customerFilter.value && customerOptions.value.some(option => option.value === requested)) customerFilter.value = requested
     selected.value = selected.value.filter(id => list.some(row => row.id === id))
   } catch (cause) { loadError.value = cause.message } finally { loading.value = false }
 }
 onMounted(async () => { await load(); if (route.query.filingId) openFiling(String(route.query.filingId)) })
+watch(() => route.query.customer, value => { customerFilter.value = customerOptions.value.some(option => option.value === value) ? String(value) : '' })
 function reportBulk(result) { const counts = Object.groupBy ? Object.groupBy(result.skipped, item => item.reason) : result.skipped.reduce((groups, item) => { (groups[item.reason] ||= []).push(item); return groups }, {}); const reasons = Object.entries(counts).map(([reason, items]) => `${reason} ${items.length} 期`).join('、'); emit('saved', `已更新 ${result.updated.length} 期，略過 ${result.skipped.length} 期${reasons ? `（${reasons}）` : ''}`) }
 async function bulk() {
   if (bulkSaving.value || !selected.value.length) return
@@ -151,7 +160,7 @@ const periodOptions = computed(() => { const [y, m] = today.split('-').map(Numbe
       </div>
       <div class="filing-tabs"><Segmented v-model="tab" :options="[{ label: '本月工作', value: 'work' }, { label: '歷史', value: 'history' }]" label="報帳分頁" /></div>
       <section v-if="tab === 'work'" class="panel table-panel">
-        <div class="panel-head filing-head"><div><h2>{{ focus === 'due' ? '需處理' : focus === 'overdue' ? '已逾期' : focus === 'receipt' ? '缺回執' : '本月工作' }}</h2><p>未完成期數按截止日排序；按「下一步」記錄今天的進度。</p></div><div class="period-pick"><Select v-model="firmFilter" :options="firmOptions" aria-label="按會計公司篩選" /></div></div>
+        <div class="panel-head filing-head"><div><h2>{{ focus === 'due' ? '需處理' : focus === 'overdue' ? '已逾期' : focus === 'receipt' ? '缺回執' : '本月工作' }}</h2><p>未完成期數按截止日排序；按「下一步」記錄今天的進度。</p></div><div class="filing-filters"><Select v-model="customerFilter" :options="customerOptions" label="按客戶篩選" filterable /><Select v-model="firmFilter" :options="firmOptions" label="按會計公司篩選" /></div></div>
         <div v-if="unassigned" class="filing-notice"><span>{{ unassigned }} 間內地公司未指定會計公司</span><Button variant="text" size="sm" @click="openSetup">設定</Button></div>
         <div v-if="focus" class="filing-filter-reset"><Button variant="text" size="sm" @click="focus = ''">顯示全部</Button></div>
         <DataTable v-model:selected="selected" :columns="columns" :data="work" :loading="loading" :selectable="true" :min-width="840">
@@ -164,13 +173,13 @@ const periodOptions = computed(() => { const [y, m] = today.split('-').map(Numbe
         </DataTable>
       </section>
       <section v-else class="panel">
-        <div class="panel-head filing-head"><div><h2>進度矩陣</h2><p>每列一間內地公司，每欄一個月；點格子打開該期。按季申報的公司只在季首月有格子。</p></div><div class="period-pick"><Select v-model="firmFilter" :options="firmOptions" aria-label="按會計公司篩選" /></div></div>
+        <div class="panel-head filing-head"><div><h2>進度矩陣</h2><p>每列一間內地公司，每欄一個月；點格子打開該期。按季申報的公司只在季首月有格子。</p></div><div class="filing-filters"><Select v-model="customerFilter" :options="customerOptions" label="按客戶篩選" filterable /><Select v-model="firmFilter" :options="firmOptions" label="按會計公司篩選" /></div></div>
         <div v-if="focus === 'filed'" class="filing-filter-reset"><Button variant="text" size="sm" @click="focus = ''">顯示全部</Button></div>
         <div v-if="loading" class="empty">載入中…</div>
         <EmptyState v-else-if="!rows.length" :title="focus === 'filed' ? '本月沒有已申報的報帳' : '還沒有報帳工作'" :desc="focus === 'filed' ? '可按「顯示全部」查看其他期數。' : '客戶名下有在營的內地公司，且報帳報稅不是客戶自理時，系統會自動生成每月工作。'" />
-        <div v-else class="scope-matrix-scroll"><div class="scope-matrix filing-matrix" role="table" aria-label="報帳進度矩陣" :style="{ '--months': shownMonths.length }">
+        <div v-else ref="matrixScroll" class="scope-matrix-scroll"><div class="scope-matrix filing-matrix" role="table" aria-label="報帳進度矩陣" :style="{ '--months': shownMonths.length }">
           <div class="scope-matrix-row scope-matrix-head" role="row"><div role="columnheader">公司</div><div v-for="month in shownMonths" :key="month" role="columnheader">{{ monthLabel(month) }}</div></div>
-          <div v-for="row in rows" :key="row.companyId" class="scope-matrix-row" role="row"><div class="filing-owner" role="rowheader"><strong>{{ row.companyName }}</strong><span>{{ row.customerName }}{{ row.firmName ? ' · ' + row.firmName : ' · 未指定會計公司' }}{{ row.filingCycle === 'quarterly' ? ' · 按季' : '' }}</span></div><div v-for="cell in row.cells.filter(item => shownMonths.includes(item.period))" :key="cell.period" role="cell"><button v-if="cell.status" type="button" class="scope-matrix-cell" :aria-label="`${row.companyName} ${cell.period}：${cellText(cell)}`" @click="openFiling(cell.filingId)"><Tag :tone="cellTone(cell)">{{ cellText(cell) }}</Tag></button><span v-else class="filing-none" :title="row.filingCycle === 'quarterly' ? '按季申報，這個月不需申報' : '這個月未有追蹤記錄'">{{ row.filingCycle === 'quarterly' && cell.period >= firstTracked ? '不需申報' : '—' }}</span></div></div>
+          <template v-for="group in customerGroups" :key="group.id"><div class="filing-customer-group">{{ group.name }} · {{ group.rows.length }} 間內地公司</div><div v-for="row in group.rows" :key="row.companyId" class="scope-matrix-row" role="row"><div class="filing-owner" role="rowheader"><strong>{{ row.companyName }}</strong><span>{{ row.firmName || '未指定會計公司' }}{{ row.filingCycle === 'quarterly' ? ' · 按季' : '' }}</span></div><div v-for="cell in row.cells.filter(item => shownMonths.includes(item.period))" :key="cell.period" role="cell"><button v-if="cell.status" type="button" class="scope-matrix-cell" :aria-label="`${row.companyName} ${cell.period}：${cellText(cell)}`" @click="openFiling(cell.filingId)"><Tag :tone="cellTone(cell)">{{ cellText(cell) }}</Tag></button><span v-else class="filing-none" :title="row.filingCycle === 'quarterly' ? '按季申報，這個月不需申報' : '這個月未有追蹤記錄'">{{ row.filingCycle === 'quarterly' && cell.period >= firstTracked ? '不需申報' : '—' }}</span></div></div></template>
         </div></div>
       </section>
     </template>
@@ -183,10 +192,10 @@ const periodOptions = computed(() => { const [y, m] = today.split('-').map(Numbe
         <p v-if="current.status === '公司已註銷'" class="hint">公司已註銷，這期不再處理。</p>
         <div v-if="current.closedReason === 'pre_system'" class="filing-notice"><span>系統啟用前已處理</span><Button variant="text" size="sm" :loading="saving" @click="cancelPreSystem">取消標記</Button></div>
         <div class="filing-steps"><div v-for="([key, label], index) in steps.filter(([key]) => key !== 'paidOn' || !form.zeroFiling)" :key="key" class="filing-step" :class="{ done: current[key], current: currentStep?.[0] === key }"><span class="filing-step-name"><span class="filing-step-mark" aria-hidden="true">{{ current[key] ? '✓' : index + 1 }}</span>{{ label }}</span><span class="cell-sub">{{ current[key] || (currentStep?.[0] === key ? '目前步驟' : '尚未記錄') }}</span></div></div>
-        <template v-if="!current.closedReason && currentStep"><Field :label="`${currentStep[1]}日期`"><DateInput v-model="form[currentStep[0]]" :label="`${currentStep[1]}日期`" /><Button variant="text" size="sm" @click="form[currentStep[0]] = today">今天</Button></Field><template v-if="currentStep[0] === 'filedOn'"><Field label="申報類型"><Segmented v-model="form.zeroFiling" :options="[{ label: '正常申報', value: false }, { label: '零申報', value: true }]" label="申報類型" /></Field><Field v-if="!form.zeroFiling" label="稅額（人民幣元）"><TextInput v-model="form.tax" placeholder="例如 356.00" /></Field></template></template>
-        <Button v-if="!current.closedReason" variant="text" size="sm" @click="editDates = !editDates">{{ editDates ? '收起日期' : '修改已記錄的日期' }}</Button>
+        <template v-if="!current.closedReason && currentStep"><div class="filing-date-row"><Field :label="`${currentStep[1]}日期`"><DateInput v-model="form[currentStep[0]]" :label="`${currentStep[1]}日期`" /></Field><Button variant="text" size="sm" @click="form[currentStep[0]] = today">今天</Button></div><template v-if="currentStep[0] === 'filedOn'"><Field label="申報類型"><Segmented v-model="form.zeroFiling" :options="[{ label: '正常申報', value: false }, { label: '零申報', value: true }]" label="申報類型" /></Field><Field v-if="!form.zeroFiling" label="稅額（人民幣元）"><TextInput v-model="form.tax" placeholder="例如 356.00" /></Field></template></template>
+        <div v-if="!current.closedReason" class="filing-date-toggle"><Button variant="text" size="sm" @click="editDates = !editDates">{{ editDates ? '收起日期' : '修改已記錄的日期' }}</Button></div>
         <div v-if="editDates" class="form-grid"><Field v-for="([key, label]) in steps" :key="key" :label="`${label}日期`"><DateInput v-model="form[key]" :label="`${label}日期`" :disabled="key === 'paidOn' && form.zeroFiling" /></Field></div>
-        <Field v-if="current.filedOn || form.filedOn" label="回執"><div class="filing-receipt"><span>{{ current.hasReceipt ? '已上傳回執' : '已申報，尚未上傳回執' }}</span><Button v-if="current.hasReceipt" variant="text" size="sm" @click="viewReceipt">查看</Button><Button size="sm" @click="fileInput.click()">{{ current.hasReceipt ? '重新上傳' : '上傳回執' }}</Button><input ref="fileInput" type="file" accept="image/png,image/jpeg,application/pdf" hidden @change="uploadReceipt" /></div></Field>
+        <Field v-if="current.filedOn" label="回執"><div class="filing-receipt"><span>{{ current.hasReceipt ? '已上傳回執' : '已申報，尚未上傳回執' }}</span><Button v-if="current.hasReceipt" variant="text" size="sm" @click="viewReceipt">查看</Button><Button size="sm" @click="fileInput.click()">{{ current.hasReceipt ? '重新上傳' : '上傳回執' }}</Button><input ref="fileInput" type="file" accept="image/png,image/jpeg,application/pdf" hidden @change="uploadReceipt" /></div></Field>
         <Field v-if="!current.closedReason" label="備註（只有員工看得到）"><TextInput v-model="form.notes" multiline /></Field><p v-if="dialogError" class="error" role="alert">{{ dialogError }}</p>
       </template>
     </FormDialog>
