@@ -2,6 +2,22 @@
 
 先讀 `AGENTS.md`；需求背景見 `docs/requirements.md` §5.3。
 
+**分工（2026-10-16）**：**後端與 21 項測試已由負責人完成**（`api/src/bookkeeping.js`、`api/test/bookkeeping.test.js`，提交 ac12bec）；客戶端由負責人做。**你（Codex）只做第 5 節管理端**，不改 `api/`、`mobile/`。
+
+### 可用的 API（只限管理者；員工、客戶 403；跨租戶 404）
+
+| 用途 | 請求 | 說明 |
+|---|---|---|
+| 會計公司 | `GET/POST /api/accounting-firms`、`PATCH /api/accounting-firms/:id {name,contact,phone,email,notes}` | 列表帶 `companies`（指派數） |
+| 公司報帳設定 | `PUT /api/companies/:id/filing-setup {accountingFirmId?, filingCycle?:'monthly'|'quarterly'}` | 只限內地公司；一般納稅人不可按季。放在公司編輯彈窗內（內地公司才顯示） |
+| 報帳列表 | `GET /api/filings?period=&companyId=&firmId=&status=`（`status` 可為 需處理／已逾期／缺回執 或狀態名） | `[{id,companyId,companyName,customerName,firmName,taxpayerType,filingCycle,period,dueOn,docsReceivedOn,sentToFirmOn,filedOn,paidOn,taxAmount,zeroFiling,notes,status,level,hasReceipt,missingReceipt}]`；`status`：未開始／資料已收／會計處理中／已申報／已完成／公司已註銷 |
+| 更新一期 | `PATCH /api/filings/:id {docsReceivedOn?,sentToFirmOn?,filedOn?,paidOn?,taxAmount?,zeroFiling?,notes?}` | 日期不能早於前一步；零申報不記繳款；已註銷 409 |
+| 回執 | `POST /api/filings/:id/receipt {data: base64}`、`GET /api/filings/:id/receipt` | JPG/PNG/PDF ≤ 5 MB |
+| 矩陣 | `GET /api/filings/matrix?months=6` | `{months:[YYYY-MM], rows:[{companyId,companyName,customerName,firmName,filingCycle,cells:[{filingId?,period,status,level,missingReceipt}]}]}`；`status` 為 null 表示該月不需申報（按季） |
+| 截止日 | `GET/PUT /api/filing-calendar/:period {dueOn}` | 預設次月 15 日；修改後未申報的期數跟隨 |
+
+今日工作的到期列表已包含報帳項目（`ruleCode='monthly_filing'`、`method='filing'`、帶 `filingId`）：**不可顯示「標記完成」**，改為打開該期詳情。
+
 ## 業務規則（管理者已確認）
 
 - 客戶名下每間內地公司每月要做帳和申報稅務
@@ -49,10 +65,10 @@
 
 由負責人親自接上（你不要改 `mobile/`），你只需提供 `/api/my/filings`。
 
-## 7. 測試
+## 7. 測試（後端已完成）
 
-具名、一情況一測試：生成冪等；按季只在季首月；已註銷公司不再生成；狀態推算；零申報；截止前 5 天需處理、逾期；缺回執；自訂截止日生效；矩陣內容；回執上傳格式與大小；客戶只看到自己的公司且不含內部資料；跨租戶 404；客戶呼叫管理接口 403。
+你只需確保 `cd api && npm test`（不少於 343 項）、`cd admin && npm run check`、`cd admin && npm run build` 全過，截 1366／390（彈窗用點擊欄）。後端已覆蓋：生成冪等；按季只在季首月；已註銷公司不再生成；狀態推算；零申報；截止前 5 天需處理、逾期；缺回執；自訂截止日生效；矩陣內容；回執上傳格式與大小；客戶只看到自己的公司且不含內部資料；跨租戶 404；客戶呼叫管理接口 403。
 
 ## 限制
 
-遵守 `AGENTS.md`。不新增依賴；回執檔案存資料庫（與現有圖片相同方式）。
+遵守 `AGENTS.md`。不新增依賴；不改 `api/`、`mobile/`。
