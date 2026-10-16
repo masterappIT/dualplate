@@ -85,13 +85,21 @@ export async function customerRoutes(req, res, url, user, h) {
     }
   }
 
+  // 步驟名稱是內部用語（例如「各證件有效期核對」）時，改為告訴客戶要交甚麼
+  const clientTodoTitle = (title, documentsJson) => {
+    const text = String(title || '').replace(/^客戶/, '')
+    if (/^(提供|上傳|簽|確認|填)/.test(text)) return text
+    let documents = []
+    try { documents = JSON.parse(documentsJson || '[]').filter(Boolean) } catch {}
+    return documents.length ? `請提供：${documents.join('、')}` : text
+  }
   if (path === '/api/my/overview') {
     const all = deadlines()
     const summaries = plates.map(plate => plateSummary(plate, all))
     const requests = query('SELECT r.id,r.title,r.status,r.stage,r.route,r.updated_at,r.plate_asset_id,p.mainland_plate FROM requests r LEFT JOIN plate_assets p ON p.id=r.plate_asset_id WHERE r.customer_id=? ORDER BY r.updated_at DESC', customer.id)
-    const waiting = query("SELECT t.id,t.title,t.request_id,r.title request_title,p.mainland_plate FROM tasks t JOIN requests r ON r.id=t.request_id LEFT JOIN plate_assets p ON p.id=r.plate_asset_id WHERE r.customer_id=? AND r.status NOT IN ('已完成','已取消') AND ((t.owner='client' AND t.status NOT IN ('已完成','不適用')) OR t.status='待客戶配合') ORDER BY r.updated_at DESC", customer.id)
+    const waiting = query("SELECT t.id,t.title,t.documents_json,t.request_id,r.title request_title,p.mainland_plate FROM tasks t JOIN requests r ON r.id=t.request_id LEFT JOIN plate_assets p ON p.id=r.plate_asset_id WHERE r.customer_id=? AND r.status NOT IN ('已完成','已取消') AND ((t.owner='client' AND t.status NOT IN ('已完成','不適用')) OR t.status='待客戶配合') ORDER BY r.updated_at DESC", customer.id)
     const todos = [
-      ...waiting.map(item => ({ kind: 'task', requestId: item.request_id, title: item.title, subtitle: [item.mainland_plate, item.request_title].filter(Boolean).join(' · ') })),
+      ...waiting.map(item => ({ kind: 'task', requestId: item.request_id, title: clientTodoTitle(item.title, item.documents_json), subtitle: [item.mainland_plate, item.request_title].filter(Boolean).join(' · ') })),
       ...requests.filter(item => item.status === '待客戶配合' && !waiting.some(task => task.request_id === item.id)).map(item => ({ kind: 'request', requestId: item.id, title: item.stage, subtitle: [item.mainland_plate, item.title].filter(Boolean).join(' · ') }))
     ]
     deadlineNotices(customer, visible(all))

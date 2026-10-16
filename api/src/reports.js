@@ -23,7 +23,7 @@ export function computeReport(tenantId, customerId, period) {
   // 1. 本月完成的工作
   const completed = db.prepare("SELECT r.id, r.title, r.service_code, r.completed_at, p.mainland_plate, p.local_plate FROM requests r LEFT JOIN plate_assets p ON p.id=r.plate_asset_id WHERE r.customer_id=? AND r.status='已完成' ORDER BY r.completed_at").all(customerId)
     .filter(row => inMonth(row.completed_at, period)).map(row => ({ title: row.title, service: services.find(item => item.code === row.service_code)?.name || row.title, plate: [row.mainland_plate, row.local_plate].filter(Boolean).join(' · '), completedOn: row.completed_at.slice(0, 10) }))
-  // 2. 未來 60 天到期（只列客戶看得到的規則；委託客戶自理的標「請你處理」）
+  // 2. 已逾期及 60 天內到期（只列客戶看得到的規則；委託客戶自理的標「請你處理」）
   const { owners } = deadlineOwners(tenantId)
   const rules = db.prepare('SELECT * FROM rules WHERE tenant_id=? AND active=1 AND customer_visible=1').all(tenantId).map(rule => ({ ...rule, match: JSON.parse(rule.match_json), params: JSON.parse(rule.params_json), remindDays: rule.remind_days }))
   const tracked = new Map(db.prepare('SELECT * FROM tracked_items WHERE tenant_id=?').all(tenantId).map(item => [`${item.owner_type}:${item.owner_id}:${item.code}`, item]))

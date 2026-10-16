@@ -75,9 +75,9 @@ function print() { window.print() }
       <section class="report-section"><h2>一、本月完成的工作 <small>{{ report.completed.length }} 項</small></h2>
         <table v-if="report.completed.length" class="report-table"><thead><tr><th>業務</th><th>牌照</th><th>結案日</th></tr></thead><tbody><tr v-for="(item, index) in report.completed" :key="index"><td>{{ item.service }}</td><td>{{ item.plate || '—' }}</td><td class="num">{{ item.completedOn }}</td></tr></tbody></table>
         <p v-else class="report-muted">本月沒有結案的工單。</p></section>
-      <section class="report-section"><h2>二、未來 60 天到期 <small>{{ report.upcoming.length }} 項</small></h2>
+      <section class="report-section"><h2>二、已逾期及 60 天內到期 <small>{{ report.upcoming.length }} 項</small></h2>
         <table v-if="report.upcoming.length" class="report-table"><thead><tr><th>事項</th><th>對象</th><th>辦理</th><th>到期</th></tr></thead><tbody><tr v-for="(item, index) in report.upcoming" :key="index"><td>{{ item.name }}</td><td>{{ item.owner }}</td><td><Tag :tone="item.handledBy === 'you' ? 'warning' : 'ok'">{{ item.handledBy === 'you' ? '請你處理' : '我們辦理' }}</Tag></td><td><DueDate :date="item.dueOn" /></td></tr></tbody></table>
-        <p v-else class="report-muted">未來 60 天沒有到期事項。</p></section>
+        <p v-else class="report-muted">沒有已逾期或 60 天內到期的事項。</p></section>
       <section class="report-section"><h2>三、車輛使用與使用費</h2>
         <table v-if="report.usage.items.length" class="report-table"><thead><tr><th>牌照</th><th>使用人</th><th>收款</th><th class="n">金額</th><th>狀態</th></tr></thead><tbody><tr v-for="(item, index) in report.usage.items" :key="index"><td>{{ item.plate }}</td><td>{{ item.user }}</td><td>{{ item.collectedByUs ? '我們代收' : '直接付給客戶' }}</td><td class="n num">{{ item.currency }} {{ money(item.amount) }}</td><td>{{ statusWord(item.status) }}</td></tr></tbody></table>
         <p v-else class="report-muted">本月沒有車輛使用安排。</p></section>

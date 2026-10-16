@@ -360,14 +360,33 @@ async function refresh() {
     sources.value = cat.sources;
     requestDetails.value = await Promise.all(r.map((item) => api("/requests/" + item.id)));
     error.value = "";
+    retryDelay = 5000;
   } catch (e) {
     if (e.status === 401) {
       clear();
       account.value = null;
       error.value = "登入已失效，請重新登入";
       router.replace({ path: '/login', query: { redirect: router.currentRoute.value.fullPath } });
-    } else error.value = e.message;
+    } else {
+      error.value = e.message;
+      if (e.network || e.status >= 500) scheduleRetry();
+    }
   }
+}
+// 網絡中斷或伺服器重啟時，逐步延長間隔自動重試；恢復連線或回到頁面時立即重試
+let retryTimer = null, retryDelay = 5000;
+function scheduleRetry() {
+  if (retryTimer) return;
+  retryTimer = setTimeout(() => { retryTimer = null; refresh(); }, retryDelay);
+  retryDelay = Math.min(retryDelay * 2, 60000);
+}
+function retryNow() {
+  if (!retryTimer || !account.value) return;
+  clearTimeout(retryTimer); retryTimer = null; refresh();
+}
+if (typeof window !== "undefined") {
+  window.addEventListener("online", retryNow);
+  window.addEventListener("focus", retryNow);
 }
 async function login(options = {}) {
   if (loggingIn.value) return false;

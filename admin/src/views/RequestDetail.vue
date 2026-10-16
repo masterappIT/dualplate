@@ -56,6 +56,7 @@
             >
           </div>
           <select
+            :aria-label="task.title + '：狀態'"
             :value="task.status"
             @change="updateTask(task, $event.target.value)"
           >

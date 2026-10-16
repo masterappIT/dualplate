@@ -39,7 +39,7 @@ const columns = [{ key: 'customerName', title: '客戶', minWidth: 180 }, { key:
       <StatCard label="已發給客戶" :value="counts.confirmed" hint="客戶端可查看" tone="ok" :active="status === '已確認'" @click="status = status === '已確認' ? '' : '已確認'" />
     </div>
     <section class="panel table-panel">
-      <div class="panel-head filing-head"><div><h2>報告</h2><p>點「打開」查看完整報告並確認。</p></div><div class="report-filters"><Select v-model="period" :options="periodOptions" aria-label="按月份篩選" /><Select v-model="status" :options="statusOptions" aria-label="按狀態篩選" /></div></div>
+      <div class="panel-head filing-head"><div><h2>報告</h2><p>點「打開」查看完整報告並確認。</p></div><div class="report-filters"><Select v-model="period" label="按月份篩選" :options="periodOptions" aria-label="按月份篩選" /><Select v-model="status" label="按狀態篩選" :options="statusOptions" aria-label="按狀態篩選" /></div></div>
       <DataTable :columns="columns" :data="shown" :loading="loading" :min-width="720">
         <template #cell-customerName="{ row }"><strong>{{ row.customerName }}</strong></template>
         <template #cell-period="{ row }">{{ row.period }}<span v-if="row.version > 1" class="cell-sub"> · 第 {{ row.version }} 版</span></template>

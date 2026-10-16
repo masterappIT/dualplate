@@ -94,6 +94,28 @@ test('overview lists tasks waiting for the customer as to-dos', async () => {
   assert.deepEqual(body.todos.map(item => item.title), ['提供新車保險單'])
 })
 
+test('to-do for an internal step asked of the customer names the documents, not the internal step', async () => {
+  const requestId = db.prepare("SELECT id FROM requests WHERE customer_id=? AND title='換車'").get(ids.customerA).id
+  const taskId = randomUUID()
+  db.prepare("INSERT INTO tasks(id,request_id,title,jurisdiction,status,owner,documents_json) VALUES (?,?,?,?,'待辦','client',?)").run(taskId, requestId, '各證件有效期核對', '通用', JSON.stringify(['香港身份證副本', '車輛登記文件']))
+  try {
+    const { body } = await request('/my/overview', tokens.a)
+    const titles = body.todos.map(item => item.title)
+    assert.ok(titles.includes('請提供：香港身份證副本、車輛登記文件'), titles.join(' / '))
+    assert.ok(!titles.includes('各證件有效期核對'))
+  } finally { db.prepare('DELETE FROM tasks WHERE id=?').run(taskId) }
+})
+
+test('to-do keeps a customer step title that already says what to do, without the 客戶 prefix', async () => {
+  const requestId = db.prepare("SELECT id FROM requests WHERE customer_id=? AND title='換車'").get(ids.customerA).id
+  const taskId = randomUUID()
+  db.prepare("INSERT INTO tasks(id,request_id,title,jurisdiction,status,owner,documents_json) VALUES (?,?,?,?,'待辦','client',?)").run(taskId, requestId, '客戶提供身份證及車輛登記文件', '通用', JSON.stringify(['香港身份證副本']))
+  try {
+    const { body } = await request('/my/overview', tokens.a)
+    assert.ok(body.todos.some(item => item.title === '提供身份證及車輛登記文件'))
+  } finally { db.prepare('DELETE FROM tasks WHERE id=?').run(taskId) }
+})
+
 test('plate summary carries holder, contractor, rental and vehicle deadlines', async () => {
   const { status, body } = await request(`/my/plates/${ids.plateA}`, tokens.a)
   assert.equal(status, 200)

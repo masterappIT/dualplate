@@ -43,7 +43,7 @@ function go(value: number) {
     <div class="pager-info">共 <b class="tnum">{{ total }}</b> 筆<template v-if="total">，目前 <b class="tnum">{{ start }}–{{ end }}</b></template></div>
     <div class="pager-ctrl">
       <div class="pager-size">
-        <Select :model-value="pageSize" :options="sizeOptions" @update:model-value="emit('update:pageSize', Number($event))" />
+        <Select label="每頁筆數" :model-value="pageSize" :options="sizeOptions" @update:model-value="emit('update:pageSize', Number($event))" />
       </div>
       <button type="button" class="pg-btn" :disabled="page <= 1" aria-label="上一頁" @click="go(page - 1)">
         <Icon name="chevronLeft" :size="15" />

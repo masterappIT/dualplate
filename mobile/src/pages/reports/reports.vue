@@ -18,8 +18,8 @@
       </view>
       <text class="section-title">本月辦好的事 · {{ current.report.completed.length }}</text>
       <view class="card"><view v-for="(c, i) in current.report.completed" :key="i" class="line"><view class="grow"><text class="line-title">{{ c.service }}</text><text class="line-sub">{{ c.plate || c.title }}</text></view><text class="line-sub num">{{ c.completedOn }}</text></view><text v-if="!current.report.completed.length" class="subtle">本月沒有結案的工單</text></view>
-      <text class="section-title">未來 60 天到期 · {{ current.report.upcoming.length }}</text>
-      <view class="card"><view v-for="(u, i) in current.report.upcoming" :key="i" class="line"><view class="grow"><text class="line-title">{{ u.name }}</text><text v-if="u.handledBy === 'you'" class="who you">請你處理</text><text class="line-sub">{{ u.owner }}</text></view><DueDate :date="u.dueOn" :days="u.daysLeft" :level="u.level" /></view><text v-if="!current.report.upcoming.length" class="subtle">未來 60 天沒有到期事項</text></view>
+      <text class="section-title">已逾期及 60 天內到期 · {{ current.report.upcoming.length }}</text>
+      <view class="card"><view v-for="(u, i) in current.report.upcoming" :key="i" class="line"><view class="grow"><text class="line-title">{{ u.name }}</text><text v-if="u.handledBy === 'you'" class="who you">請你處理</text><text class="line-sub">{{ u.owner }}</text></view><DueDate :date="u.dueOn" :days="u.daysLeft" :level="u.level" /></view><text v-if="!current.report.upcoming.length" class="subtle">沒有已逾期或 60 天內到期的事項</text></view>
       <view v-if="current.report.usage.items.length"><text class="section-title">車輛使用與使用費</text>
         <view class="card"><view v-for="(u, i) in current.report.usage.items" :key="i" class="line"><view class="grow"><text class="line-title">{{ u.plate }}</text><text class="line-sub">使用人 {{ u.user }} · {{ u.collectedByUs ? '由我們代收' : '直接付給你' }}</text></view><view class="right"><text class="num line-title">{{ u.currency }} {{ money(u.amount) }}</text><text class="line-sub">{{ u.status === '已收' ? '已收到' : u.status === '部分收' ? '部分收到' : '未收到' }}</text></view></view></view>
       </view>

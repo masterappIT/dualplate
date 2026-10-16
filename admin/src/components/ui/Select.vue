@@ -25,6 +25,8 @@ const props = withDefaults(defineProps<{
   disabled?: boolean
   invalid?: boolean
   emptyText?: string
+  /** 不在 Field 內使用時，供讀屏軟件讀出的名稱 */
+  label?: string
 }>(), {
   placeholder: '請選擇',
   emptyText: '沒有符合的選項',
@@ -143,6 +145,7 @@ onBeforeUnmount(() => hide())
     aria-haspopup="listbox"
     :aria-expanded="open"
     :aria-controls="listId"
+    :aria-label="label || undefined"
     @click="open ? hide() : show()"
     @keydown="onKey"
   >

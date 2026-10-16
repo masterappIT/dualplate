@@ -62,6 +62,7 @@
           >
         </div>
         <select
+          aria-label="驗車狀態"
           :value="i.status"
           @change="updateInspection(i, $event.target.value)"
         >

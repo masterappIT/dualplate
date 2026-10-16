@@ -11,7 +11,7 @@ export function api(path, method = 'GET', data) {
         if (response.statusCode >= 200 && response.statusCode < 300) return resolve(response.data)
         if (response.statusCode === 401 && path !== '/login' && !path.startsWith('/wechat/')) { clearSession(); uni.navigateTo({ url: '/pages/login/login' }) }
         reject(Object.assign(new Error(response.data?.error || '操作失敗'), { status: response.statusCode, data: response.data }))
-      }, fail(error) { reject(new Error(error.errMsg || '網絡連接失敗')) }
+      }, fail(error) { reject(new Error('連不上伺服器，請檢查網絡後再試')) }
     })
   })
 }
@@ -33,7 +33,7 @@ export function privateImage(path) {
         const contentType = response.header?.['content-type'] || response.header?.['Content-Type'] || 'image/png'
         const encoded = uni.arrayBufferToBase64(response.data)
         resolve(`data:${contentType};base64,${encoded}`)
-      }, fail(error) { reject(new Error(error.errMsg || '圖片載入失敗')) }
+      }, fail(error) { reject(new Error('圖片載入失敗，請檢查網絡後再試')) }
     })
   })
 }
