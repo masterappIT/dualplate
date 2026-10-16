@@ -1,6 +1,7 @@
 import { db, id, now, hashPassword } from './db.js'
 import { services, planFor } from './catalog.js'
 import { notify } from './client-portal.js'
+import { passwordProblem } from './security.js'
 import { checkRequestFees, recordRequestFees, expectedFees } from './fees.js'
 
 const statuses = ['待開始', '進行中', '待客戶提供', '已完成', '已取消']
@@ -102,7 +103,8 @@ export async function workOrderRoutes(req, res, url, user, h) {
   if (staffCollection && method === 'POST') {
     if (!canManage(user)) return fail(res, 403, '無權限'), true
     const body = await parseBody(req)
-    if (!isObject(body) || typeof body.name !== 'string' || !body.name.trim() || typeof body.username !== 'string' || !/^[a-z][a-z0-9._-]{2,31}$/.test(body.username.trim().toLowerCase()) || typeof body.password !== 'string' || body.password.length < 8) return fail(res, 400, '員工姓名、帳號和最少 8 字元密碼不可為空'), true
+    if (!isObject(body) || typeof body.name !== 'string' || !body.name.trim() || typeof body.username !== 'string' || !/^[a-z][a-z0-9._-]{2,31}$/.test(body.username.trim().toLowerCase()) || typeof body.password !== 'string') return fail(res, 400, '員工姓名、帳號和密碼不可為空'), true
+    { const problem = passwordProblem(body.password, { username: body.username.trim() }); if (problem) return fail(res, 400, problem), true }
     if (body.role !== undefined && !['admin', 'staff'].includes(body.role)) return fail(res, 400, '員工角色無效'), true
     if (db.prepare('SELECT id FROM users WHERE username=? COLLATE NOCASE').get(body.username.trim()) || db.prepare('SELECT id FROM users WHERE email=?').get(`${body.username.trim().toLowerCase()}@internal.invalid`)) return fail(res, 409, '員工帳號已存在'), true
     const staffId = id(), username = body.username.trim().toLowerCase()
@@ -116,7 +118,7 @@ export async function workOrderRoutes(req, res, url, user, h) {
   if (userMatch && userMatch[2] === 'reset-password' && method === 'POST') {
     if (!canManage(user)) return fail(res, 403, '無權限'), true
     const target = staffUser(tenant, userMatch[1], true); if (!target) return fail(res, 404, '員工不存在'), true
-    const body = await parseBody(req); if (!isObject(body) || typeof body.password !== 'string' || body.password.length < 8) return fail(res, 400, '密碼至少 8 字元'), true
+    const body = await parseBody(req); if (!isObject(body) || passwordProblem(body.password, target)) return fail(res, 400, passwordProblem(body?.password, target) || '密碼無效'), true
     db.prepare('UPDATE users SET password_hash=? WHERE id=? AND tenant_id=?').run(hashPassword(body.password), target.id, tenant)
     db.prepare('DELETE FROM sessions WHERE user_id=?').run(target.id)
     return json(res, 200, { ok: true }), true

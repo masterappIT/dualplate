@@ -130,6 +130,8 @@ CREATE INDEX IF NOT EXISTS idx_companies_group ON companies(group_id);
 CREATE INDEX IF NOT EXISTS idx_tracked_items_tenant ON tracked_items(tenant_id);`)
 const addColumn = (table, column, definition) => { if (!db.prepare(`PRAGMA table_info(${table})`).all().some(x => x.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`) }
 addColumn('users', 'tenant_id', 'TEXT')
+// 會話最近使用時間：閒置 7 天失效（docs/tasks/production-brief.md 第 2 節）
+addColumn('sessions', 'last_seen_at', 'TEXT')
 addColumn('customers', 'tenant_id', 'TEXT')
 addColumn('plate_assets', 'group_id', 'TEXT REFERENCES company_groups(id)')
 addColumn('plate_assets', 'indicator_category', 'TEXT')

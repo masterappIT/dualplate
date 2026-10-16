@@ -11,3 +11,5 @@ api/data/
 
 api/test/fixtures/cards/
 .review/
+
+api/logs/

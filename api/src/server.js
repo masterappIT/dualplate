@@ -18,12 +18,13 @@ import { rentalRoutes, legacyStart, legacyEnd, activeContract } from './rentals.
 import { feeRoutes } from './fees.js'
 import { bookkeepingRoutes } from './bookkeeping.js'
 import { reportRoutes } from './reports.js'
+import { passwordProblem, authenticate, createSession, lockedMinutes, recordFailure, clearFailures, clientIp, audit, auditRoutes, logError, health } from './security.js'
 
 const port = Number(process.env.PORT || 4100)
 const allowedOrigins = new Set((process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174').split(','))
 const json = (res, status, value) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(value)) }
 const fail = (res, status, message) => json(res, status, { error: message })
-const parseBody = async req => { let raw = ''; for await (const chunk of req) { raw += chunk; if (raw.length > 12000000) throw new Error('請求內容過大') } if (!raw) return {}; const body = JSON.parse(raw); if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('請求內容格式錯誤'); return body }
+const parseBody = async req => { let raw = ''; for await (const chunk of req) { raw += chunk; if (raw.length > 12000000) throw new Error('請求內容過大') } if (!raw) return {}; const body = JSON.parse(raw); if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('請求內容格式錯誤'); req.parsedBody = body; return body }
 const required = (body, keys) => keys.every(key => typeof body[key] === 'string' && body[key].trim())
 const clean = (value, max = 500) => String(value ?? '').trim().slice(0, max)
 const query = (sql, ...params) => db.prepare(sql).all(...params)
@@ -51,9 +52,7 @@ const importCompanyGroup = (customerId, route, hongKongOrMacau, mainland) => {
 const importPreviews = new Map()
 
 function auth(req) {
-  const token = (req.headers.authorization || '').replace(/^Bearer /, '')
-  if (!token) return null
-  return one('SELECT u.id,u.role,u.name,u.email,u.customer_id,u.tenant_id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires_at>? AND u.active=1', token, now())
+  return authenticate((req.headers.authorization || '').replace(/^Bearer /, ''))
 }
 // Every customer belongs to one tenant; admins see their tenant only, customers see themselves only.
 function canAccessCustomer(user, customerId) {
@@ -112,17 +111,18 @@ export const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`)
   const path = url.pathname
   try {
-    if (path === '/api/health') return json(res, 200, { ok: true })
+    if (path === '/api/health') { const status = health(); return json(res, status.ok ? 200 : 503, status) }
     if (path === '/api/admin/login' && req.method === 'POST') {
       const body = await parseBody(req)
       const username = clean(body.username, 64).toLowerCase()
       const password = String(body.password || '')
       if (!username || !password) return fail(res, 400, '請輸入管理員帳號和密碼')
+      const ip = clientIp(req), wait = lockedMinutes('staff', username, ip)
+      if (wait) return fail(res, 429, `登入失敗次數過多，請 ${wait} 分鐘後再試`)
       const account = one("SELECT * FROM users WHERE role IN ('admin','staff') AND active=1 AND username=? COLLATE NOCASE", username)
-      if (!account || !verifyPassword(password, account.password_hash)) return fail(res, 401, '帳號或密碼不正確')
-      const token = randomBytes(32).toString('hex')
-      const expires = new Date(Date.now() + 7 * 86400000).toISOString()
-      db.prepare('INSERT INTO sessions VALUES (?,?,?)').run(token, account.id, expires)
+      if (!account || !verifyPassword(password, account.password_hash)) { recordFailure('staff', username, ip); return fail(res, 401, '帳號或密碼不正確') }
+      clearFailures('staff', username)
+      const token = createSession(account.id)
       db.prepare('UPDATE users SET last_login_at=? WHERE id=?').run(now(), account.id)
       return json(res, 200, { token, user: { id: account.id, name: account.name, username: account.username, role: account.role } })
     }
@@ -131,16 +131,19 @@ export const server = http.createServer(async (req, res) => {
       // 客戶可用電郵或手機號碼登入（第 15 輪）
       const login = clean(body.email ?? body.phone ?? body.login, 160)
       const account = login.includes('@') ? one("SELECT * FROM users WHERE role='customer' AND active=1 AND email=?", login.toLowerCase()) : one("SELECT * FROM users WHERE role='customer' AND active=1 AND phone=?", login.replace(/[\s-]/g, ''))
-      if (!account || !verifyPassword(String(body.password || ''), account.password_hash)) return fail(res, 401, '帳號或密碼不正確')
-      const token = randomBytes(32).toString('hex')
-      const expires = new Date(Date.now() + 7 * 86400000).toISOString()
-      db.prepare('INSERT INTO sessions VALUES (?,?,?)').run(token, account.id, expires)
+      const ip = clientIp(req), wait = lockedMinutes('customer', login, ip)
+      if (wait) return fail(res, 429, `登入失敗次數過多，請 ${wait} 分鐘後再試`)
+      if (!account || !verifyPassword(String(body.password || ''), account.password_hash)) { recordFailure('customer', login, ip); return fail(res, 401, '帳號或密碼不正確') }
+      clearFailures('customer', login)
+      const token = createSession(account.id)
       db.prepare('UPDATE users SET last_login_at=? WHERE id=?').run(now(), account.id)
       return json(res, 200, { token, user: { id: account.id, name: account.name, email: account.email, role: account.role, customerId: account.customer_id } })
     }
     if (await publicPortalRoutes(req, res, url, { json, fail, parseBody })) return
     const user = auth(req)
     if (!user) return fail(res, 401, '請先登入')
+    audit(req, res, user, path)
+    if (await auditRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (path === '/api/me' && req.method === 'GET') return json(res, 200, { id: user.id, name: user.name, email: user.email, role: user.role, customerId: user.customer_id })
     if (path === '/api/catalog' && req.method === 'GET') return json(res, 200, { services, sources, routePlans: Object.fromEntries(services.map(s => [s.code, Object.fromEntries(s.routes.map(route => [route, planFor(s, route)]))])) })
     if (await phase1Routes(req, res, url, user, { json, fail, parseBody, canAccessCustomer, vehicleFor, plateFor, query, one, clean })) return
@@ -271,7 +274,7 @@ export const server = http.createServer(async (req, res) => {
       return json(res, 200, { cardData: recognized.cardData, fieldStatus: recognized.fieldStatus })
     }
     if (path === '/api/customers' && req.method === 'GET') {
-      return json(res, 200, ['admin', 'staff'].includes(user.role) ? query('SELECT * FROM customers WHERE tenant_id=? ORDER BY is_self DESC, name', user.tenant_id) : query('SELECT * FROM customers WHERE id=?', user.customer_id))
+      return json(res, 200, ['admin', 'staff'].includes(user.role) ? query('SELECT * FROM customers WHERE tenant_id=? ORDER BY is_self DESC, name', user.tenant_id) : query('SELECT id,name,kind,phone FROM customers WHERE id=?', user.customer_id)) // 客戶只拿自己的基本資料，不含內部備註
     }
     const reminderMatch = path.match(/^\/api\/plates\/([^/]+)\/crossing-reminder$/)
     if (reminderMatch) {
@@ -484,7 +487,7 @@ export const server = http.createServer(async (req, res) => {
       if (body.email && one('SELECT id FROM users WHERE email=?', clean(body.email, 160).toLowerCase())) return fail(res, 409, '這個電郵已被使用')
       if (!canAccessCustomer(user, body.customerId)) return fail(res, 404, '客戶不存在')
       if (one('SELECT is_self FROM customers WHERE id=?', body.customerId)?.is_self) return fail(res, 409, '本公司（自有）不開通客戶端登入')
-      if (body.password.length < 12) return fail(res, 400, '密碼至少 12 字元')
+      { const problem = passwordProblem(body.password, { email: body.email, phone: body.phone }); if (problem) return fail(res, 400, problem) }
       const userId = id()
       db.prepare('INSERT INTO users(id,role,name,email,password_hash,customer_id,tenant_id,phone) VALUES (?,?,?,?,?,?,?,?)').run(userId, 'customer', clean(body.name, 100), body.email ? clean(body.email, 160).toLowerCase() : `${phone}@phone.invalid`, hashPassword(body.password), body.customerId, user.tenant_id, phone)
       return json(res, 201, { id: userId })
@@ -634,8 +637,8 @@ export const server = http.createServer(async (req, res) => {
     if (error instanceof SyntaxError) return fail(res, 400, 'JSON 格式錯誤')
     if (error.message === '請求內容格式錯誤') return fail(res, 400, error.message)
     if (String(error.message).includes('UNIQUE constraint')) return fail(res, 409, '資料已存在')
-    console.error(error)
-    return fail(res, 500, '伺服器處理失敗')
+    logError(error, { method: req.method, path })
+    return fail(res, 500, '伺服器處理失敗，請稍後再試；如持續發生請聯絡管理者')
   }
 })
 if (process.env.API_NO_LISTEN !== '1') server.listen(port, () => console.log(`API listening on http://localhost:${port}`))

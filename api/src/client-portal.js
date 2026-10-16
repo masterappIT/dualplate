@@ -52,7 +52,7 @@ export async function publicPortalRoutes(req, res, url, h) {
   if (!openid) return fail(res, 400, '微信登入碼無效或已過期'), true
   const session = account => {
     const token = randomBytes(32).toString('hex')
-    db.prepare('INSERT INTO sessions VALUES (?,?,?)').run(token, account.id, new Date(Date.now() + 7 * 86400000).toISOString())
+    db.prepare('INSERT INTO sessions(token,user_id,expires_at,last_seen_at) VALUES (?,?,?,?)').run(token, account.id, new Date(Date.now() + 30 * 86400000).toISOString(), now())
     return { token, user: { id: account.id, name: account.name, email: account.email, role: account.role, customerId: account.customer_id } }
   }
   if (url.pathname === '/api/wechat/login') {

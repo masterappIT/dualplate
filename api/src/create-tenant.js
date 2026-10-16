@@ -4,8 +4,8 @@ const tenantName = String(process.env.TENANT_NAME || '').trim()
 const username = String(process.env.ADMIN_USERNAME || '').trim().toLowerCase()
 const adminName = String(process.env.ADMIN_NAME || '').trim()
 const password = String(process.env.ADMIN_PASSWORD || '')
-if (!tenantName || !/^[a-z][a-z0-9._-]{2,31}$/.test(username) || !adminName || password.length < 8) {
-  console.error('請設定 TENANT_NAME、ADMIN_USERNAME（3–32 位，英文字母開頭）、ADMIN_NAME 和最少 8 字元的 ADMIN_PASSWORD')
+if (!tenantName || !/^[a-z][a-z0-9._-]{2,31}$/.test(username) || !adminName || password.length < 10) {
+  console.error('請設定 TENANT_NAME、ADMIN_USERNAME（3–32 位，英文字母開頭）、ADMIN_NAME 和最少 10 字元的 ADMIN_PASSWORD')
   process.exit(1)
 }
 if (db.prepare('SELECT id FROM users WHERE username=? COLLATE NOCASE').get(username)) {
