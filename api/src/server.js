@@ -14,6 +14,7 @@ import { portalRoutes, publicPortalRoutes } from './client-portal.js'
 import { workOrderRoutes } from './work-order-routes.js'
 import { viewRoutes } from './view-routes.js'
 import { driverRoutes } from './drivers.js'
+import { rentalRoutes, legacyStart, legacyEnd, activeContract } from './rentals.js'
 
 const port = Number(process.env.PORT || 4100)
 const allowedOrigins = new Set((process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174').split(','))
@@ -76,7 +77,7 @@ function plateDetail(user, plateId) {
   const imageValue = x => ['admin', 'staff'].includes(user.role) ? `data:${x.mime};base64,${x.data.toString('base64')}` : true
   const companyStatuses = ['admin', 'staff'].includes(user.role) && item.group_id ? query('SELECT c.id,c.jurisdiction,c.name,c.status,c.status_changed_on FROM companies c JOIN company_groups g ON g.id=c.group_id AND g.tenant_id=c.tenant_id WHERE c.tenant_id=? AND c.group_id=? AND g.customer_id=? ORDER BY c.jurisdiction,c.name', user.tenant_id, item.group_id, item.customer_id) : []
   const warnings = companyStatuses.filter(company => company.jurisdiction === '內地' && ['已註銷', '註銷中'].includes(company.status)).map(company => company.status === '已註銷' ? '內承單位已註銷' : '內承單位註銷中')
-  return { ...item, cardData: cardData(item.card_data), rentals: query('SELECT * FROM plate_rentals WHERE plate_asset_id=? ORDER BY created_at DESC', item.id), cardImages: Object.fromEntries(images.map(x => [x.side, imageValue(x)])), platePhotos: Object.fromEntries(photos.map(x => [x.kind, imageValue(x)])), companyStatuses, warnings: [...new Set(warnings)] }
+  return { ...item, cardData: cardData(item.card_data), rentals: query('SELECT * FROM plate_rentals WHERE plate_asset_id=? ORDER BY created_at DESC', item.id), rentalContracts: query('SELECT id,renter_name,renter_vehicle_plate,starts_on,ends_on,rent_amount,currency,collection_mode,status FROM rental_contracts WHERE plate_asset_id=? ORDER BY starts_on DESC', item.id), cardImages: Object.fromEntries(images.map(x => [x.side, imageValue(x)])), platePhotos: Object.fromEntries(photos.map(x => [x.kind, imageValue(x)])), companyStatuses, warnings: [...new Set(warnings)] }
 }
 function plateSummary(item, tenantId) {
   const tracked = query('SELECT code,expires_on FROM tracked_items WHERE tenant_id=? AND owner_type=? AND owner_id=? AND code IN (?,?) ORDER BY code', tenantId, 'plate', item.id, 'hk_crp', 'mo_permit')
@@ -143,6 +144,7 @@ export const server = http.createServer(async (req, res) => {
     if (await workOrderRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await driverRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (viewRoutes(req, res, url, user, { json, fail })) return
+    if (await rentalRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await portalRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await customerRoutes(req, res, url, user, { json, fail, query, one, plateFor, parseBody })) return
     if (path === '/api/import/plates' && req.method === 'POST') {
@@ -352,8 +354,9 @@ export const server = http.createServer(async (req, res) => {
       if (groupId) { const parent = one('SELECT * FROM company_groups WHERE id=? AND tenant_id=?', groupId, user.tenant_id); if (!parent) return fail(res, 404, '公司組不存在'); if (parent.customer_id !== old.customer_id) return fail(res, 400, '公司組與客戶不符') }
       if (user.role !== 'admin' && (b.groupId !== undefined || b.indicatorCategory !== undefined || b.port !== undefined)) return fail(res, 403, '指標類別、口岸和公司組須由專員維護')
       if (b.port !== undefined && b.port !== null && b.port !== '' && !crossingPorts.includes(b.port)) return fail(res, 400, '未知口岸名稱')
-      if (usage === '出租中' && !one("SELECT id FROM plate_rentals WHERE plate_asset_id=? AND status='出租中'", old.id)) return fail(res, 400, '出租中須先建立出租記錄')
-      if (usage !== '出租中' && one("SELECT id FROM plate_rentals WHERE plate_asset_id=? AND status='出租中'", old.id)) return fail(res, 400, '請先結束出租記錄')
+      // 「出租中」只由生效的出租合約推算
+      if (usage === '出租中' && !activeContract(old.id)) return fail(res, 400, '出租中須先建立出租合約')
+      if (usage !== '出租中' && activeContract(old.id)) return fail(res, 400, '請先終止出租合約')
       const nextCardNumber = clean(b.cardNumber ?? old.card_number,80)
       if (!nextCardNumber) return fail(res,400,'批文卡編號不能留空')
       if (one('SELECT id FROM plate_assets WHERE customer_id=? AND route=? AND card_number=? AND id<>?',old.customer_id,old.route,nextCardNumber,old.id)) return fail(res,409,'這張批文卡已在名下建檔')
@@ -432,11 +435,11 @@ export const server = http.createServer(async (req, res) => {
       const b = await parseBody(req)
       if (!required(b, ['plateAssetId','renterName'])) return fail(res, 400, '請填寫兩地牌與承租方')
       const item = plateFor(user, b.plateAssetId); if (!item) return fail(res, 404, '兩地牌不存在')
-      if (one("SELECT id FROM plate_rentals WHERE plate_asset_id=? AND status='出租中'", item.id)) return fail(res, 409, '已有進行中的出租記錄')
+      if (one("SELECT id FROM plate_rentals WHERE plate_asset_id=? AND status='出租中'", item.id) || activeContract(item.id)) return fail(res, 409, '已有進行中的出租記錄')
       if (b.startsOn && b.endsOn && b.endsOn < b.startsOn) return fail(res, 400, '結束日期早於開始日期')
       const rentalId=id()
       db.prepare('INSERT INTO plate_rentals(id,plate_asset_id,renter_name,renter_vehicle_plate,starts_on,ends_on,status,notes,created_at) VALUES (?,?,?,?,?,?,?,?,?)').run(rentalId,item.id,clean(b.renterName,120),clean(b.renterVehiclePlate,50)||null,clean(b.startsOn,20)||null,clean(b.endsOn,20)||null,'出租中',clean(b.notes,1000),now())
-      db.prepare("UPDATE plate_assets SET usage_status='出租中',updated_at=? WHERE id=?").run(now(),item.id)
+      legacyStart(user.tenant_id, item.id, { renterName: clean(b.renterName,120), renterVehiclePlate: clean(b.renterVehiclePlate,50), startsOn: clean(b.startsOn,20), endsOn: clean(b.endsOn,20), notes: clean(b.notes,1000) })
       return json(res,201,one('SELECT * FROM plate_rentals WHERE id=?',rentalId))
     }
     const rentalMatch = path.match(/^\/api\/plate-rentals\/([^/]+)$/)
@@ -445,7 +448,7 @@ export const server = http.createServer(async (req, res) => {
       const old=one('SELECT * FROM plate_rentals WHERE id=?',rentalMatch[1]); if (!old || !plateFor(user,old.plate_asset_id)) return fail(res,404,'出租記錄不存在')
       const b=await parseBody(req); if (!['出租中','已結束'].includes(b.status)) return fail(res,400,'出租狀態無效')
       db.prepare('UPDATE plate_rentals SET status=?,ends_on=?,notes=? WHERE id=?').run(b.status,clean(b.endsOn ?? old.ends_on,20)||null,clean(b.notes ?? old.notes,1000),old.id)
-      if (b.status==='已結束') db.prepare("UPDATE plate_assets SET usage_status='待核對',updated_at=? WHERE id=?").run(now(),old.plate_asset_id)
+      if (b.status==='已結束') legacyEnd(user.tenant_id, old.plate_asset_id, clean(b.endsOn,20) || null)
       return json(res,200,one('SELECT * FROM plate_rentals WHERE id=?',old.id))
     }
     if (path === '/api/customers' && req.method === 'POST') {

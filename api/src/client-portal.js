@@ -7,7 +7,7 @@ const isObject = value => value && typeof value === 'object' && !Array.isArray(v
 const text = (value, max) => typeof value === 'string' ? value.trim().slice(0, max) : ''
 const MAX_FILE = 5 * 1024 * 1024
 // Real file type from the first bytes, not the name the client claims.
-const sniff = buffer => buffer.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47])) ? 'image/png'
+export const sniff = buffer => buffer.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47])) ? 'image/png'
   : buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff])) ? 'image/jpeg'
   : buffer.subarray(0, 4).toString('latin1') === '%PDF' ? 'application/pdf' : null
 const attachmentRow = row => ({ id: row.id, requestId: row.request_id, taskId: row.task_id, fileName: row.file_name, mime: row.mime, size: row.size, status: row.status, reviewNote: row.review_note || '', createdAt: row.created_at, reviewedAt: row.reviewed_at })

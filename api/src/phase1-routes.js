@@ -2,6 +2,7 @@ import { db, id, now } from './db.js'
 import { plateFacts } from './plate-facts.js'
 import { deadlineOwners } from './deadline-owners.js'
 import { driverFor } from './drivers.js'
+import { rentOverview } from './rentals.js'
 import { scopeMap } from './entrustment.js'
 import { computeDeadlines, ruleMatches, ruleScopes, ruleMethods, matchKeys, dateFields } from './rules.js'
 
@@ -217,12 +218,13 @@ export async function phase1Routes(req, res, url, user, h) {
     const { customers, plates, companies, owners } = deadlineOwners(tenant)
     const tracked = new Map(query('SELECT * FROM tracked_items WHERE tenant_id=?', tenant).map(item => [`${item.owner_type}:${item.owner_id}:${item.code}`, item]))
     const completions = new Set(query('SELECT * FROM rule_completions WHERE tenant_id=?', tenant).map(item => `${item.code}:${item.owner_id}:${item.period}`))
-    const deadlines = computeDeadlines({ rules: rules(), owners, tracked, completions, scopes: scopeMap(tenant), windowDays: days }).filter(item => item.level !== 'ok')
+    const { rent, deadlines: rentDeadlines } = rentOverview(tenant)
+    const deadlines = [...computeDeadlines({ rules: rules(), owners, tracked, completions, scopes: scopeMap(tenant), windowDays: days }).filter(item => item.level !== 'ok'), ...rentDeadlines]
     // Items the client handles themselves are listed (for the client view) but never counted as our work.
     const ours = deadlines.filter(item => item.handler !== 'client')
     const counts = Object.fromEntries(['overdue','due','missing','upcoming'].map(level => [level, ours.filter(item => item.level === level).length]))
     const byUsage = Object.fromEntries([...new Set(plates.map(item => item.usage_status))].map(status => [status, plates.filter(item => item.usage_status === status).length]))
-    return send(200, { deadlines, counts, plates: { total: plates.length, byUsage }, customers: customers.map(item => {
+    return send(200, { deadlines, counts, rent, plates: { total: plates.length, byUsage }, customers: customers.map(item => {
       const entries = ours.filter(entry => entry.customerId === item.id), overdue = entries.filter(entry => entry.level === 'overdue').length, due = entries.filter(entry => entry.level === 'due').length, missing = entries.filter(entry => entry.level === 'missing').length
       const customerCompanies = companies.filter(company => company.customer_id === item.id)
       return { ...item, plates: plates.filter(plate => plate.customer_id === item.id).length, companies: customerCompanies.filter(company => company.status !== '已註銷').length, dissolvedCompanies: customerCompanies.filter(company => company.status === '已註銷').length, overdue, due, missing, health: overdue ? 'red' : due || missing ? 'amber' : 'green' }
