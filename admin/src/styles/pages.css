@@ -143,6 +143,20 @@ body { background: var(--canvas); color: var(--ink); font-family: var(--font-bod
 /* 報帳報稅：進度矩陣沿用委託矩陣的格線，公司欄放客戶與會計公司 */
 .filing-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .filing-head .select { min-width: 200px; max-width: 260px; }
+.filing-tabs { margin: 16px 0; }
+.filing-notice, .filing-actions, .filing-setup-batch { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.filing-notice { margin: 0 16px 16px; }
+.filing-filter-reset { margin: 0 16px 8px; }
+.filing-actions { flex-wrap: nowrap; }
+.filing-setup-batch { margin-top: 0; }
+.filing-setup-batch label { min-width: 160px; }
+.filing-bulk-bar .btn-text { color: var(--canvas-ink); }
+@media (max-width: 600px) {
+  .filing-bulk-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; width: calc(100vw - 24px); white-space: normal; overflow: visible; }
+  .filing-bulk-bar .float-bar-sep { display: none; }
+  .filing-bulk-bar .select-trigger { min-width: 0; }
+  .filing-bulk-bar .btn:last-child { grid-column: 2; grid-row: 1; }
+}
 .filing-matrix .scope-matrix-row { grid-template-columns: 240px repeat(var(--months, 6), minmax(92px, 1fr)); }
 .filing-matrix { min-width: 0; }
 .filing-matrix .scope-matrix-row > div[role='cell'] { justify-content: center; }
@@ -151,7 +165,7 @@ body { background: var(--canvas); color: var(--ink); font-family: var(--font-bod
 .filing-none { color: var(--ink-3); font-size: 12px; }
 .filing-status { display: flex; align-items: center; gap: 12px; min-height: 40px; }
 .filing-steps { display: grid; gap: 8px; margin: 8px 0 16px; padding: 12px; border: 1px dashed var(--border); border-radius: var(--r-card); }
-.filing-step { display: grid; grid-template-columns: minmax(0, 1fr) 170px 56px; align-items: center; gap: 12px; }
+.filing-step { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .filing-step-name { display: flex; align-items: center; gap: 8px; font-weight: 600; }
 .filing-step-name small { color: var(--ink-3); font-weight: 400; font-size: 12px; }
 .filing-step-mark { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--paper); border: 1px solid var(--border); color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -162,7 +176,7 @@ body { background: var(--canvas); color: var(--ink); font-family: var(--font-bod
 .firm-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
 .firm-add { margin-top: 16px; }
 .drawer-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
-@media (max-width: 720px) { .filing-matrix .scope-matrix-row { grid-template-columns: 116px repeat(var(--months, 3), minmax(68px, 1fr)); } .filing-head { flex-direction: column; } .filing-head .select { max-width: none; width: 100%; } .filing-step { grid-template-columns: minmax(0, 1fr) 56px; gap: 4px 8px; } .filing-step .date-input { grid-column: 1 / -1; grid-row: 2; } }
+@media (max-width: 720px) { .filing-matrix .scope-matrix-row { grid-template-columns: 116px repeat(var(--months, 3), minmax(68px, 1fr)); } .filing-head { flex-direction: column; } .filing-head .select { max-width: none; width: 100%; } .filing-actions { flex-wrap: wrap; } }
 
 .hint { margin: 8px 0; color: var(--ink-2); font-size: 13px; }
 /* 月報：A4 證件感版面；列印時只留報告本身 */

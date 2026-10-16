@@ -44,6 +44,7 @@ export function ensureFilings(tenantId) {
 }
 
 export function filingStatus(row) {
+  if (row.closed_reason === 'pre_system') return '啟用前已處理'
   if (row.closed_reason) return '公司已註銷'
   if (row.paid_on || (row.filed_on && row.zero_filing)) return '已完成'
   if (row.filed_on) return '已申報'
@@ -63,7 +64,7 @@ function filingView(row) {
   const receipt = hasReceipt(row.id), status = filingStatus(row)
   return { id: row.id, companyId: row.company_id, companyName: company?.name, customerId: company?.customer_id, customerName: company?.customer_name, firmId: company?.accounting_firm_id || null, firmName: company?.firm_name || '', taxpayerType: company?.taxpayer_type || '', filingCycle: company?.filing_cycle || 'monthly',
     period: row.period, dueOn: row.due_on, docsReceivedOn: row.docs_received_on, sentToFirmOn: row.sent_to_firm_on, filedOn: row.filed_on, paidOn: row.paid_on, taxAmount: row.tax_amount, zeroFiling: Boolean(row.zero_filing), notes: row.notes || '', closedReason: row.closed_reason || '',
-    status, level: filingLevel(row), hasReceipt: receipt, missingReceipt: Boolean(row.filed_on) && !receipt, updatedAt: row.updated_at }
+    status, level: filingLevel(row), hasReceipt: receipt, missingReceipt: !row.closed_reason && Boolean(row.filed_on) && !receipt, updatedAt: row.updated_at }
 }
 
 // 管理總覽的到期項目：名稱「報稅：公司名 YYYY-MM」；外包時帶外包單位
@@ -83,13 +84,14 @@ export async function bookkeepingRoutes(req, res, url, user, { json, fail, parse
     ensureFilings(tenant)
     // 客戶只看狀態、稅額、零申報；不含會計公司聯絡資料和內部備註
     const companies = db.prepare("SELECT id, name, status FROM companies WHERE tenant_id=? AND customer_id=? AND jurisdiction='內地' ORDER BY name").all(tenant, user.customer_id)
-    return json(res, 200, companies.map(company => ({ companyId: company.id, companyName: company.name, periods: db.prepare('SELECT * FROM filing_periods WHERE company_id=? ORDER BY period DESC LIMIT 6').all(company.id).map(row => ({ period: row.period, dueOn: row.due_on, status: filingStatus(row), taxAmount: row.tax_amount, zeroFiling: Boolean(row.zero_filing), filedOn: row.filed_on })) }))), true
+    return json(res, 200, companies.map(company => ({ companyId: company.id, companyName: company.name, periods: db.prepare('SELECT * FROM filing_periods WHERE company_id=? ORDER BY period DESC LIMIT 6').all(company.id).map(row => ({ period: row.period, dueOn: row.due_on, status: row.closed_reason === 'pre_system' ? '已完成' : filingStatus(row), taxAmount: row.tax_amount, zeroFiling: Boolean(row.zero_filing), filedOn: row.filed_on })) }))), true
   }
   const firmMatch = path.match(/^\/api\/accounting-firms(?:\/([^/]+))?$/)
-  const filingMatch = path.match(/^\/api\/filings(?:\/(matrix|[^/]+)(\/receipt)?)?$/)
+  const filingMatch = path.match(/^\/api\/filings(?:\/(matrix|bulk|[^/]+)(\/(receipt|pre-system))?)?$/)
   const calendarMatch = path.match(/^\/api\/filing-calendar\/([^/]+)$/)
-  const setupMatch = path.match(/^\/api\/companies\/([^/]+)\/filing-setup$/)
-  if (!firmMatch && !filingMatch && !calendarMatch && !setupMatch) return false
+  const bulkSetup = path === '/api/companies/filing-setup'
+  const setupMatch = bulkSetup ? null : path.match(/^\/api\/companies\/([^/]+)\/filing-setup$/)
+  if (!firmMatch && !filingMatch && !calendarMatch && !setupMatch && !bulkSetup) return false
   if (user.role !== 'admin') return fail(res, 403, '報帳報稅只限管理者'), true
 
   if (firmMatch) {
@@ -114,6 +116,22 @@ export async function bookkeepingRoutes(req, res, url, user, { json, fail, parse
     return json(res, 200, view(db.prepare('SELECT * FROM accounting_firms WHERE id=?').get(firm.id))), true
   }
 
+  if (bulkSetup) {
+    if (method !== 'PUT') return fail(res, 405, '不支援此操作'), true
+    const body = await parseBody(req)
+    if (!isObject(body) || !Array.isArray(body.companyIds) || !body.companyIds.length || body.companyIds.some(value => typeof value !== 'string' || !value.trim()) || new Set(body.companyIds).size !== body.companyIds.length) return fail(res, 400, '請選擇有效且不重複的公司'), true
+    if (!['monthly', 'quarterly'].includes(body.filingCycle)) return fail(res, 400, '申報週期須為每月或每季'), true
+    if (body.accountingFirmId !== null && (typeof body.accountingFirmId !== 'string' || !body.accountingFirmId.trim())) return fail(res, 400, '會計公司無效'), true
+    if (body.accountingFirmId && !db.prepare('SELECT id FROM accounting_firms WHERE id=? AND tenant_id=?').get(body.accountingFirmId, tenant)) return fail(res, 404, '會計公司不存在'), true
+    const companies = body.companyIds.map(companyId => db.prepare('SELECT * FROM companies WHERE id=? AND tenant_id=?').get(companyId, tenant))
+    if (companies.some(company => !company)) return fail(res, 404, '公司不存在'), true
+    if (companies.some(company => company.jurisdiction !== '內地')) return fail(res, 400, '報帳報稅只適用於內地公司'), true
+    if (body.filingCycle === 'quarterly' && companies.some(company => company.taxpayer_type === '一般納稅人')) return fail(res, 400, '一般納稅人須按月申報'), true
+    const update = db.prepare('UPDATE companies SET accounting_firm_id=?, filing_cycle=?, updated_at=? WHERE id=? AND tenant_id=?')
+    db.exec('BEGIN')
+    try { for (const company of companies) update.run(body.accountingFirmId, body.filingCycle, now(), company.id, tenant); db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
+    return json(res, 200, { updated: body.companyIds }), true
+  }
   if (setupMatch) {
     if (method !== 'PUT') return fail(res, 405, '不支援此操作'), true
     const company = db.prepare('SELECT * FROM companies WHERE id=? AND tenant_id=?').get(setupMatch[1], tenant)
@@ -146,6 +164,30 @@ export async function bookkeepingRoutes(req, res, url, user, { json, fail, parse
   }
 
   ensureFilings(tenant)
+  if (filingMatch[1] === 'bulk') {
+    if (method !== 'POST') return fail(res, 405, '不支援此操作'), true
+    const body = await parseBody(req)
+    if (!isObject(body) || !Array.isArray(body.ids) || !body.ids.length || body.ids.some(value => typeof value !== 'string' || !value.trim()) || !['docs_received', 'sent_to_firm', 'pre_system'].includes(body.action)) return fail(res, 400, '批量內容無效'), true
+    const updated = [], skipped = [], seen = new Set()
+    const find = db.prepare('SELECT * FROM filing_periods WHERE id=? AND tenant_id=?')
+    const update = db.prepare('UPDATE filing_periods SET docs_received_on=?,sent_to_firm_on=?,closed_reason=?,updated_by=?,updated_at=? WHERE id=? AND tenant_id=?')
+    db.exec('BEGIN')
+    try {
+      for (const filingId of body.ids) {
+        if (seen.has(filingId)) { skipped.push({ id: filingId, reason: '重複選取' }); continue }
+        seen.add(filingId)
+        const row = find.get(filingId, tenant)
+        if (!row) { skipped.push({ id: filingId, reason: '期數不存在或無權限' }); continue }
+        if (row.closed_reason) { skipped.push({ id: filingId, reason: '這期已結束' }); continue }
+        if (body.action === 'pre_system' && row.filed_on) { skipped.push({ id: filingId, reason: '已申報不可標記' }); continue }
+        if (body.action === 'docs_received' && (row.docs_received_on || row.sent_to_firm_on || row.filed_on || row.paid_on) || body.action === 'sent_to_firm' && (!row.docs_received_on || row.sent_to_firm_on || row.filed_on || row.paid_on)) { skipped.push({ id: filingId, reason: '目前步驟不符' }); continue }
+        update.run(body.action === 'docs_received' ? today() : row.docs_received_on, body.action === 'sent_to_firm' ? today() : row.sent_to_firm_on, body.action === 'pre_system' ? 'pre_system' : row.closed_reason, user.id, now(), filingId, tenant)
+        updated.push(filingId)
+      }
+      db.exec('COMMIT')
+    } catch (error) { db.exec('ROLLBACK'); throw error }
+    return json(res, 200, { updated, skipped }), true
+  }
   if (!filingMatch[1]) {
     if (method !== 'GET') return fail(res, 405, '不支援此操作'), true
     const { period, companyId, firmId, status } = Object.fromEntries(url.searchParams)
@@ -159,11 +201,17 @@ export async function bookkeepingRoutes(req, res, url, user, { json, fail, parse
     if (!Number.isInteger(months) || months < 1 || months > 24) return fail(res, 400, '月數須為 1–24'), true
     const current = today().slice(0, 7), columns = Array.from({ length: months }, (_, index) => addMonths(current, index - months + 1))
     const companies = db.prepare("SELECT co.id, co.name, co.status, co.filing_cycle, c.name customer_name, f.name firm_name FROM companies co JOIN customers c ON c.id=co.customer_id LEFT JOIN accounting_firms f ON f.id=co.accounting_firm_id WHERE co.tenant_id=? AND co.jurisdiction='內地' AND co.id IN (SELECT company_id FROM filing_periods) ORDER BY c.name, co.name").all(tenant)
-    return json(res, 200, { months: columns, rows: companies.map(company => ({ companyId: company.id, companyName: company.name, customerName: company.customer_name, firmName: company.firm_name || '', filingCycle: company.filing_cycle, cells: columns.map(month => { const row = db.prepare('SELECT * FROM filing_periods WHERE company_id=? AND period=?').get(company.id, month); return row ? { filingId: row.id, period: month, status: filingStatus(row), level: filingLevel(row), missingReceipt: Boolean(row.filed_on) && !hasReceipt(row.id) } : { period: month, status: null } }) })) }), true
+    return json(res, 200, { months: columns, rows: companies.map(company => ({ companyId: company.id, companyName: company.name, customerName: company.customer_name, firmName: company.firm_name || '', filingCycle: company.filing_cycle, cells: columns.map(month => { const row = db.prepare('SELECT * FROM filing_periods WHERE company_id=? AND period=?').get(company.id, month); return row ? { filingId: row.id, period: month, status: filingStatus(row), level: filingLevel(row), missingReceipt: !row.closed_reason && Boolean(row.filed_on) && !hasReceipt(row.id) } : { period: month, status: null } }) })) }), true
   }
   const filing = db.prepare('SELECT * FROM filing_periods WHERE id=? AND tenant_id=?').get(filingMatch[1], tenant)
   if (!filing) return fail(res, 404, '報帳期數不存在'), true
   if (filingMatch[2]) {
+    if (filingMatch[3] === 'pre-system') {
+      if (method !== 'DELETE') return fail(res, 405, '不支援此操作'), true
+      if (filing.closed_reason !== 'pre_system') return fail(res, 409, '這期沒有啟用前標記'), true
+      db.prepare('UPDATE filing_periods SET closed_reason=NULL,updated_by=?,updated_at=? WHERE id=? AND tenant_id=?').run(user.id, now(), filing.id, tenant)
+      return json(res, 200, filingView(db.prepare('SELECT * FROM filing_periods WHERE id=?').get(filing.id))), true
+    }
     if (method === 'GET') {
       const receipt = db.prepare('SELECT * FROM filing_receipts WHERE filing_id=?').get(filing.id)
       if (!receipt) return fail(res, 404, '沒有回執'), true
