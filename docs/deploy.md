@@ -12,8 +12,7 @@ flowchart LR
   Disk --> Backup[每日備份 + 發布前備份]
   Backup --> GCS[私有 Cloud Storage 90 天]
   Disk --> Snap[每日快照 14 天]
-  GitHub[GitHub Actions] --> Build[Cloud Build]
-  Build --> Registry[Artifact Registry 摘要映像]
+  GitHub[GitHub Actions 建置] --> Registry[Artifact Registry 摘要映像]
   Registry --> Caddy
   Registry --> API
 ```
@@ -27,7 +26,7 @@ flowchart LR
 
 ## 發布與回滾
 
-推送 `main` 後，`.github/workflows/deploy-production.yml` 先執行 API 測試、管理端 check/build、客戶端 H5 build 和腳本語法檢查。`DEPLOY_ENABLED=true` 才透過 Cloud Build 建置及推送兩個映像。`.gcloudignore` 排除本機資料、SQLite、測試樣本與秘密。發布前再檢查 commit 仍是 `main` 最新，通過後經 IAP SSH 呼叫 VM 的 `/srv/dualplate/deploy.sh <API@sha256> <web@sha256>`。腳本先備份 SQLite 並上傳 GCS；新容器健康檢查失敗，便切回舊摘要。首次沒有資料庫時跳過發布前備份，API 首次啟動建立空資料庫。
+推送 `main` 後，`.github/workflows/deploy-production.yml` 先執行 API 測試、管理端 check/build、客戶端 H5 build 和腳本語法檢查。`DEPLOY_ENABLED=true` 才在 GitHub 機器上以 `docker buildx` 建置兩個映像並推送到 Artifact Registry（同 MasterDriver）。`.dockerignore` 排除本機資料、SQLite、測試樣本與秘密。發布前再檢查 commit 仍是 `main` 最新，通過後經 IAP SSH 呼叫 VM 的 `/srv/dualplate/deploy.sh <API@sha256> <web@sha256>`。腳本先備份 SQLite 並上傳 GCS；新容器健康檢查失敗，便切回舊摘要。首次沒有資料庫時跳過發布前備份，API 首次啟動建立空資料庫。
 
 手動回滾：
 
@@ -48,7 +47,7 @@ export PROJECT_ID=dualplate-511819
 export REGION=asia-east2
 export ZONE=asia-east2-a
 gcloud config set project "$PROJECT_ID"
-gcloud services enable compute.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com logging.googleapis.com secretmanager.googleapis.com iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com storage.googleapis.com
+gcloud services enable compute.googleapis.com artifactregistry.googleapis.com logging.googleapis.com secretmanager.googleapis.com iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com storage.googleapis.com
 gcloud artifacts repositories create dualplate --location="$REGION" --repository-format=docker
 gcloud storage buckets create "gs://${PROJECT_ID}-backups" --location="$REGION" --uniform-bucket-level-access --public-access-prevention
 printf '%s\n' '{"rule":[{"action":{"type":"Delete"},"condition":{"age":90}}]}' > /tmp/dualplate-lifecycle.json
@@ -59,22 +58,15 @@ gcloud compute resource-policies create snapshot-schedule dualplate-data-daily -
 gcloud compute disks add-resource-policies dualplate-data --zone="$ZONE" --resource-policies=dualplate-data-daily
 gcloud iam service-accounts create dualplate-vm
 gcloud iam service-accounts create dualplate-deploy
-gcloud iam service-accounts create dualplate-build
 ```
 
-19:00 UTC 是香港次日 03:00。Debian 12 `cron` 不支援 `CRON_TZ`，所以 `bootstrap.sh` 把主機時區設為 UTC，`deploy/vm/backup.cron` 使用 19:15，對應香港次日 03:15，執行 SQLite 線上備份與 GCS 上傳。授權：VM 帳戶只需讀映像、讀 `dualplate-app-env` Secret、對備份 bucket 使用 `roles/storage.objectUser`（上傳後核對物件需要讀取）；建置帳戶只需讀 Cloud Build 來源、寫映像與寫日誌；部署帳戶提交 Cloud Build、經 IAP SSH 登入 VM，不讀 Secret 內容。以下指令逐條設定：
+19:00 UTC 是香港次日 03:00。Debian 12 `cron` 不支援 `CRON_TZ`，所以 `bootstrap.sh` 把主機時區設為 UTC，`deploy/vm/backup.cron` 使用 19:15，對應香港次日 03:15，執行 SQLite 線上備份與 GCS 上傳。授權：VM 帳戶只需讀映像、讀 `dualplate-app-env` Secret、對備份 bucket 使用 `roles/storage.objectUser`（上傳後核對物件需要讀取）；部署帳戶在 GitHub 機器上推送映像（Artifact Registry 寫入）、經 IAP SSH 登入 VM，不讀 Secret 內容。以下指令逐條設定：
 
 ```bash
 VM_SA="dualplate-vm@${PROJECT_ID}.iam.gserviceaccount.com"
 DEPLOY_SA="dualplate-deploy@${PROJECT_ID}.iam.gserviceaccount.com"
-BUILD_SA="dualplate-build@${PROJECT_ID}.iam.gserviceaccount.com"
 gcloud artifacts repositories add-iam-policy-binding dualplate --location="$REGION" --member="serviceAccount:${VM_SA}" --role=roles/artifactregistry.reader
-gcloud artifacts repositories add-iam-policy-binding dualplate --location="$REGION" --member="serviceAccount:${BUILD_SA}" --role=roles/artifactregistry.writer
-gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:${BUILD_SA}" --role=roles/logging.logWriter --condition=None
-gcloud storage buckets add-iam-policy-binding "gs://${PROJECT_ID}_cloudbuild" --member="serviceAccount:${BUILD_SA}" --role=roles/storage.objectViewer
-gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:${DEPLOY_SA}" --role=roles/cloudbuild.builds.editor --condition=None
-gcloud storage buckets add-iam-policy-binding "gs://${PROJECT_ID}_cloudbuild" --member="serviceAccount:${DEPLOY_SA}" --role=roles/storage.objectCreator
-gcloud iam service-accounts add-iam-policy-binding "$BUILD_SA" --member="serviceAccount:${DEPLOY_SA}" --role=roles/iam.serviceAccountUser
+gcloud artifacts repositories add-iam-policy-binding dualplate --location="$REGION" --member="serviceAccount:${DEPLOY_SA}" --role=roles/artifactregistry.writer
 gcloud storage buckets add-iam-policy-binding "gs://${PROJECT_ID}-backups" --member="serviceAccount:${VM_SA}" --role=roles/storage.objectUser
 gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:${DEPLOY_SA}" --role=roles/compute.osAdminLogin --condition=None
 gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:${DEPLOY_SA}" --role=roles/iap.tunnelResourceAccessor --condition=None

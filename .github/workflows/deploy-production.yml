@@ -39,7 +39,10 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@v2
-      - name: Build and push immutable images with Cloud Build
+      - name: Configure Artifact Registry
+        run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
+      # 同 MasterDriver：在 GitHub 機器上建置並推送，部署帳戶只需 Artifact Registry 寫入權限
+      - name: Build and push immutable images
         id: images
         env:
           PROJECT: ${{ vars.GCP_PROJECT_ID }}
@@ -49,15 +52,9 @@ jobs:
           set -euo pipefail
           base="${REGION}-docker.pkg.dev/${PROJECT}/${REPO}"
           tag="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          gcloud builds submit . \
-            --project="$PROJECT" \
-            --region=global \
-            --config=deploy/cloudbuild.yaml \
-            --service-account="projects/${PROJECT}/serviceAccounts/dualplate-build@${PROJECT}.iam.gserviceaccount.com" \
-            --substitutions="_REGISTRY=${base},_TAG=${tag}" \
-            --quiet
           for name in api web; do
             image="${base}/${name}:${tag}"
+            docker buildx build --platform linux/amd64 --file "deploy/${name}/Dockerfile" --tag "$image" --push --provenance=false .
             digest="$(gcloud artifacts docker images describe "$image" --project="$PROJECT" --format='value(image_summary.digest)')"
             [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { printf 'Invalid digest for %s\n' "$image" >&2; exit 1; }
             printf '%s=%s@%s\n' "$name" "${base}/${name}" "$digest" >> "$GITHUB_OUTPUT"
