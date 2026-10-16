@@ -13,6 +13,7 @@ import { entrustmentRoutes } from './entrustment-routes.js'
 import { portalRoutes, publicPortalRoutes } from './client-portal.js'
 import { workOrderRoutes } from './work-order-routes.js'
 import { viewRoutes } from './view-routes.js'
+import { driverRoutes } from './drivers.js'
 
 const port = Number(process.env.PORT || 4100)
 const allowedOrigins = new Set((process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174').split(','))
@@ -140,6 +141,7 @@ export const server = http.createServer(async (req, res) => {
     if (await phase1Routes(req, res, url, user, { json, fail, parseBody, canAccessCustomer, vehicleFor, plateFor, query, one, clean })) return
     if (await entrustmentRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await workOrderRoutes(req, res, url, user, { json, fail, parseBody })) return
+    if (await driverRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (viewRoutes(req, res, url, user, { json, fail })) return
     if (await portalRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await customerRoutes(req, res, url, user, { json, fail, query, one, plateFor, parseBody })) return

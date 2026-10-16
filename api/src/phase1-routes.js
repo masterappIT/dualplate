@@ -1,6 +1,7 @@
 import { db, id, now } from './db.js'
 import { plateFacts } from './plate-facts.js'
 import { deadlineOwners } from './deadline-owners.js'
+import { driverFor } from './drivers.js'
 import { scopeMap } from './entrustment.js'
 import { computeDeadlines, ruleMatches, ruleScopes, ruleMethods, matchKeys, dateFields } from './rules.js'
 
@@ -36,9 +37,10 @@ export async function phase1Routes(req, res, url, user, h) {
     if (type === 'plate') return plateFor(user, ownerId)
     if (type === 'vehicle') return vehicleFor(user, ownerId)
     if (type === 'company') return company(ownerId)
+    if (type === 'driver') return driverFor(tenant, ownerId)
     return null
   }
-  const facts = (type, item) => type === 'plate' ? plateFacts(item) : type === 'vehicle' ? { route: item.route, origin: item.origin, firstRegisteredOn: item.first_registered_on } : { jurisdiction: item.jurisdiction, status: item.status || '存續', companyStatus: item.status || '存續', incorporatedOn: item.incorporated_on }
+  const facts = (type, item) => type === 'driver' ? {} : type === 'plate' ? plateFacts(item) : type === 'vehicle' ? { route: item.route, origin: item.origin, firstRegisteredOn: item.first_registered_on } : { jurisdiction: item.jurisdiction, status: item.status || '存續', companyStatus: item.status || '存續', incorporatedOn: item.incorporated_on }
   const statusWarnings = companies => [...new Set(companies.filter(item => item.jurisdiction === '內地' && ['已註銷', '註銷中'].includes(item.status)).map(item => item.status === '已註銷' ? '內承單位已註銷' : '內承單位註銷中'))]
   const companyStatusInfo = (groupId, customerId) => query('SELECT id,jurisdiction,name,status,status_changed_on FROM companies WHERE tenant_id=? AND group_id=? AND customer_id=? ORDER BY jurisdiction,name', tenant, groupId, customerId)
   const rules = () => query('SELECT * FROM rules WHERE tenant_id=? ORDER BY sort,name', tenant).map(decoded)

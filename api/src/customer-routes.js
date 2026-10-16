@@ -2,6 +2,7 @@ import { computeDeadlines } from './rules.js'
 import { plateFacts } from './plate-facts.js'
 import { addCrossing, crossingSummary, setReminder } from './crossings.js'
 import { scopeMap } from './entrustment.js'
+import { driverOwners, mainPlate } from './drivers.js'
 import { deadlineNotices } from './client-portal.js'
 import { services, planFor } from './catalog.js'
 
@@ -50,7 +51,8 @@ export async function customerRoutes(req, res, url, user, h) {
     const owners = [
       ...plates.map(item => ({ ownerType: 'plate', ownerId: item.id, label: plateLabel(item), facts: plateFacts(item) })),
       ...companies.filter(item => companyStatus(item) !== '已註銷').map(item => ({ ownerType: 'company', ownerId: item.id, label: item.name, facts: { jurisdiction: item.jurisdiction, incorporatedOn: item.incorporated_on, status: companyStatus(item), companyStatus: companyStatus(item) } })),
-      ...vehicles.map(item => { const plate = plates.find(entry => entry.vehicle_id === item.id); return { ownerType: 'vehicle', ownerId: item.id, label: item.plate, facts: { route: item.route, origin: item.origin, firstRegisteredOn: item.first_registered_on }, scopeOwner: plate ? { type: 'plate', id: plate.id } : null } })
+      ...vehicles.map(item => { const plate = plates.find(entry => entry.vehicle_id === item.id); return { ownerType: 'vehicle', ownerId: item.id, label: item.plate, facts: { route: item.route, origin: item.origin, firstRegisteredOn: item.first_registered_on }, scopeOwner: plate ? { type: 'plate', id: plate.id } : null } }),
+      ...driverOwners(customer.tenant_id, customer.id)
     ]
     const tracked = new Map(query('SELECT * FROM tracked_items WHERE tenant_id=?', customer.tenant_id).map(item => [`${item.owner_type}:${item.owner_id}:${item.code}`, item]))
     const completions = new Set(query('SELECT * FROM rule_completions WHERE tenant_id=?', customer.tenant_id).map(item => `${item.code}:${item.owner_id}:${item.period}`))
@@ -59,7 +61,7 @@ export async function customerRoutes(req, res, url, user, h) {
   // Vehicle deadlines belong to the plate the vehicle is mounted on.
   const visible = list => list.filter(item => item.level !== 'missing')
   // Company deadlines point at a plate of the same company group, when there is one.
-  const plateOf = item => item.ownerType === 'plate' ? item.ownerId : item.ownerType === 'vehicle' ? plates.find(plate => plate.vehicle_id === item.ownerId)?.id : plates.find(plate => plate.group_id && companies.some(company => company.id === item.ownerId && company.group_id === plate.group_id))?.id
+  const plateOf = item => item.ownerType === 'plate' ? item.ownerId : item.ownerType === 'driver' ? mainPlate(item.ownerId) : item.ownerType === 'vehicle' ? plates.find(plate => plate.vehicle_id === item.ownerId)?.id : plates.find(plate => plate.group_id && companies.some(company => company.id === item.ownerId && company.group_id === plate.group_id))?.id
   function groupCompanies(groupId) {
     const members = companies.filter(item => item.group_id === groupId)
     const pick = list => list.map(item => ({ id: item.id, name: item.name, jurisdiction: item.jurisdiction, registrationNo: item.registration_no || '', incorporatedOn: item.incorporated_on || '', status: companyStatus(item) }))

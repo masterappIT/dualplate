@@ -1,6 +1,6 @@
 // Default expiry rules per tenant, based on the official review of 2026-10-16 (docs/requirements.md §1.2).
 // Tenants can edit names, conditions, parameters and reminder days afterwards.
-export const ruleScopes = ['plate', 'company', 'vehicle']
+export const ruleScopes = ['plate', 'company', 'vehicle', 'driver']
 // Which entrusted service each rule belongs to (docs/tasks/entrustment-brief.md §2). Custom rules default by scope.
 export const defaultService = scope => scope === 'company' ? 'company_upkeep' : 'plate_service'
 export const ruleMethods = ['expiry', 'anniversary', 'yearly', 'inspection', 'periodic', 'since_last', 'after_field']
@@ -27,6 +27,10 @@ export const defaultRules = [
   { code: 'hk_registered_office', name: '香港公司註冊地址／秘書服務合約', scope: 'company', method: 'expiry', match: { jurisdiction: '香港' }, params: {}, remindDays: 30, service: 'secretary', customerVisible: true },
   { code: 'cn_registered_address', name: '內地公司註冊地址（掛靠）合約', scope: 'company', method: 'expiry', match: { jurisdiction: '內地' }, params: {}, remindDays: 30, service: 'company_upkeep', customerVisible: true },
   { code: 'hk_audit_tax', name: '香港公司審計及利得稅報稅', scope: 'company', method: 'expiry', match: { jurisdiction: '香港' }, params: {}, remindDays: 60, service: 'audit_tax', customerVisible: true },
+  // 司機證件（docs/tasks/drivers-brief.md）：手動填寫到期日，委託範圍跟隨主司機所在牌照
+  { code: 'home_return_permit', name: '回鄉證', scope: 'driver', method: 'expiry', match: {}, params: {}, remindDays: 60, service: 'plate_service', customerVisible: true },
+  { code: 'hk_driving_licence', name: '香港駕駛執照', scope: 'driver', method: 'expiry', match: {}, params: {}, remindDays: 60, service: 'plate_service', customerVisible: true },
+  { code: 'cn_driving_licence', name: '內地駕駛證', scope: 'driver', method: 'expiry', match: {}, params: {}, remindDays: 60, service: 'plate_service', customerVisible: true },
   { code: 'cn_status_check', name: '核對內地公司登記狀態', scope: 'company', method: 'periodic', match: { jurisdiction: '內地', companyStatus: ['存續', '經營異常', '註銷中'] }, params: { months: [1, 4, 7, 10], officialUrl: 'https://www.gsxt.gov.cn/' }, remindDays: 30, service: 'company_upkeep', customerVisible: false }
 ]
 

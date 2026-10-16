@@ -54,13 +54,14 @@ function ownerBelongsToRequest(tenant, request, ownerType, ownerId) {
   if (ownerType === 'plate') return db.prepare('SELECT p.id FROM plate_assets p JOIN customers c ON c.id=p.customer_id WHERE p.id=? AND p.customer_id=? AND c.tenant_id=?').get(ownerId, request.customer_id, tenant)
   if (ownerType === 'vehicle') return db.prepare('SELECT v.id FROM vehicles v JOIN customers c ON c.id=v.customer_id WHERE v.id=? AND v.customer_id=? AND c.tenant_id=?').get(ownerId, request.customer_id, tenant)
   if (ownerType === 'company') return db.prepare('SELECT co.id FROM companies co WHERE co.id=? AND co.customer_id=? AND co.tenant_id=?').get(ownerId, request.customer_id, tenant)
+  if (ownerType === 'driver') return db.prepare('SELECT id FROM drivers WHERE id=? AND customer_id=? AND tenant_id=?').get(ownerId, request.customer_id, tenant)
   return null
 }
 function updateTrackedItems(tenant, request, updates, actorId) {
   if (updates === undefined) return 0
   if (!Array.isArray(updates)) return null
   for (const update of updates) {
-    if (!isObject(update) || !['plate', 'vehicle', 'company'].includes(update.ownerType) || typeof update.ownerId !== 'string' || typeof update.code !== 'string' || !update.code.trim() || !validDate(update.expiresOn)) return null
+    if (!isObject(update) || !['plate', 'vehicle', 'company', 'driver'].includes(update.ownerType) || typeof update.ownerId !== 'string' || typeof update.code !== 'string' || !update.code.trim() || !validDate(update.expiresOn)) return null
     if (!ownerBelongsToRequest(tenant, request, update.ownerType, update.ownerId)) return null
   }
   for (const update of updates) db.prepare('INSERT INTO tracked_items(tenant_id,owner_type,owner_id,code,expires_on,notes,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(owner_type,owner_id,code) DO UPDATE SET tenant_id=excluded.tenant_id,expires_on=excluded.expires_on,notes=excluded.notes,updated_by=excluded.updated_by,updated_at=excluded.updated_at').run(tenant, update.ownerType, update.ownerId, update.code.trim(), update.expiresOn, clean(update.notes, 500), actorId, now())
