@@ -18,7 +18,9 @@ import { useAdminStore } from '../store'
 const { modal, plateSearch, plateFilter, filteredPlateRows, selectedPlateIds, bulkRule, allowedBulkRules, bulkDate, saveBulkDates, customerName, openPlate, previewPlateImport, confirmPlateImport, importPreview, saveTrackedItem, showError, refresh } = useAdminStore()
 const filters = [{ value: 'all', label: '全部' }, { value: 'attention', label: '需注意' }, { value: 'rental', label: '出租中' }, { value: 'own', label: '自用' }, { value: 'empty', label: '空置' }, { value: 'missing', label: '資料不全' }]
 const list = useListPage(filteredPlateRows, refresh, selectedPlateIds)
-const columns = [{ key: 'mainland_plate', title: '車牌' }, { key: 'holder_company', title: '持牌公司' }, { key: 'customer_id', title: '客戶' }, { key: 'port', title: '口岸' }, { key: 'card_expires_on', title: '批文到期' }, { key: 'permit_expires_on', title: 'CRP／通行證到期' }, { key: 'usage_status', title: '使用' }, { key: 'health_status', title: '狀態' }, { key: 'action', title: '操作', className: 'col-actions' }]
+// 使用狀態併入狀態欄的第二行；「待核對」對用戶顯示為「使用待確認」。
+const usageText = status => ({ '待核對': '使用待確認' }[status] || status || '使用待確認')
+const columns = [{ key: 'mainland_plate', title: '車牌', width: 190 }, { key: 'holder_company', title: '持牌公司', width: 150 }, { key: 'customer_id', title: '客戶', width: 120 }, { key: 'port', title: '口岸', width: 72 }, { key: 'card_expires_on', title: '批文到期', width: 128 }, { key: 'permit_expires_on', title: 'CRP／通行證到期', width: 138 }, { key: 'health_status', title: '狀態／使用', width: 96 }, { key: 'action', title: '操作', className: 'col-actions', width: 72 }]
 const importOpen = ref(false)
 const importStage = computed(() => importPreview.value ? '預覽' : '選檔')
 const statusLabel = status => ({ overdue: '已逾期', due: '需注意', missing: '資料不全', ok: '正常' }[status] || status)
@@ -43,7 +45,7 @@ function downloadTemplate() {
 }
 </script>
 <template>
-  <ListPage title="牌照" desc="全部牌照集中在一張表，日期可直接填寫或批量更新。" table-title="牌照總表" :list="list" :columns="columns" :min-width="1180" selectable>
+  <ListPage title="牌照" desc="全部牌照集中在一張表，日期可直接填寫或批量更新。" table-title="牌照總表" :list="list" :columns="columns" :min-width="1000" selectable>
     <template #actions><Button @click="importOpen = true">匯入 CSV</Button><Button @click="modal = 'vehicle'">＋ 登記車輛</Button><Button variant="primary" @click="modal = 'plate'">＋ 登記牌照</Button></template>
     <template #before><Segmented v-model="plateFilter" :options="filters" label="牌照分類" /></template>
     <template #search><Field label="搜尋牌照"><TextInput v-model="plateSearch" placeholder="搜尋車牌、客戶或公司" /></Field></template>
@@ -53,7 +55,7 @@ function downloadTemplate() {
     <template #cell-port="{ row }">{{ row.port || '待設定' }}</template>
     <template #cell-card_expires_on="{ row }"><DueDate :date="row.card_expires_on" /></template>
     <template #cell-permit_expires_on="{ row }"><DueDate :date="row.permit_expires_on" editable label="CRP／通行證到期" :on-save="value => savePermit(row, value)" /></template>
-    <template #cell-health_status="{ row }"><Tag :tone="row.health_status === 'overdue' ? 'danger' : row.health_status === 'due' ? 'warning' : row.health_status === 'ok' ? 'ok' : 'neutral'">{{ statusLabel(row.health_status) }}</Tag></template>
+    <template #cell-health_status="{ row }"><Tag :tone="row.health_status === 'overdue' ? 'danger' : row.health_status === 'due' ? 'warning' : row.health_status === 'ok' ? 'ok' : 'neutral'">{{ statusLabel(row.health_status) }}</Tag><small class="cell-sub">{{ usageText(row.usage_status) }}</small></template>
     <template #cell-action="{ row }"><button class="text-button" @click="openPlate(row)">查看 →</button></template>
     <template #batch><label>到期種類 <select v-model="bulkRule" :disabled="!allowedBulkRules.length"><option v-if="allowedBulkRules.includes('hk_crp')" value="hk_crp">CRP 到期</option><option v-if="allowedBulkRules.includes('mo_permit')" value="mo_permit">澳門通行證到期</option></select></label><DateInput v-model="bulkDate" label="批量到期日" /><Button :disabled="!allowedBulkRules.length" @click="saveBulkDates">批量填日期</Button><span v-if="!allowedBulkRules.length">請按路線分開批量填寫</span></template>
   </ListPage>

@@ -1,4 +1,5 @@
 <template>
+  <template v-if="selected">
   <div class="page-heading">
     <div>
       <button class="back" @click="view = 'business'">← 返回業務</button>
@@ -167,6 +168,8 @@
       </section>
     </div>
   </div>
+  </template>
+  <div v-else class="panel empty" role="status">正在載入工單資料…</div>
 </template>
 <script setup>
 import { computed } from 'vue'

@@ -17,14 +17,15 @@ const canvas = ref<HTMLCanvasElement | null>(null)
 /* 节点锚点（归一化坐标）：0 是中心枢纽，其余为能力模块 */
 interface NetNode { ax: number; ay: number; r: number; seed: number; x: number; y: number; tx: number; ty: number }
 const ANCHORS: Array<Pick<NetNode, 'ax' | 'ay' | 'r' | 'seed'>> = [
-  { ax: 0.5, ay: 0.52, r: 3.4, seed: 0.13 },
-  { ax: 0.2, ay: 0.3, r: 2.2, seed: 0.31 },
-  { ax: 0.34, ay: 0.74, r: 2.0, seed: 0.47 },
-  { ax: 0.72, ay: 0.26, r: 2.1, seed: 0.59 },
-  { ax: 0.82, ay: 0.58, r: 1.9, seed: 0.71 },
-  { ax: 0.56, ay: 0.82, r: 1.8, seed: 0.83 },
-  { ax: 0.14, ay: 0.58, r: 1.8, seed: 0.97 },
-  { ax: 0.7, ay: 0.86, r: 1.6, seed: 0.07 },
+  // 節點避開中間的標題、右側時鐘與底部能力面板，口岸名稱不會壓在文字上。
+  { ax: 0.5, ay: 0.68, r: 3.4, seed: 0.13 },
+  { ax: 0.2, ay: 0.22, r: 2.2, seed: 0.31 },
+  { ax: 0.28, ay: 0.75, r: 2.0, seed: 0.47 },
+  { ax: 0.62, ay: 0.19, r: 2.1, seed: 0.59 },
+  { ax: 0.9, ay: 0.73, r: 1.9, seed: 0.71 },
+  { ax: 0.68, ay: 0.77, r: 1.8, seed: 0.83 },
+  { ax: 0.1, ay: 0.64, r: 1.8, seed: 0.97 },
+  { ax: 0.42, ay: 0.25, r: 1.6, seed: 0.07 },
 ]
 const nodeNames = ['牌照印章', '皇崗口岸', '粵港牌照', '深圳灣口岸', '港珠澳口岸', '粵澳牌照', '文錦渡口岸', '蓮塘口岸']
 /* 对勾折线顶点（归一化）：短边下压 → 拐点 → 长边上挑 */

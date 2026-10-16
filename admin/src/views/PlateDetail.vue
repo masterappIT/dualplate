@@ -1,4 +1,5 @@
 <template>
+  <template v-if="selectedPlate">
   <div class="page-heading">
     <div>
       <button class="back" @click="view = 'plates'">← 返回牌照</button>
@@ -15,6 +16,67 @@
       ＋ 登記出租
     </button>
   </div>
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <h2>批文卡 · 模擬卡預覽</h2>
+        <p>
+          客戶端同步顯示以下內容 · {{ selectedPlate.card_status || "待核對" }} ·
+          {{ selectedPlate.card_updated_by || "尚未更新" }}
+        </p>
+      </div>
+      <button class="button primary" @click="saveCard">儲存並核對</button>
+    </div>
+    <div class="approval-admin-grid">
+      <div>
+        <ApprovalCard :key="selectedPlate.id" :data="cardDraft" />
+        <p class="preview-note">
+          模板按提供的批文卡原件重繪；文字由欄位資料即時生成。上傳後請逐欄核對。
+        </p>
+      </div>
+      <div>
+        <div class="form-grid card-form-grid">
+          <div v-for="field in cardFields" :key="field.key">
+            <label
+              >{{ field.label
+              }}<span
+                v-if="fieldStatusText(cardFieldStatus[field.key])"
+                class="card-field-status"
+                :class="fieldStatusClass(cardFieldStatus[field.key])"
+                >{{ fieldStatusText(cardFieldStatus[field.key]) }}</span
+              ></label
+            ><input v-model="cardDraft[field.key]" />
+          </div>
+        </div>
+        <button class="button primary" @click="saveCard">儲存並核對</button>
+      </div>
+    </div>
+    <details class="scan-details">
+      <summary>原件掃描與重新上傳（供核對）</summary>
+      <div class="card-upload-grid">
+        <div v-for="side in ['front', 'back']" :key="side">
+          <strong>{{ side === "front" ? "正面" : "背面" }}</strong
+          ><img
+            v-if="selectedPlate.cardImages?.[side]"
+            :src="selectedPlate.cardImages[side]"
+            class="card-image"
+          />
+          <div v-else class="card-placeholder">尚未上傳</div>
+          <input
+            type="file"
+            accept="image/png,image/jpeg"
+            @change="uploadCard(side, $event)"
+          />
+        </div>
+      </div>
+    </details>
+  </section>
+  <ExpiryPanel
+    owner-type="plate"
+    :owner-id="selectedPlate.id"
+    @saved="showSuccess"
+    @error="showError"
+  />
   <div class="grid-two">
     <section class="panel">
       <div class="panel-head">
@@ -98,12 +160,6 @@
     </div>
     <button class="button primary" @click="savePlate">儲存指標資料</button>
   </section>
-  <ExpiryPanel
-    owner-type="plate"
-    :owner-id="selectedPlate.id"
-    @saved="showSuccess"
-    @error="showError"
-  />
   <section class="panel">
     <div class="panel-head">
       <div>
@@ -130,61 +186,8 @@
       </div>
     </div>
   </section>
-  <section class="panel">
-    <div class="panel-head">
-      <div>
-        <h2>批文卡 · 模擬卡預覽</h2>
-        <p>
-          客戶端同步顯示以下內容 · {{ selectedPlate.card_status || "待核對" }} ·
-          {{ selectedPlate.card_updated_by || "尚未更新" }}
-        </p>
-      </div>
-      <button class="button primary" @click="saveCard">儲存並核對</button>
-    </div>
-    <div class="approval-admin-grid">
-      <div>
-        <ApprovalCard :key="selectedPlate.id" :data="cardDraft" />
-        <p class="preview-note">
-          模板按提供的批文卡原件重繪；文字由欄位資料即時生成。上傳後請逐欄核對。
-        </p>
-      </div>
-      <div>
-        <div class="form-grid card-form-grid">
-          <div v-for="field in cardFields" :key="field.key">
-            <label
-              >{{ field.label
-              }}<span
-                v-if="fieldStatusText(cardFieldStatus[field.key])"
-                class="card-field-status"
-                :class="fieldStatusClass(cardFieldStatus[field.key])"
-                >{{ fieldStatusText(cardFieldStatus[field.key]) }}</span
-              ></label
-            ><input v-model="cardDraft[field.key]" />
-          </div>
-        </div>
-        <button class="button primary" @click="saveCard">儲存並核對</button>
-      </div>
-    </div>
-    <details class="scan-details">
-      <summary>原件掃描與重新上傳（供核對）</summary>
-      <div class="card-upload-grid">
-        <div v-for="side in ['front', 'back']" :key="side">
-          <strong>{{ side === "front" ? "正面" : "背面" }}</strong
-          ><img
-            v-if="selectedPlate.cardImages?.[side]"
-            :src="selectedPlate.cardImages[side]"
-            class="card-image"
-          />
-          <div v-else class="card-placeholder">尚未上傳</div>
-          <input
-            type="file"
-            accept="image/png,image/jpeg"
-            @change="uploadCard(side, $event)"
-          />
-        </div>
-      </div>
-    </details>
-  </section>
+  </template>
+  <div v-else class="panel empty" role="status">正在載入牌照資料…</div>
 </template>
 <script setup>
 import { computed } from 'vue'

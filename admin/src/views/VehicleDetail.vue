@@ -1,4 +1,5 @@
 <template>
+  <template v-if="selectedVehicle">
   <div class="page-heading">
     <div>
       <button class="back" @click="view = 'plates'">← 返回牌照</button>
@@ -99,6 +100,8 @@
         >
       </div>
   </section>
+  </template>
+  <div v-else class="panel empty" role="status">正在載入車輛資料…</div>
 </template>
 <script setup>
 import { useAdminStore } from "../store";

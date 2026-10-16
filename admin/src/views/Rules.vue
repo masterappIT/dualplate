@@ -35,8 +35,8 @@ onMounted(load)
       <template #cell-scope="{ row }">{{ appliesTo(row) }}</template>
       <template #cell-method="{ row }">{{ calculation(row) }}</template>
       <template #cell-remind_days="{ row }">{{ row.remind_days }} 天</template>
-      <template #cell-customerVisible="{ row }"><Switch :model-value="!!row.customerVisible" :disabled="saving === row.id" :label="`${row.name}客戶看得到`" @update:model-value="toggle(row, 'customerVisible', $event)" /><span>{{ row.customerVisible ? '是' : '否' }}</span></template>
-      <template #cell-active="{ row }"><Switch :model-value="!!row.active" :disabled="saving === row.id" :label="`${row.name}啟用`" @update:model-value="toggle(row, 'active', $event)" /><span>{{ row.active ? '啟用' : '停用' }}</span></template>
+      <template #cell-customerVisible="{ row }"><Switch :model-value="!!row.customerVisible" :disabled="saving === row.id" :label="`${row.name}客戶看得到`" @update:model-value="toggle(row, 'customerVisible', $event)">{{ row.customerVisible ? '是' : '否' }}</Switch></template>
+      <template #cell-active="{ row }"><Switch :model-value="!!row.active" :disabled="saving === row.id" :label="`${row.name}啟用`" @update:model-value="toggle(row, 'active', $event)">{{ row.active ? '啟用' : '停用' }}</Switch></template>
       <template #cell-action="{ row }"><Button @click="edit(row)">編輯</Button></template>
     </DataTable></div>
   </section>

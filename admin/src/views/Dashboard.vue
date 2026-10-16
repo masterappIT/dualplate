@@ -15,11 +15,13 @@
       <template #cell-customer="{ row }">{{ row.customerName || row.request?.customer_name || row.customer_name || '—' }}</template>
       <template #cell-due="{ row }"><DueDate v-if="row.ruleCode" :date="row.dueOn" :editable="row.method === 'expiry' && row.ruleCode !== 'approval'" label="到期日" :on-save="value => saveDate(row, value)" /><span v-else>—</span></template>
       <template #cell-status="{ row }"><Tag :tone="row.ruleCode ? ({ danger: 'danger', amber: 'warning', muted: 'neutral' }[tone(row.level)] || 'neutral') : 'info'">{{ row.ruleCode ? label(row.level) : row.request ? '待客戶提供' : row.status }}</Tag></template>
-      <template #cell-action="{ row }"><div class="row-actions"><template v-if="row.ruleCode"><button v-if="row.ruleCode === 'approval'" class="text-button" @click="openPlateById(row.ownerId)">修改批文卡</button><button v-else-if="row.completable" class="text-button" @click="complete(row)">已辦好</button><button class="text-button" @click="createRequestFromDeadline(row)">開工單</button></template><button v-else class="text-button" @click="openRequest(row.request || row)">查看工單 →</button></div></template>
+      <template #cell-action="{ row }"><div class="row-actions"><template v-if="row.ruleCode"><button v-if="row.ruleCode === 'approval'" class="text-button" @click="openPlateById(row.ownerId)">修改批文卡</button><button v-else-if="row.completable" class="text-button" @click="complete(row, $event)">已辦好</button><button class="text-button" @click="createRequestFromDeadline(row)">開工單</button></template><button v-else class="text-button" @click="openRequest(row.request || row)">查看工單 →</button></div></template>
     </DataTable>
   </section>
+  <StampMark v-if="stamp" :key="stamp.key" class="stamp-float" :style="{ left: stamp.x + 'px', top: stamp.y + 'px' }" text="已辦好" play />
 </template>
 <script setup>
+import StampMark from '../components/ui/StampMark.vue'
 import { ref, computed } from 'vue'
 import StatCard from '../components/ui/StatCard.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -41,5 +43,8 @@ const tabs = [{ value: 'due', label: '到期待辦' }, { value: 'active', label:
 const label = level => ({ overdue: '已逾期', due: '需處理', missing: '待錄入' }[level] || level)
 const tone = level => ({ overdue: 'danger', due: 'amber', missing: 'muted' }[level] || '')
 async function saveDate(item, expiresOn) { return saveTrackedItem({ ...item, code: item.ruleCode, expiresOn }) }
-async function complete(item) { try { await api('/rule-completions', 'POST', { ruleCode: item.ruleCode, ownerId: item.ownerId, period: item.period }); await useAdminStore().refresh(); showSuccess('本期已標記完成') } catch (error) { showError(error) } }
+// 蓋章回饋：在按下的位置蓋「已辦好」章，0.9 秒後消失（列表隨即重新整理，該項會離開清單）。
+const stamp = ref(null)
+function stampAt(event) { const rect = event?.target?.getBoundingClientRect?.(); stamp.value = rect ? { x: rect.left + rect.width / 2 - 28, y: rect.top - 20, key: Date.now() } : null; setTimeout(() => { stamp.value = null }, 900) }
+async function complete(item, event) { try { await api('/rule-completions', 'POST', { ruleCode: item.ruleCode, ownerId: item.ownerId, period: item.period }); stampAt(event); await useAdminStore().refresh(); showSuccess('本期已標記完成') } catch (error) { showError(error) } }
 </script>
