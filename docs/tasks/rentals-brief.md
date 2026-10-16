@@ -18,6 +18,27 @@
 
 ## 第 A 輪：合約、應收款、管理端與客戶端
 
+**分工（2026-10-16）**：**A 輪後端、遷移與測試已由負責人完成**（`api/src/rentals.js`、`api/test/rentals.test.js`，提交 7d4d95c）。**你（Codex）只做下文第 4 節管理端**，不改 `api/`、`mobile/`；後端問題寫進報告「疑慮」。
+
+### 可用的 API（只限管理者，員工與客戶 403，跨租戶 404）
+
+| 用途 | 請求 | 說明 |
+|---|---|---|
+| 合約列表 | `GET /api/rental-contracts?plateId=&customerId=&status=` | 每份含 `renter{name,type,phone,vehiclePlate,driver}`、`rentAmount`（分）、`currency`、`cycle`、`dueDay`、`collectionMode`、`feeType`/`feeValue`、`lessorType`/`lessorCompanyId`、`status`、`currentInvoice`、`invoices[]`、`plateLabel`、`customerName`、`isSelf` |
+| 新增 | `POST /api/rental-contracts {plateId, renter:{name,type,phone,vehiclePlate,driver}, startsOn, endsOn?, rentAmount, currency, cycle, dueDay, depositAmount?, collectionMode, feeType, feeValue, lessorType, lessorCompanyId?, status:'草擬'|'生效', notes?}` | 同一牌照已有生效合約 409；自有牌照不可 `agent`；只有代收可設管理費 |
+| 修改 | `PATCH /api/rental-contracts/:id`（同上欄位） | 改金額只影響未到期未收的期數；已結束 409 |
+| 終止 | `POST /api/rental-contracts/:id/terminate {endedOn, reason}` | 原因必填；之後未收的期數作廢 |
+| 應收款 | `GET /api/rent-invoices?contractId=&status=` | `status`：待收／逾期／部分收／已收／作廢 |
+| 收款 | `POST /api/rent-invoices/:id/receive {receivedOn, receivedAmount, receivedBy?:'代辦公司'|'客戶', proof?: base64, notes?}` | 憑證 JPG/PNG/PDF ≤ 5 MB |
+| 撤銷 | `POST /api/rent-invoices/:id/unreceive` | |
+| 憑證 | `GET /api/rent-invoices/:id/proof` | 需帶令牌，用 blob 顯示 |
+| 總覽 | `GET /api/overview` 新增 `rent:{month, due:{count,amount:{HKD:..}}, received, overdue}` | 逾期租金在 `deadlines` 中為 `ruleCode='rent_overdue'`、`method='rent'`、帶 `contractId`、`invoiceId`：**這類項目不可顯示「標記完成」**，改為「登記收款」或連到合約 |
+| 牌照詳情 | `GET /api/plate-assets/:id` 新增 `rentalContracts[]` | 舊 `rentals` 保留給歷史 |
+
+金額單位是「分」：畫面輸入與顯示要換成元（兩位小數）並帶幣種；不同幣種分開顯示，不換算。牌照的「出租中」用途已由合約推算，表格的用途選單不要再讓人手動改成「出租中」。
+
+
+
 > **委託範圍（第 12 輪已上線）**：牌照的 `rental_management` 為 `client`（客戶自理）時，管理端不產生收款提醒工作，只記錄合約與狀態；`outsourced` 時顯示外包單位。
 
 ### 1. 資料（一次性遷移，沿用 `schema_migrations`）
@@ -48,13 +69,13 @@
 - 兩地牌詳情的「出租記錄」改為顯示合約，並可從這裡新增合約
 - 管理總覽顯示本月租金數字與逾期項
 
-### 5. 客戶端（**負責人親自做**，你不要改 `mobile/`）
+### 5. 客戶端（負責人親自做，你不要改 `mobile/`）
 
 只需提供上述 `/api/my/rentals`；負責人會接上首頁「本月租金」、牌照詳情的出租資訊和新的租金頁面。
 
-### 6. 測試
+### 6. 測試（後端 24 項已完成）
 
-具名、一情況一測試：應收款生成與補生成冪等；季繳／年繳期數；提前終止作廢；同牌重疊合約被拒；收款與撤銷；逾期判斷；總覽租金數字；客戶只看到自己的合約且不含電話；跨租戶 404；客戶呼叫管理接口 403；舊 `plate_rentals` 遷移只執行一次。
+你只需確保 `cd api && npm test`（目前 274 項）、`cd admin && npm run check`、`cd admin && npm run build` 全過，並截 1366／390（彈窗用點擊欄）。後端已覆蓋：應收款生成與補生成冪等；季繳／年繳期數；提前終止作廢；同牌重疊合約被拒；收款與撤銷；逾期判斷；總覽租金數字；客戶只看到自己的合約且不含電話；跨租戶 404；客戶呼叫管理接口 403；舊 `plate_rentals` 遷移只執行一次。
 
 ---
 
