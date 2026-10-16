@@ -32,7 +32,7 @@ import { api, getUser, friendlyDate } from '../../lib/api'
 const items = ref([]), outstanding = ref({}), loaded = ref(false), busy = ref(''), filter = ref('open')
 const filters = [{ key: 'open', label: '未付' }, { key: 'all', label: '全部' }]
 const totals = computed(() => Object.entries(outstanding.value).map(([currency, value]) => ({ currency, value })))
-const toConfirm = computed(() => items.value.filter(item => item.needsConfirm))
+const toConfirm = computed(() => items.value.filter(item => item.needsConfirm).sort((a, b) => String(a.dueOn || '').localeCompare(String(b.dueOn || ''))))
 const shown = computed(() => filter.value === 'open' ? items.value.filter(item => ['未收', '部分收'].includes(item.status)) : items.value)
 const money = value => (value / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const label = item => item.status === '已收' ? '已付款' : item.overdue ? '已逾期' : item.status === '部分收' ? '部分付款' : '待付款'
