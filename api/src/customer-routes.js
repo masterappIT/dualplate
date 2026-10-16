@@ -2,6 +2,7 @@ import { computeDeadlines } from './rules.js'
 import { plateFacts } from './plate-facts.js'
 import { addCrossing, crossingSummary, setReminder } from './crossings.js'
 import { scopeMap } from './entrustment.js'
+import { services, planFor } from './catalog.js'
 
 // Customer-facing summaries for the client app. Customers only see their own records, never
 // internal "missing data" items, rule codes or tenant details.
@@ -9,10 +10,23 @@ const levelRank = { overdue: 0, due: 1, upcoming: 2, ok: 3 }
 const publicDeadline = item => ({ handledBy: item.handler === 'client' ? 'you' : 'us', name: item.name, ownerType: item.ownerType, ownerId: item.ownerId, ownerLabel: item.ownerLabel, dueOn: item.dueOn, daysLeft: item.daysLeft, level: item.level, detail: item.method === 'expiry' ? '' : item.detail })
 const plateLabel = plate => `${plate.mainland_plate || '內地車牌待補'} · ${plate.local_plate || '港澳車牌待補'}`
 const companyStatus = company => company.status || '存續'
+const requestStatus = status => ({ '待開始': '已收到', '新要求': '已收到', '進行中': '辦理中', '待收件': '辦理中', '待客戶提供': '需要你提供資料', '待客戶配合': '需要你提供資料', '已完成': '已完成', '已取消': '已取消' }[status] || status)
 
 export async function customerRoutes(req, res, url, user, h) {
   const { json, fail, query, one, plateFor } = h
   const path = url.pathname
+  const requestMatch = path.match(/^\/api\/requests\/([^/]+)$/)
+  if (requestMatch && req.method === 'GET') {
+    if (user.role !== 'customer') { fail(res, 403, '此功能只供客戶使用'); return true }
+    const item = one('SELECT r.*,c.name customer_name,v.plate FROM requests r JOIN customers c ON c.id=r.customer_id LEFT JOIN vehicles v ON v.id=r.vehicle_id WHERE r.id=? AND r.customer_id=? AND c.tenant_id=?', requestMatch[1], user.customer_id, user.tenant_id)
+    if (!item) { fail(res, 404, '工單不存在'); return true }
+    const tasks = query('SELECT * FROM tasks WHERE request_id=? ORDER BY sort,rowid', item.id).map(task => ({ ...task, documents: (() => { try { return JSON.parse(task.documents_json || '[]') } catch { return [] } })() }))
+    const service = services.find(entry => entry.code === item.service_code)
+    const clientTodos = tasks.filter(task => (task.owner === 'client' || task.status === '待客戶配合') && !['已完成', '不適用'].includes(task.status)).map(task => ({ id: task.id, title: task.title, owner: 'client', status: task.status, documents: task.documents }))
+    const vehicle = item.vehicle_id ? one('SELECT * FROM vehicles WHERE id=? AND customer_id=?', item.vehicle_id, user.customer_id) : null
+    const plateAsset = item.plate_asset_id ? plateFor(user, item.plate_asset_id) : null
+    return json(res, 200, { ...item, status: requestStatus(item.status), activities: query('SELECT a.*,u.name actor_name FROM activities a LEFT JOIN users u ON u.id=a.actor_id WHERE a.request_id=? ORDER BY a.created_at DESC', item.id), tasks, clientTodos, vehicle, plateAsset, plan: service ? planFor(service, item.route) : null, inspectionGuidance: [] }), true
+  }
   if (!path.startsWith('/api/my/')) return false
   if (user.role !== 'customer') { fail(res, 403, '此功能只供客戶使用'); return true }
   const crossingPost = req.method === 'POST' && /^\/api\/my\/plates\/[^/]+\/crossings$/.test(path)
@@ -70,7 +84,7 @@ export async function customerRoutes(req, res, url, user, h) {
     const all = deadlines()
     const summaries = plates.map(plate => plateSummary(plate, all))
     const requests = query('SELECT r.id,r.title,r.status,r.stage,r.route,r.updated_at,r.plate_asset_id,p.mainland_plate FROM requests r LEFT JOIN plate_assets p ON p.id=r.plate_asset_id WHERE r.customer_id=? ORDER BY r.updated_at DESC', customer.id)
-    const waiting = query("SELECT t.id,t.title,t.request_id,r.title request_title,p.mainland_plate FROM tasks t JOIN requests r ON r.id=t.request_id LEFT JOIN plate_assets p ON p.id=r.plate_asset_id WHERE r.customer_id=? AND r.status<>'已完成' AND t.status='待客戶配合' ORDER BY r.updated_at DESC", customer.id)
+    const waiting = query("SELECT t.id,t.title,t.request_id,r.title request_title,p.mainland_plate FROM tasks t JOIN requests r ON r.id=t.request_id LEFT JOIN plate_assets p ON p.id=r.plate_asset_id WHERE r.customer_id=? AND r.status NOT IN ('已完成','已取消') AND ((t.owner='client' AND t.status NOT IN ('已完成','不適用')) OR t.status='待客戶配合') ORDER BY r.updated_at DESC", customer.id)
     const todos = [
       ...waiting.map(item => ({ kind: 'task', requestId: item.request_id, title: item.title, subtitle: [item.mainland_plate, item.request_title].filter(Boolean).join(' · ') })),
       ...requests.filter(item => item.status === '待客戶配合' && !waiting.some(task => task.request_id === item.id)).map(item => ({ kind: 'request', requestId: item.id, title: item.stage, subtitle: [item.mainland_plate, item.title].filter(Boolean).join(' · ') }))
@@ -81,7 +95,7 @@ export async function customerRoutes(req, res, url, user, h) {
       plates: summaries,
       deadlines: visible(all).filter(item => item.level !== 'ok').sort((a, b) => levelRank[a.level] - levelRank[b.level] || String(a.dueOn).localeCompare(String(b.dueOn))),
       todos,
-      activeRequests: requests.filter(item => item.status !== '已完成').slice(0, 5).map(item => ({ id: item.id, title: item.title, status: item.status, stage: item.stage, plate: item.mainland_plate || '', updatedAt: item.updated_at })),
+      activeRequests: requests.filter(item => !['已完成', '已取消'].includes(item.status)).slice(0, 5).map(item => ({ id: item.id, title: item.title, status: requestStatus(item.status), stage: item.stage, plate: item.mainland_plate || '', updatedAt: item.updated_at })),
       rentals: { active: summaries.filter(item => item.rental).length }
     }), true
   }

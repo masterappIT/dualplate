@@ -26,7 +26,8 @@ export async function phase1Routes(req, res, url, user, h) {
   const { json, fail, parseBody, canAccessCustomer, vehicleFor, plateFor, query, one, clean } = h
   const path = url.pathname, method = req.method, tenant = user.tenant_id
   if (!(/^\/api\/(company-groups|companies|tracked-items|rules|rule-completions|overview)(\/[^/]+)?$/.test(path) || path === '/api/tracked-items/bulk' || /^\/api\/companies\/[^/]+\/hk-lookup$/.test(path))) return false
-  if (user.role !== 'admin') { fail(res, 403, '無權限'); return true }
+  const staffReadOnly = user.role === 'staff' && ((method === 'GET' && /^\/api\/(company-groups|companies|tracked-items|rules|overview)(\/[^/]+)?$/.test(path)) || ['/api/tracked-items', '/api/tracked-items/bulk'].includes(path) && method === 'PUT' || path === '/api/rule-completions' && ['POST', 'DELETE'].includes(method))
+  if (user.role !== 'admin' && !staffReadOnly) { fail(res, 403, '無權限'); return true }
   const send = (status, value) => { json(res, status, value); return true }
   const error = (status, message) => { fail(res, status, message); return true }
   const customer = customerId => canAccessCustomer(user, customerId)

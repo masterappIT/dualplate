@@ -20,7 +20,7 @@ export async function entrustmentRoutes(req, res, url, user, h) {
   }
   if (path === '/api/service-scopes' && method === 'PUT') {
     const body = await parseBody(req)
-    if (!isObject(body)) return fail(res, 400, '內容無效'), true
+    if (!isObject(body) || !['company', 'plate'].includes(body.ownerType) || typeof body.ownerId !== 'string' || !body.ownerId.trim() || typeof body.service !== 'string' || !body.service.trim() || typeof body.handler !== 'string' || !body.handler.trim()) return fail(res, 400, '內容無效'), true
     const owner = loadOwner(tenant, body.ownerType, body.ownerId)
     if (!owner) return fail(res, 404, '對象不存在'), true
     const problem = checkScope(owner, body.ownerType, body)

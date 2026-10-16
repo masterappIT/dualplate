@@ -3,32 +3,38 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { spawn, spawnSync } from 'node:child_process'
-import { createServer as createHttpServer } from 'node:http'
-import { createServer as createNetServer } from 'node:net'
+import { spawnSync } from 'node:child_process'
+import { Readable } from 'node:stream'
 import { DatabaseSync } from 'node:sqlite'
 import { randomUUID, scryptSync } from 'node:crypto'
 import { defaultRules } from '../src/rules.js'
 
 const hash = password => { const salt = randomUUID(); return `${salt}:${scryptSync(password, salt, 64).toString('hex')}` }
-const freePort = () => new Promise((resolve,reject) => { const server = createNetServer(); server.on('error',reject); server.listen(0,'127.0.0.1',() => { const port = server.address().port; server.close(() => resolve(port)) }) })
-const waitForHealth = async (port, child, stderr) => { for (let attempt = 0; attempt < 100; attempt++) { if (child.exitCode !== null) throw new Error(`server stopped: ${stderr()}`); try { if ((await fetch(`http://127.0.0.1:${port}/api/health`)).ok) return } catch {} await new Promise(resolve => setTimeout(resolve,50)) } throw new Error(`server not ready: ${stderr()}`) }
+const lookupResponse = { data: [{ Brn:'68249242', Chinese_Company_Name:'曲坤有限公司', English_Company_Name:'Kukwan Limited', Address_of_Registered_Office:'香港測試地址', Company_Type:'私人股份有限公司', Date_of_Incorporation:'26-09-2017', 'Re-domiciliation_Date':'' }] }
+const nativeFetch = globalThis.fetch
+globalThis.fetch = async (input, init) => String(input).startsWith('http://mock-company-lookup.invalid/') ? new Response(JSON.stringify(lookupResponse), { status: 200, headers: { 'content-type': 'application/json' } }) : nativeFetch(input, init)
+const invoke = (server, path, method = 'GET', body, token = '') => {
+  const payload = body === undefined ? '' : JSON.stringify(body)
+  const incoming = Readable.from(payload ? [payload] : [])
+  Object.assign(incoming, { method, url: `/api${path}`, headers: { host: 'localhost', authorization: token ? `Bearer ${token}` : '', 'content-type': 'application/json' } })
+  return new Promise(resolve => {
+    const outgoing = { setHeader() {}, writeHead(status) { this.status = status }, end(text) { resolve({ status: this.status, body: JSON.parse(text) }) } }
+    server.emit('request', incoming, outgoing)
+  })
+}
 
 const state = {}
 describe('第一階段 API 整合測試', { concurrency:false }, () => {
   before(async () => {
     state.directory = mkdtempSync(join(dirname(fileURLToPath(import.meta.url)),'.phase1-api-'))
     state.databasePath = join(state.directory,'test.db')
-    state.lookupPort = await freePort()
-    state.lookupServer = createHttpServer((req,res) => {
-      res.writeHead(200, {'content-type':'application/json'})
-      res.end(JSON.stringify({ data: [{ Brn:'68249242', Chinese_Company_Name:'曲坤有限公司', English_Company_Name:'Kukwan Limited', Address_of_Registered_Office:'香港測試地址', Company_Type:'私人股份有限公司', Date_of_Incorporation:'26-09-2017', 'Re-domiciliation_Date':'' }] }))
-    })
-    await new Promise(resolve => state.lookupServer.listen(state.lookupPort,'127.0.0.1',resolve))
-    state.port = await freePort()
-    state.child = spawn(process.execPath,['src/server.js'],{ cwd:new URL('../',import.meta.url),env:{...process.env,DB_PATH:state.databasePath,PORT:String(state.port),DEMO_SEED:'0',HK_COMPANY_LOOKUP_URL:`http://127.0.0.1:${state.lookupPort}/lookup`},stdio:'pipe' })
-    let errorText = ''; state.child.stderr.on('data',chunk => { errorText += chunk }); state.stderr = () => errorText
-    await waitForHealth(state.port,state.child,state.stderr)
+    process.env.DB_PATH = state.databasePath
+    process.env.DEMO_SEED = '0'
+    process.env.API_NO_LISTEN = '1'
+    process.env.HK_COMPANY_LOOKUP_URL = 'http://mock-company-lookup.invalid/lookup'
+    const imported = await import(`../src/server.js?integration-test=${randomUUID()}`)
+    state.server = imported.server
+    state.stderr = () => ''
     state.db = new DatabaseSync(state.databasePath)
     state.tenantA = randomUUID(); state.tenantB = randomUUID(); state.customerA = randomUUID(); state.customerB = randomUUID(); state.plateA = randomUUID(); state.plateB = randomUUID(); state.vehicleA = randomUUID(); state.companyA = randomUUID(); state.mainlandCompany = randomUUID()
     for (const [tenant,customer] of [[state.tenantA,state.customerA],[state.tenantB,state.customerB]]) {
@@ -50,7 +56,7 @@ describe('第一階段 API 整合測試', { concurrency:false }, () => {
     assert.equal((await state.request(`/companies/${state.mainlandCompany}`,'PATCH',{groupId:state.group.id},state.adminA)).status,200)
     const company = await state.request('/companies','POST',{customerId:state.customerA,groupId:state.group.id,jurisdiction:'香港',name:'香港甲',incorporatedOn:'2020-02-29'},state.adminA); assert.equal(company.status,201); state.company = company.body
   })
-  after(async () => { state.db?.close(); state.child?.kill(); state.lookupServer?.close(); if (state.directory) rmSync(state.directory,{recursive:true,force:true}) })
+  after(() => { state.db?.close(); state.server?.close(); if (state.directory) rmSync(state.directory,{recursive:true,force:true}) })
 
   test('租戶隔離及客戶帳號權限', async () => {
     for (const route of ['/customers','/plate-assets','/companies','/company-groups','/rules','/overview']) {
@@ -362,4 +368,4 @@ describe('第一階段 API 整合測試', { concurrency:false }, () => {
   })
 })
 
-state.request = async (path, method='GET', body, token='') => { const response = await fetch(`http://127.0.0.1:${state.port}/api${path}`,{method,headers:{'content-type':'application/json',authorization:token ? `Bearer ${token}` : ''},body:body === undefined ? undefined : JSON.stringify(body)}); return {status:response.status,body:await response.json()} }
+state.request = (path, method='GET', body, token='') => invoke(state.server, path, method, body, token)

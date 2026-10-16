@@ -3,12 +3,13 @@ import { mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { randomUUID, scryptSync, timingSafeEqual } from 'node:crypto'
 import { defaultRules } from './rules.js'
+import { services, planFor } from './catalog.js'
 
 const file = resolve(process.env.DB_PATH || './data/app.sqlite')
 mkdirSync(dirname(file), { recursive: true })
 export const db = new DatabaseSync(file)
 db.exec(`PRAGMA foreign_keys=ON;
-CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, role TEXT NOT NULL, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, customer_id TEXT, username TEXT UNIQUE);
+CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, role TEXT NOT NULL, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, customer_id TEXT, username TEXT UNIQUE, active INTEGER NOT NULL DEFAULT 1, last_login_at TEXT);
 CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS customers(id TEXT PRIMARY KEY, name TEXT NOT NULL, kind TEXT NOT NULL, phone TEXT, owner_id TEXT, notes TEXT);
 CREATE TABLE IF NOT EXISTS vehicles(id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, route TEXT NOT NULL, origin TEXT NOT NULL, type TEXT NOT NULL, plate TEXT NOT NULL, brand TEXT, model TEXT, vin TEXT, manufactured_year INTEGER, notes TEXT);
@@ -17,9 +18,9 @@ CREATE TABLE IF NOT EXISTS plate_rentals(id TEXT PRIMARY KEY, plate_asset_id TEX
 CREATE TABLE IF NOT EXISTS approval_card_images(plate_asset_id TEXT NOT NULL, side TEXT NOT NULL, mime TEXT NOT NULL, data BLOB NOT NULL, PRIMARY KEY(plate_asset_id,side), FOREIGN KEY(plate_asset_id) REFERENCES plate_assets(id));
 CREATE TABLE IF NOT EXISTS plate_photos(plate_asset_id TEXT NOT NULL, kind TEXT NOT NULL, mime TEXT NOT NULL, data BLOB NOT NULL, PRIMARY KEY(plate_asset_id,kind), FOREIGN KEY(plate_asset_id) REFERENCES plate_assets(id));
 CREATE TABLE IF NOT EXISTS credentials(id TEXT PRIMARY KEY, vehicle_id TEXT NOT NULL, name TEXT NOT NULL, issuer TEXT, number TEXT, expires_on TEXT, status TEXT NOT NULL DEFAULT '待核對', source_id TEXT);
-CREATE TABLE IF NOT EXISTS requests(id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, vehicle_id TEXT, service_code TEXT NOT NULL, route TEXT NOT NULL, title TEXT NOT NULL, description TEXT, status TEXT NOT NULL, stage TEXT NOT NULL, assignee_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS requests(id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, vehicle_id TEXT, service_code TEXT NOT NULL, route TEXT NOT NULL, title TEXT NOT NULL, description TEXT, status TEXT NOT NULL, stage TEXT NOT NULL, assignee_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, due_on TEXT, template_id TEXT, priority TEXT NOT NULL DEFAULT 'normal', completed_at TEXT, cancelled_reason TEXT);
 CREATE TABLE IF NOT EXISTS activities(id TEXT PRIMARY KEY, request_id TEXT NOT NULL, actor_id TEXT, kind TEXT NOT NULL, detail TEXT NOT NULL, created_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS tasks(id TEXT PRIMARY KEY, request_id TEXT NOT NULL, title TEXT NOT NULL, jurisdiction TEXT NOT NULL, status TEXT NOT NULL DEFAULT '待辦', source_id TEXT, due_on TEXT, notes TEXT);
+CREATE TABLE IF NOT EXISTS tasks(id TEXT PRIMARY KEY, request_id TEXT NOT NULL, title TEXT NOT NULL, jurisdiction TEXT NOT NULL, status TEXT NOT NULL DEFAULT '待辦', source_id TEXT, due_on TEXT, notes TEXT, owner TEXT NOT NULL DEFAULT 'us', documents_json TEXT NOT NULL DEFAULT '[]', completed_by TEXT, completed_at TEXT, sort INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS inspections(id TEXT PRIMARY KEY, vehicle_id TEXT NOT NULL, request_id TEXT, title TEXT NOT NULL, status TEXT NOT NULL, appointment_on TEXT, result_on TEXT, source_id TEXT, notes TEXT);
 CREATE INDEX IF NOT EXISTS idx_requests_customer ON requests(customer_id);
 CREATE INDEX IF NOT EXISTS idx_vehicles_customer ON vehicles(customer_id);
@@ -67,7 +68,55 @@ if (!plateColumns.includes('card_updated_at')) db.exec('ALTER TABLE plate_assets
 if (!plateColumns.includes('card_status')) db.exec("ALTER TABLE plate_assets ADD COLUMN card_status TEXT NOT NULL DEFAULT '待核對'")
 const requestColumns = db.prepare('PRAGMA table_info(requests)').all().map(x => x.name)
 if (!requestColumns.includes('plate_asset_id')) db.exec('ALTER TABLE requests ADD COLUMN plate_asset_id TEXT REFERENCES plate_assets(id)')
+if (!requestColumns.includes('due_on')) db.exec('ALTER TABLE requests ADD COLUMN due_on TEXT')
+if (!requestColumns.includes('template_id')) db.exec('ALTER TABLE requests ADD COLUMN template_id TEXT')
+if (!requestColumns.includes('priority')) db.exec("ALTER TABLE requests ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'")
+if (!requestColumns.includes('completed_at')) db.exec('ALTER TABLE requests ADD COLUMN completed_at TEXT')
+if (!requestColumns.includes('cancelled_reason')) db.exec('ALTER TABLE requests ADD COLUMN cancelled_reason TEXT')
 db.exec('CREATE INDEX IF NOT EXISTS idx_requests_plate_asset ON requests(plate_asset_id)')
+const taskColumns = db.prepare('PRAGMA table_info(tasks)').all().map(x => x.name)
+if (!taskColumns.includes('owner')) db.exec("ALTER TABLE tasks ADD COLUMN owner TEXT NOT NULL DEFAULT 'us'")
+if (!taskColumns.includes('documents_json')) db.exec("ALTER TABLE tasks ADD COLUMN documents_json TEXT NOT NULL DEFAULT '[]'")
+if (!taskColumns.includes('completed_by')) db.exec('ALTER TABLE tasks ADD COLUMN completed_by TEXT')
+if (!taskColumns.includes('completed_at')) db.exec('ALTER TABLE tasks ADD COLUMN completed_at TEXT')
+if (!taskColumns.includes('sort')) db.exec('ALTER TABLE tasks ADD COLUMN sort INTEGER NOT NULL DEFAULT 0')
+const userColumnNames = db.prepare('PRAGMA table_info(users)').all().map(x => x.name)
+if (!userColumnNames.includes('active')) db.exec('ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1')
+if (!userColumnNames.includes('last_login_at')) db.exec('ALTER TABLE users ADD COLUMN last_login_at TEXT')
+db.exec(`CREATE TABLE IF NOT EXISTS work_templates(
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  service_code TEXT NOT NULL,
+  route TEXT NOT NULL,
+  name TEXT NOT NULL,
+  steps_json TEXT NOT NULL DEFAULT '[]',
+  active INTEGER NOT NULL DEFAULT 1,
+  sort INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(tenant_id, service_code, route, name)
+);
+CREATE INDEX IF NOT EXISTS idx_work_templates_tenant ON work_templates(tenant_id, active, sort);
+CREATE INDEX IF NOT EXISTS idx_requests_assignee ON requests(assignee_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_sort ON tasks(request_id, sort);`)
+
+const workOrdersMigration = 'work-orders-v1'
+if (!db.prepare('SELECT name FROM schema_migrations WHERE name=?').get(workOrdersMigration)) {
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    db.exec("UPDATE requests SET status=CASE WHEN status='已完成' THEN '已完成' WHEN status='新要求' THEN '待開始' ELSE '進行中' END")
+    db.exec("UPDATE tasks SET owner='client',status='待辦' WHERE status='待客戶配合'")
+    db.exec("UPDATE requests SET priority='normal' WHERE priority IS NULL OR priority NOT IN ('normal','urgent')")
+    db.exec("UPDATE tasks SET owner='us' WHERE owner IS NULL OR owner NOT IN ('us','client')")
+    db.exec("UPDATE tasks SET documents_json='[]' WHERE documents_json IS NULL OR TRIM(documents_json)=''")
+    db.exec("UPDATE tasks SET sort=rowid WHERE sort IS NULL OR sort=0")
+    db.prepare('INSERT INTO schema_migrations(name,applied_at) VALUES (?,?)').run(workOrdersMigration, new Date().toISOString())
+    db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
+  }
+}
 
 // Phase 1: tenants, company groups and configurable expiry rules (docs/phase1-design.md).
 db.exec(`CREATE TABLE IF NOT EXISTS tenants(id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL);
@@ -148,11 +197,21 @@ export function seedRules(tenantId) {
   // The 90-day rule became opt-in after release; tenants seeded before keep their edits but gain the condition.
   db.prepare("UPDATE rules SET match_json=? WHERE tenant_id=? AND code='crossing_90' AND match_json='{}'").run(JSON.stringify({ crossingReminder: 1 }), tenantId)
   ensureSelfCustomer(tenantId)
+  ensureWorkTemplates(tenantId)
 }
 // Every tenant has exactly one built-in 「本公司（自有）」 customer for its own indicators.
 export function ensureSelfCustomer(tenantId) {
   if (db.prepare('SELECT id FROM customers WHERE tenant_id=? AND is_self=1').get(tenantId)) return
   db.prepare('INSERT INTO customers(id,name,kind,tenant_id,is_self) VALUES (?,?,?,?,1)').run(randomUUID(), '本公司（自有）', '公司', tenantId)
+}
+export function ensureWorkTemplates(tenantId) {
+  for (const service of services) for (const route of service.routes) {
+    if (db.prepare('SELECT id FROM work_templates WHERE tenant_id=? AND service_code=? AND route=? AND name=?').get(tenantId, service.code, route, service.name)) continue
+    const plan = planFor(service, route)
+    const steps = plan.stages.map((title, index) => ({ title, owner: 'us', documents: [], days: null, sourceId: plan.sourceIds[index] || null }))
+    db.prepare('INSERT INTO work_templates(id,tenant_id,service_code,route,name,steps_json,active,sort,created_at,updated_at) VALUES (?,?,?,?,?,?,1,?,?,?)')
+      .run(randomUUID(), tenantId, service.code, route, service.name, JSON.stringify(steps), service.routes.indexOf(route), new Date().toISOString(), new Date().toISOString())
+  }
 }
 for (const tenant of db.prepare('SELECT id FROM tenants').all()) seedRules(tenant.id)
 const approvalRuleMigration = 'approval-rule-card-expires-on'
@@ -218,6 +277,6 @@ if (process.env.DEMO_SEED === '1' && db.prepare('SELECT COUNT(*) count FROM user
     ['香港 TD547 續期材料與提交', '香港', 'HK-CRP'],
     ['香港 CRP 回執與新有效期核對', '香港', 'HK-CRP'],
     ['相關備案核對', '通用', null]
-  ]) db.prepare('INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?)').run(id(), requestId, title, jurisdiction, '待辦', sourceId, null, null)
+  ]) db.prepare('INSERT INTO tasks(id,request_id,title,jurisdiction,status,source_id,due_on,notes,sort) VALUES (?,?,?,?,?,?,?,?,?)').run(id(), requestId, title, jurisdiction, '待辦', sourceId, null, null, db.prepare('SELECT COUNT(*) count FROM tasks WHERE request_id=?').get(requestId).count)
 }
 migrateCredentials()

@@ -58,7 +58,7 @@ export function checkScope(owner, ownerType, { service, handler, providerName })
 
 // Applies one change inside the caller's transaction. Same value as now is a no-op so history stays clean.
 export function writeScope({ tenantId, ownerType, ownerId, service, handler, providerName, notes, userId }) {
-  const current = db.prepare('SELECT * FROM service_scopes WHERE owner_type=? AND owner_id=? AND service=? AND ended_on IS NULL').get(ownerType, ownerId, service)
+  const current = db.prepare('SELECT * FROM service_scopes WHERE tenant_id=? AND owner_type=? AND owner_id=? AND service=? AND ended_on IS NULL').get(tenantId, ownerType, ownerId, service)
   const provider = handler === 'outsourced' ? String(providerName).trim().slice(0, 120) : ''
   if ((current?.handler || 'us') === handler && (current?.provider_name || '') === provider) return false
   const today = businessToday().toISOString().slice(0, 10), now = new Date().toISOString()
@@ -81,7 +81,7 @@ export function templateChanges(tenantId, customerId, templateKey) {
   if (!template || !customer) return null
   const owners = [
     ...db.prepare('SELECT * FROM companies WHERE customer_id=? AND tenant_id=?').all(customerId, tenantId).map(item => ['company', item, item.name]),
-    ...db.prepare('SELECT * FROM plate_assets WHERE customer_id=?').all(customerId).map(item => ['plate', item, [item.mainland_plate, item.local_plate].filter(Boolean).join(' · ') || item.card_number])
+    ...db.prepare('SELECT * FROM plate_assets WHERE customer_id=? AND id IN (SELECT p.id FROM plate_assets p JOIN customers c ON c.id=p.customer_id WHERE c.tenant_id=?)').all(customerId, tenantId).map(item => ['plate', item, [item.mainland_plate, item.local_plate].filter(Boolean).join(' · ') || item.card_number])
   ]
   const current = scopeMap(tenantId)
   const changes = []

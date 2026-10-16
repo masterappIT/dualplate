@@ -3,26 +3,34 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { spawn } from 'node:child_process'
-import { createServer } from 'node:net'
+import { Readable } from 'node:stream'
 import { DatabaseSync } from 'node:sqlite'
 import { randomUUID, scryptSync } from 'node:crypto'
 
 const hash = password => { const salt = randomUUID(); return `${salt}:${scryptSync(password, salt, 64).toString('hex')}` }
-const freePort = () => new Promise((resolve, reject) => { const server = createServer(); server.on('error', reject); server.listen(0, '127.0.0.1', () => { const port = server.address().port; server.close(() => resolve(port)) }) })
 const isoDay = offset => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10)
 
-let child, directory, port, db
+let directory, db, server
 const ids = { customerA: randomUUID(), customerB: randomUUID(), plateA: randomUUID(), plateA2: randomUUID(), plateB: randomUUID(), vehicleA: randomUUID(), groupA: randomUUID(), hkA: randomUUID(), cnA: randomUUID() }
 const tokens = {}
-async function request(path, token, method = 'GET') { const response = await fetch(`http://127.0.0.1:${port}/api${path}`, { method, headers: { authorization: token ? `Bearer ${token}` : '' } }); return { status: response.status, body: await response.json() } }
+const request = (path, token = '', method = 'GET', body) => {
+  const payload = body === undefined ? '' : JSON.stringify(body)
+  const incoming = Readable.from(payload ? [payload] : [])
+  Object.assign(incoming, { method, url: `/api${path}`, headers: { host: 'localhost', authorization: token ? `Bearer ${token}` : '', 'content-type': 'application/json' } })
+  return new Promise(resolve => {
+    const outgoing = { setHeader() {}, writeHead(status) { this.status = status }, end(text) { resolve({ status: this.status, body: JSON.parse(text) }) } }
+    server.emit('request', incoming, outgoing)
+  })
+}
 
 before(async () => {
   directory = mkdtempSync(join(dirname(fileURLToPath(import.meta.url)), '.customer-api-'))
   const databasePath = join(directory, 'test.db')
-  port = await freePort()
-  child = spawn(process.execPath, ['src/server.js'], { cwd: new URL('../', import.meta.url), env: { ...process.env, DB_PATH: databasePath, PORT: String(port), DEMO_SEED: '0' }, stdio: 'pipe' })
-  for (let attempt = 0; attempt < 100; attempt++) { try { if ((await fetch(`http://127.0.0.1:${port}/api/health`)).ok) break } catch {} await new Promise(resolve => setTimeout(resolve, 50)) }
+  process.env.DB_PATH = databasePath
+  process.env.DEMO_SEED = '0'
+  process.env.API_NO_LISTEN = '1'
+  const imported = await import(`../src/server.js?customer-test=${randomUUID()}`)
+  server = imported.server
   db = new DatabaseSync(databasePath)
   const now = new Date().toISOString()
   for (const [customer, email] of [[ids.customerA, 'a@test.invalid'], [ids.customerB, 'b@test.invalid']]) {
@@ -42,10 +50,10 @@ before(async () => {
   const requestId = randomUUID()
   db.prepare('INSERT INTO requests(id,customer_id,service_code,route,title,status,stage,created_at,updated_at,plate_asset_id) VALUES (?,?,?,?,?,?,?,?,?,?)').run(requestId, ids.customerA, 'vehicle_change', '粵港', '換車', '待客戶配合', '收集資料', now, now, ids.plateA)
   db.prepare("INSERT INTO tasks(id,request_id,title,jurisdiction,status) VALUES (?,?,?,?,'待客戶配合')").run(randomUUID(), requestId, '提供新車保險單', '通用')
-  for (const [key, email] of [['a', 'a@test.invalid'], ['b', 'b@test.invalid']]) tokens[key] = (await (await fetch(`http://127.0.0.1:${port}/api/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, password: 'password123' }) })).json()).token
-  tokens.admin = (await (await fetch(`http://127.0.0.1:${port}/api/admin/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'staff', password: 'password123' }) })).json()).token
+  for (const [key, email] of [['a', 'a@test.invalid'], ['b', 'b@test.invalid']]) tokens[key] = (await request('/login', '', 'POST', { email, password: 'password123' })).body.token
+  tokens.admin = (await request('/admin/login', '', 'POST', { username: 'staff', password: 'password123' })).body.token
 })
-after(async () => { db?.close(); child?.kill(); if (child) await new Promise(resolve => child.once('exit', resolve)); rmSync(directory, { recursive: true, force: true }) })
+after(() => { db?.close(); server?.close(); rmSync(directory, { recursive: true, force: true }) })
 
 test('overview counts plate health and lists only the customer own plates', async () => {
   const { status, body } = await request('/my/overview', tokens.a)
