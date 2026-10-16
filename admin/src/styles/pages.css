@@ -215,3 +215,16 @@ body { background: var(--canvas); color: var(--ink); font-family: var(--font-bod
   .report-cover { margin: 0; border-radius: var(--r-card); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .report-rule { margin: 18px 0; } .report-section { break-inside: avoid; }
 }
+
+/* 出租第 B 輪：分頁、承租方連結、合約範本 */
+.rental-tabs { margin: 8px 0 16px; }
+.period-pick { width: 240px; flex: none; }
+@media (max-width: 720px) { .period-pick { width: 100%; } }
+.renter-link { margin-top: 20px; padding-top: 16px; border-top: 1px dashed var(--border); }
+.renter-link-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.renter-link-head p { margin: 4px 0 0; color: var(--ink-2); font-size: 12px; }
+.renter-link-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.renter-link-share { margin-top: 12px; padding: 12px; border-radius: var(--r-card); background: var(--paper); }
+.renter-link-share pre { margin: 8px 0 12px; white-space: pre-wrap; word-break: break-all; font-family: inherit; font-size: 13px; }
+.template-tokens { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.template-token { border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--jade); padding: 4px 10px; font-size: 12px; cursor: pointer; }

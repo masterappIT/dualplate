@@ -127,7 +127,7 @@ const periodOptions = computed(() => { const [y, m] = today.split('-').map(Numbe
       </div>
 
       <section class="panel">
-        <div class="panel-head filing-head"><div><h2>進度矩陣</h2><p>每列一間內地公司，每欄一個月；點格子打開該期。按季申報的公司只在季首月有格子。</p></div><Select v-model="firmFilter" :options="firmOptions" aria-label="按會計公司篩選" @update:model-value="load" /></div>
+        <div class="panel-head filing-head"><div><h2>進度矩陣</h2><p>每列一間內地公司，每欄一個月；點格子打開該期。按季申報的公司只在季首月有格子。</p></div><div class="period-pick"><Select v-model="firmFilter" :options="firmOptions" aria-label="按會計公司篩選" @update:model-value="load" /></div></div>
         <div v-if="loading" class="empty">載入中…</div>
         <EmptyState v-else-if="!rows.length" title="還沒有報帳工作" desc="客戶名下有在營的內地公司，且報帳報稅不是客戶自理時，系統會自動生成每月工作。" />
         <div v-else class="scope-matrix-scroll">

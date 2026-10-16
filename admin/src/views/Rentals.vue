@@ -15,9 +15,14 @@ import PlateChip from '../components/ui/PlateChip.vue'
 import Tag from '../components/ui/Tag.vue'
 import DataTable from '../components/ui/DataTable.vue'
 import FormDialog from '../components/business/FormDialog.vue'
+import Segmented from '../components/ui/Segmented.vue'
+import RenterLink from '../components/business/RenterLink.vue'
+import RentalDesk from '../components/business/RentalDesk.vue'
 
 const route = useRoute(), router = useRouter()
 const { customers, plates, companyRecords, refresh, showSuccess, showError } = useAdminStore()
+// 合約／承租方憑證／代收結算／合約範本
+const deskTab = ref(route.query.tab && ['uploads', 'settlement', 'template'].includes(route.query.tab) ? route.query.tab : 'contracts')
 const contracts = ref([]), loading = ref(true), listError = ref(''), selected = ref(null), detailError = ref(''), busy = ref(false)
 const status = ref(''), customerId = ref(''), dialog = ref(''), formError = ref(''), receiptFile = ref(null), proofBusy = ref(false)
 const invoice = ref(null), receipt = ref({ receivedOn: today(), amount: '', receivedBy: '', notes: '' })
@@ -126,6 +131,9 @@ onMounted(load)
 
 <template>
   <PageHeader title="出租與租金" desc="合約、每期應收款與收款記錄。"><Button variant="primary" @click="newContract">＋ 新增合約</Button></PageHeader>
+  <Segmented v-model="deskTab" class="rental-tabs" :options="[{ label: '合約', value: 'contracts' }, { label: '承租方憑證', value: 'uploads' }, { label: '代收結算', value: 'settlement' }, { label: '合約範本', value: 'template' }]" label="出租功能" />
+  <RentalDesk v-if="deskTab !== 'contracts'" :tab="deskTab" @saved="showSuccess" @error="showError" @changed="load" />
+  <template v-else>
   <section class="panel">
     <div class="panel-head"><div><h2>合約列表</h2><p>按客戶及狀態查看；金額按原幣顯示。</p></div></div>
     <div class="rental-filters"><Field label="客戶"><Select v-model="customerId" :options="[{ value: '', label: '全部客戶' }, ...customers.map(item => ({ value: item.id, label: item.name }))]" /></Field><Field label="合約狀態"><Select v-model="status" :options="['全部狀態', '草擬', '生效', '已結束', '已終止'].map(item => ({ value: item === '全部狀態' ? '' : item, label: item }))" /></Field></div>
@@ -150,8 +158,10 @@ onMounted(load)
         <template #cell-status="{ row }"><Tag :tone="tone(row.status)">{{ row.status }}</Tag></template>
         <template #cell-action="{ row }"><div class="rental-actions"><button v-if="!['作廢', '已收'].includes(row.status)" class="text-button" @click="openReceipt(row)">登記收款</button><button v-if="row.receivedOn" class="text-button" :disabled="busy" @click="unreceive(row)">撤銷</button><button v-if="row.hasProof" class="text-button" :disabled="proofBusy" @click="proof(row)">查看憑證</button></div></template>
       </DataTable>
+      <RenterLink :contract-id="selected.id" :renter-name="selected.renter.name" @saved="showSuccess" @error="showError" />
     </template>
   </section>
+  </template>
   <FormDialog :open="dialog === 'contract'" :title="form.id ? '編輯合約' : '新增合約'" layout="stack" :saving="busy" submit-text="儲存合約" @close="dialog = ''" @submit="saveContract">
     <Field label="牌照" required><Select v-model="form.plateId" :disabled="!!form.id" :options="[{ value: '', label: '請選擇牌照' }, ...plateOptions]" /></Field>
     <div class="form-grid"><Field label="承租方名稱" required><TextInput v-model="form.renter.name" /></Field><Field label="承租方類型"><Select v-model="form.renter.type" :options="['個人', '公司']" /></Field><Field label="聯絡電話"><TextInput v-model="form.renter.phone" type="tel" /></Field><Field label="使用車牌"><TextInput v-model="form.renter.vehiclePlate" /></Field><Field label="司機"><TextInput v-model="form.renter.driver" /></Field><Field label="合約狀態"><Select v-model="form.status" :options="['草擬', '生效']" /></Field><Field label="起租日期" required><DateInput v-model="form.startsOn" label="起租日期" /></Field><Field label="結束日期"><DateInput v-model="form.endsOn" label="結束日期" /></Field></div>
