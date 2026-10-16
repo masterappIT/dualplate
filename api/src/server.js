@@ -19,6 +19,7 @@ import { feeRoutes } from './fees.js'
 import { bookkeepingRoutes } from './bookkeeping.js'
 import { reportRoutes } from './reports.js'
 import { renterPublicRoutes, renterAdminRoutes } from './renter-portal.js'
+import { seedDemo } from './demo-seed.js'
 import { passwordProblem, authenticate, createSession, lockedMinutes, recordFailure, clearFailures, clientIp, audit, auditRoutes, logError, health } from './security.js'
 
 const port = Number(process.env.PORT || 4100)
@@ -645,4 +646,6 @@ export const server = http.createServer(async (req, res) => {
     return fail(res, 500, '伺服器處理失敗，請稍後再試；如持續發生請聯絡管理者')
   }
 })
+// 本機示範：DEMO_SEED=1 時補上完整閉環示範資料（每個資料庫一次）
+seedDemo()
 if (process.env.API_NO_LISTEN !== '1') server.listen(port, () => console.log(`API listening on http://localhost:${port}`))
