@@ -120,12 +120,16 @@ export function pageLeave(el: Element, done: () => void) {
     setTimeout(done, 0)
     return
   }
+  // 動畫卡住（例如畫面被背景化而暫停繪製）時的保底：最多等 900ms 就直接換頁
+  let finished = false
+  const finish = () => { if (finished) return; finished = true; done() }
+  const guard = setTimeout(() => { gsap.killTweensOf(el); gsap.set(el, { opacity: 0 }); finish() }, 900)
   gsap.to(el, {
     opacity: 0,
     scale: 0.988,
     duration: DUR.pageOut,
     ease: EASE.exit,
-    onComplete: done,
+    onComplete: () => { clearTimeout(guard); finish() },
   })
 }
 
@@ -142,7 +146,11 @@ export function pageEnter(el: Element, done: () => void) {
   gsap.set(items, { opacity: 0, y: 12 })
   gsap.set(cards, { opacity: 0, y: 18 })
   page.classList.add('is-entrance-ready')
-  const tl = gsap.timeline({ onComplete: () => { gsap.set(page, { clearProps: 'transform' }); done() } })
+  // 同樣的保底：動畫沒有在 1.5 秒內完成就直接顯示最終狀態，避免頁面停在透明或空白
+  let finished = false
+  const finish = () => { if (finished) return; finished = true; gsap.set(page, { clearProps: 'transform' }); done() }
+  const guard = setTimeout(() => { tl.progress(1); finish() }, 1500)
+  const tl = gsap.timeline({ onComplete: () => { clearTimeout(guard); finish() } })
   tl.to(page, { scale: 1, duration: DUR.pageIn, ease: EASE.glide }, 0)
   tl.to(items, { opacity: 1, y: 0, duration: DUR.pageIn, ease: EASE.reveal, stagger: { each: 0.05, from: 'start' }, clearProps: 'transform' }, 0.04)
   // 并列卡片从中间向两侧展开

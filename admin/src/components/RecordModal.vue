@@ -24,14 +24,14 @@ async function submit() {
   if (modal.value === 'customer-user') {
     if (creating.value) return
     const name = String(form.value.name || '').trim(), email = String(form.value.email || '').trim(), phone = String(form.value.phone || '').trim(), password = String(form.value.password || '')
-    formError.value = !name ? '請填寫顯示名稱。' : !email && !phone ? '請填寫電郵或手機號碼。' : email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? '請填寫有效的電郵地址。' : phone && !/^\+?\d{8,15}$/.test(phone.replace(/[\s-]/g, '')) ? '請填寫 8 至 15 位的手機號碼。' : password.length < 12 ? '初始密碼至少 12 字元。' : ''
+    formError.value = !name ? '請填寫顯示名稱。' : !email && !phone ? '請填寫電郵或手機號碼。' : email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? '請填寫有效的電郵地址。' : phone && !/^\+?\d{8,15}$/.test(phone.replace(/[\s-]/g, '')) ? '請填寫 8 至 15 位的手機號碼。' : password.length < 10 ? '初始密碼至少 10 個字元。' : ''
     if (formError.value) return
     creating.value = true
     try {
       const created = await createCustomerUser()
       if (created) {
-        const entry = import.meta.env.VITE_CLIENT_LOGIN_URL || '微信小程序「跨境車牌管家」'
-        welcome.value = `您好，${created.name}：\n已為您開通「跨境車牌管家」客戶登入。\n登入入口：${entry}\n帳號：${created.email || created.phone}\n初始密碼：${created.password}\n首次登入請開啟入口，輸入帳號及初始密碼，即可查看工單進度和待辦事項。請妥善保管密碼。`
+        const entry = import.meta.env.VITE_CLIENT_LOGIN_URL || '微信小程序「車牌管家」'
+        welcome.value = `您好，${created.name}：\n已為您開通「車牌管家」客戶登入。\n登入入口：${entry}\n帳號：${created.email || created.phone}\n初始密碼：${created.password}\n首次登入請開啟入口，輸入帳號及初始密碼，即可查看工單進度和待辦事項。請妥善保管密碼。`
       }
     } finally {
       creating.value = false
@@ -48,7 +48,7 @@ async function copyWelcome() { try { await navigator.clipboard.writeText(welcome
       <Field label="聯絡電話"><TextInput v-model="form.phone" type="tel" /></Field>
     </template>
     <template v-else-if="modal === 'customer-user'">
-      <p class="dialog-note">為 {{ selectedCustomer?.name }} 開通客戶端登入。密碼最少 12 字元。</p>
+      <p class="dialog-note">為 {{ selectedCustomer?.name }} 開通客戶端登入。密碼至少 10 個字元，不可與帳號相同。</p>
       <Field label="顯示名稱" required><TextInput v-model="form.name" /></Field>
       <p class="dialog-note">電郵或手機號碼至少填一項。</p>
       <Field label="電郵"><TextInput v-model="form.email" type="email" /></Field>
