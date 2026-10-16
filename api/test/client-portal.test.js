@@ -146,3 +146,11 @@ test('客戶看到的工單狀態和更新紀錄不出現內部字眼', async ()
   const detail = (await request(`/requests/${state.request}`, 'GET', undefined, 'client')).body
   assert.ok(detail.activities.every(item => !/待客戶提供|待客戶配合/.test(item.detail)))
 })
+test('同一工單第二個客戶步驟會再通知一次', async () => {
+  const second = randomUUID()
+  state.db.prepare("UPDATE tasks SET owner='client' WHERE id=?").run(state.task)
+  state.db.prepare('INSERT INTO tasks(id,request_id,title,jurisdiction,status,owner,sort) VALUES (?,?,?,?,?,?,?)').run(second, state.request, '簽署授權書', '通用', '待辦', 'client', 99)
+  await request(`/tasks/${state.task}`, 'PATCH', { status: '已完成' })
+  const items = (await request('/my/notifications', 'GET', undefined, 'client')).body.items.filter(item => item.kind === 'request' && item.body.includes('簽署授權書'))
+  assert.equal(items.length, 1)
+})

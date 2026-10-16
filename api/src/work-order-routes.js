@@ -37,13 +37,16 @@ const customerWords = { '進行中': '辦理中', '待客戶提供': '需要你�
 function notifyStatus(requestId, status) {
   const request = db.prepare('SELECT r.id,r.title,r.customer_id,c.tenant_id FROM requests r JOIN customers c ON c.id=r.customer_id WHERE r.id=?').get(requestId)
   if (!request || !customerWords[status]) return
-  notify({ tenantId: request.tenant_id, customerId: request.customer_id, kind: 'request', title: `${request.title}：${customerWords[status]}`, body: status === '待客戶提供' ? '請查看需要提供的資料並上傳。' : '', link: `/pages/request-detail/request-detail?id=${request.id}`, dedupeKey: `request:${request.id}:${status}` })
+  // 需要客戶提供資料時按步驟去重：同一工單第二個客戶步驟也會再通知
+  const step = status === '待客戶提供' ? db.prepare("SELECT id,title FROM tasks WHERE request_id=? AND owner='client' AND status NOT IN ('已完成','不適用') ORDER BY sort,rowid LIMIT 1").get(requestId) : null
+  notify({ tenantId: request.tenant_id, customerId: request.customer_id, kind: 'request', title: `${request.title}：${customerWords[status]}`, body: status === '待客戶提供' ? `${step ? step.title + '。' : ''}請查看需要提供的資料並上傳。` : '', link: `/pages/request-detail/request-detail?id=${request.id}`, dedupeKey: `request:${request.id}:${status}${step ? ':' + step.id : ''}` })
 }
 function updateRequestStatus(requestId) {
   const request = db.prepare('SELECT status FROM requests WHERE id=?').get(requestId)
   if (!request || ['已完成', '已取消'].includes(request.status)) return request?.status
   const status = nextStatus(requestId, request.status)
-  if (status !== request.status) { db.prepare('UPDATE requests SET status=?,updated_at=? WHERE id=?').run(status, now(), requestId); notifyStatus(requestId, status) }
+  if (status !== request.status) db.prepare('UPDATE requests SET status=?,updated_at=? WHERE id=?').run(status, now(), requestId)
+  if (status !== request.status || status === '待客戶提供') notifyStatus(requestId, status)
   return status
 }
 function ensureScope(user, request) { return request && request.customer_id && customerFor(user.tenant_id, request.customer_id) ? request : null }
