@@ -177,3 +177,8 @@ test('舊出租記錄接口改為建立和結束合約', async () => {
   assert.equal((await request(`/plate-rentals/${legacy.id}`, 'PATCH', { status: '已結束' })).status, 200)
   assert.equal(usage(state.selfPlate), '閒置')
 })
+test('今日工作的到期列表按逾期、需處理、即將到期、待錄入排序，租金項目不會排在最後', async () => {
+  const rank = { overdue: 0, due: 1, upcoming: 2, missing: 3 }
+  const levels = (await request('/overview')).body.deadlines.map(item => rank[item.level])
+  assert.deepEqual(levels, [...levels].sort((a, b) => a - b))
+})

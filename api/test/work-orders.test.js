@@ -256,3 +256,8 @@ test('管理端工單詳情帶官方依據（plan）', async () => {
   const detail = await request(`/requests/${created.body.id}`)
   assert.ok(Array.isArray(detail.body.plan?.sourceIds) && detail.body.plan.sourceIds.length > 0)
 })
+
+test('建立工單時車輛、牌照、負責人留空（不指定）照樣可建立', async () => {
+  const result = await request('/work-orders', 'POST', { customerId: state.customer, serviceCode: 'renewal', route: '粵港', vehicleId: '', plateAssetId: '', assigneeId: '', templateId: '', quoteId: '', dueOn: '' })
+  assert.equal(result.status, 201, JSON.stringify(result.body))
+})

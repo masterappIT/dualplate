@@ -170,3 +170,8 @@ test('停用客戶帳號後即時不能使用，重新啟用後可再登入', as
   assert.equal((await request(`/customer-users/${state['other-clientId']}`, 'PATCH', { active: true })).body.active, true)
   assert.equal((await request('/login', 'POST', { email: 'other-client@test.invalid', password: 'Password12345' }, '')).status, 200)
 })
+test('更新紀錄的「進行中」對客戶顯示為「辦理中」', async () => {
+  state.db.prepare('INSERT INTO activities VALUES (?,?,?,?,?,?)').run(randomUUID(), state.request, state.adminId, 'status', '進行中', new Date().toISOString())
+  const detail = (await request(`/requests/${state.request}`, 'GET', undefined, 'client')).body
+  assert.ok(detail.activities.some(item => item.detail === '辦理中')); assert.ok(!detail.activities.some(item => item.detail === '進行中'))
+})

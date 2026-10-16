@@ -181,6 +181,9 @@ export async function workOrderRoutes(req, res, url, user, h) {
     const body = await parseBody(req)
     if (!isObject(body) || typeof body.customerId !== 'string' || typeof body.serviceCode !== 'string' || typeof body.route !== 'string') return fail(res, 400, '客戶、業務和路線不可為空'), true
     const customer = customerFor(tenant, body.customerId); if (!customer) return fail(res, 404, '客戶不存在'), true
+    // 表單的「不指定」送空字串，當作沒有指定
+    for (const key of ['vehicleId', 'plateAssetId', 'quoteId', 'assigneeId', 'templateId']) if (body[key] === '') body[key] = null
+    if (body.dueOn === '' || body.dueOn === null) delete body.dueOn
     const catalogService = services.find(item => item.code === body.serviceCode && item.routes.includes(body.route))
     if (!catalogService && body.serviceCode !== 'custom') return fail(res, 400, '業務類型與路線不相符'), true
     const assigneeId = body.assigneeId || user.id; if (!staffUser(tenant, assigneeId)) return fail(res, 400, '負責員工不存在或已停用'), true
@@ -189,7 +192,7 @@ export async function workOrderRoutes(req, res, url, user, h) {
     if (body.quoteId !== undefined && body.quoteId !== null && (!quote || quote.status !== '已接受' || quote.request_id)) return fail(res, 400, '報價不存在、未接受或已開過工單'), true
     const template = body.templateId ? templateFor(tenant, body.templateId, true) : currentTemplate(tenant, body.serviceCode, body.route); if (!template || template.service_code !== body.serviceCode || template.route !== body.route) return fail(res, 400, '業務範本不存在或已停用'), true
     const service = catalogService || { code: 'custom', name: template.name }
-    const steps = parseSteps(template), dueOn = body.dueOn === undefined ? addDays(new Date().toISOString().slice(0, 10), taskDays(steps)) : body.dueOn
+    const steps = parseSteps(template), dueOn = body.dueOn === undefined ? addDays(new Date().toISOString().slice(0, 10), taskDays(steps) || 14) : body.dueOn // 範本沒有設定天數時預設 14 天，避免新工單一建立就到期
     if (!validDate(dueOn)) return fail(res, 400, '截止日期無效'), true
     if (body.vehicleId !== undefined && body.vehicleId !== null && (!db.prepare('SELECT id FROM vehicles WHERE id=? AND customer_id=? AND route=?').get(body.vehicleId, customer.id, body.route))) return fail(res, 400, '車輛與客戶或路線不相符'), true
     if (body.plateAssetId !== undefined && body.plateAssetId !== null && (!db.prepare('SELECT id FROM plate_assets WHERE id=? AND customer_id=? AND route=?').get(body.plateAssetId, customer.id, body.route))) return fail(res, 400, '牌照與客戶或路線不相符'), true
@@ -203,7 +206,8 @@ export async function workOrderRoutes(req, res, url, user, h) {
     const request = ensureScope(user, requestFor(tenant, requestMatch[1])); if (!request) return fail(res, 404, '工單不存在'), true
     updateRequestStatus(request.id)
     const template = request.template_id ? templateFor(tenant, request.template_id) : null
-    return json(res, 200, { ...requestFor(tenant, request.id), ...(user.role === 'admin' ? { expectedFees: expectedFees(request.id) } : {}), tasks: db.prepare('SELECT * FROM tasks WHERE request_id=? ORDER BY sort,rowid').all(request.id).map(stepPayload), activities: db.prepare('SELECT a.*,u.name actor_name FROM activities a LEFT JOIN users u ON u.id=a.actor_id WHERE a.request_id=? ORDER BY a.created_at DESC').all(request.id), template: template ? templatePayload(template) : null, plan: (service => service ? planFor(service, request.route) : null)(services.find(entry => entry.code === request.service_code)), clientTodos: db.prepare("SELECT id,title,owner,status,documents_json,sort FROM tasks WHERE request_id=? AND owner='client' AND status NOT IN ('已完成','不適用') ORDER BY sort,rowid").all(request.id).map(stepPayload) }), true
+    const plateAsset = request.plate_asset_id ? db.prepare('SELECT id, mainland_plate, local_plate, card_number, route FROM plate_assets WHERE id=?').get(request.plate_asset_id) || null : null
+    return json(res, 200, { ...requestFor(tenant, request.id), plateAsset, ...(user.role === 'admin' ? { expectedFees: expectedFees(request.id) } : {}), tasks: db.prepare('SELECT * FROM tasks WHERE request_id=? ORDER BY sort,rowid').all(request.id).map(stepPayload), activities: db.prepare('SELECT a.*,u.name actor_name FROM activities a LEFT JOIN users u ON u.id=a.actor_id WHERE a.request_id=? ORDER BY a.created_at DESC').all(request.id), template: template ? templatePayload(template) : null, plan: (service => service ? planFor(service, request.route) : null)(services.find(entry => entry.code === request.service_code)), clientTodos: db.prepare("SELECT id,title,owner,status,documents_json,sort FROM tasks WHERE request_id=? AND owner='client' AND status NOT IN ('已完成','不適用') ORDER BY sort,rowid").all(request.id).map(stepPayload) }), true
   }
   if (requestMatch && method === 'PATCH') {
     const request = ensureScope(user, requestFor(tenant, requestMatch[1])); if (!request) return fail(res, 404, '工單不存在'), true

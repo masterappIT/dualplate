@@ -41,6 +41,7 @@
             <p>分別核對內地、香港／澳門的步驟</p>
           </div>
         </div>
+        <div v-if="allStepsDone" class="ready-to-close"><span>全部步驟已完成，可以結案並更新到期日、記錄收費。</span><Button variant="primary" size="sm" @click="editRequest.status = '已完成'; saveProgress()">結案</Button></div>
         <div v-for="task in selected.tasks" :key="task.id" class="task-row step-spine" :class="{ 'step-finished': ['已完成', '不適用'].includes(task.status), 'step-current': task.id === selected.tasks.find(item => !['已完成', '不適用'].includes(item.status))?.id }">
           <span
             class="task-number"
@@ -63,6 +64,7 @@
             <option>已完成</option>
             <option>不適用</option>
           </select>
+          <Button v-if="!['已完成', '不適用'].includes(task.status) && selected.status !== '已完成'" variant="text" size="sm" @click="task.owner === 'client' ? setOwner(task, 'us', []) : askClient(task)">{{ task.owner === 'client' ? '改由我們處理' : '請客戶提供' }}</Button>
         </div>
       </section>
       <section class="panel table-panel">
@@ -175,6 +177,11 @@
   </div>
   </template>
   <div v-else class="panel empty" role="status">正在載入工單資料…</div>
+  <Modal :open="Boolean(clientTask)" title="請客戶提供資料" :sub="clientTask ? `${clientTask.title} · 客戶會在手機收到通知並可直接上傳` : ''" @close="clientTask = null">
+    <Field label="需要客戶提供的文件（每行一項）"><TextInput v-model="clientDocs" multiline :rows="4" placeholder="例如：香港身份證副本&#10;車輛登記文件" /></Field>
+    <p v-if="clientError" class="error" role="alert">{{ clientError }}</p>
+    <template #footer><Button variant="ghost" @click="clientTask = null">取消</Button><Button variant="primary" :loading="clientSaving" @click="setOwner(clientTask, 'client', clientDocs.split(/\n|、|,|，/).map(item => item.trim()).filter(Boolean))">交給客戶</Button></template>
+  </Modal>
   <Modal :open="completionOpen" title="更新到期日" sub="結案前核對證件到期日與司機登記；也可略過。" @close="completionOpen = false"><p v-if="selected?.service_code === 'vehicle_change'">換車後請到牌照詳情核對並更新批文卡。</p><div v-for="entry in deadlineEntries" :key="entry.code" class="record-row"><Field :label="entry.label"><DateInput v-model="entry.expiresOn" :label="entry.label" /></Field></div><template v-if="selected?.service_code === 'driver_change'"><p v-if="!selected.plate_asset_id">工單尚未關聯牌照，請先關聯牌照才可更新司機登記。</p><template v-else><Field label="主司機"><Select v-model="completionDrivers.main" :options="completionDriverOptions" /></Field><Field label="副司機一"><Select v-model="completionDrivers.deputies[0]" :options="completionDriverOptions" /></Field><Field label="副司機二"><Select v-model="completionDrivers.deputies[1]" :options="completionDriverOptions" /></Field><div v-for="driver in selectedCompletionDrivers" :key="driver.id"><strong>{{ driver.name }} · 證件到期</strong><div v-for="document in driver.documents" :key="document.code" class="record-row"><Field :label="document.name"><DateInput v-model="completionDriverDates[`${driver.id}:${document.code}`]" :label="document.name" /></Field></div></div><p>更新司機登記會先儲存到牌照；結案若失敗，登記仍會保留。</p></template></template><RequestFees v-if="completionOpen && user()?.role === 'admin' && !isSelfCustomer" ref="requestFees" :expected="selected?.expectedFees || []" /><p v-if="completionError" role="alert" class="error">{{ completionError }}</p><template #footer><Button @click="completionOpen = false">返回</Button><Button :disabled="completionSaving" @click="finish(true)">略過更新並結案</Button><Button variant="primary" :loading="completionSaving" :disabled="!deadlineEntries.some(item => item.expiresOn) && selected?.service_code !== 'driver_change' || selected?.service_code === 'driver_change' && !selected.plate_asset_id" @click="finish(false)">更新並結案</Button></template></Modal>
   <Modal :open="cancelOpen" title="取消工單" @close="cancelOpen = false"><Field label="取消原因" required><TextInput v-model="cancelReason" multiline /></Field><template #footer><Button @click="cancelOpen = false">返回</Button><Button variant="primary" :disabled="!cancelReason.trim()" @click="cancelRequest">確認取消</Button></template></Modal>
   <Modal :open="!!reuploadTarget" title="要求重交文件" :sub="reuploadTarget?.fileName" @close="reuploadTarget = null"><Field label="重交原因" required><TextInput v-model="reviewNote" multiline placeholder="告訴客戶需要修正甚麼" /></Field><p v-if="reviewError" class="error" role="alert">{{ reviewError }}</p><template #footer><Button @click="reuploadTarget = null">取消</Button><Button variant="primary" :loading="!!reviewing" :disabled="!reviewNote.trim()" @click="reviewAttachment(reuploadTarget, '需重交')">送出要求</Button></template></Modal>
@@ -196,6 +203,19 @@ import KeyValue from '../components/ui/KeyValue.vue'
 import DataTable from '../components/ui/DataTable.vue'
 import StampMark from '../components/ui/StampMark.vue'
 import RequestFees from '../components/business/RequestFees.vue'
+// 把某一步交給客戶提供資料（或改回我們處理）：客戶端會收到通知，並在辦理進度直接上傳
+const clientTask = ref(null), clientDocs = ref(''), clientSaving = ref(false), clientError = ref('')
+function askClient(task) { clientTask.value = task; clientDocs.value = (task.documents || []).join('\n'); clientError.value = '' }
+async function setOwner(task, owner, documents) {
+  if (owner === 'client' && !documents.length) { clientError.value = '請至少寫一項需要客戶提供的文件'; return }
+  clientSaving.value = true
+  try {
+    await api(`/tasks/${task.id}`, 'PATCH', { owner, documents })
+    clientTask.value = null
+    await openRequest(selected.value)
+    showSuccess(owner === 'client' ? '已通知客戶提供資料' : '已改由我們處理')
+  } catch (cause) { clientError.value = cause.message; showError(cause) } finally { clientSaving.value = false }
+}
 const {
   view,
   selected,
@@ -218,6 +238,7 @@ const {
 } = useAdminStore();
 const staff = ref([]), completionOpen = ref(false), completionSaving = ref(false), cancelOpen = ref(false), cancelReason = ref(''), completionError = ref(''), deadlineEntries = ref([])
 const requestFees = ref(null)
+const allStepsDone = computed(() => Boolean(selected.value?.tasks?.length) && !['已完成', '已取消'].includes(selected.value.status) && selected.value.tasks.every(task => ['已完成', '不適用'].includes(task.status)))
 const isSelfCustomer = computed(() => customers.value.find(customer => customer.id === selected.value?.customer_id)?.is_self)
 const completionDrivers = ref({ main: '', deputies: ['', ''] }), completionDriverOptions = ref([]), completionDriverRecords = ref([]), completionDriverDates = ref({})
 const selectedCompletionDrivers = computed(() => completionDriverRecords.value.filter(driver => [completionDrivers.value.main, ...completionDrivers.value.deputies].includes(driver.id)))

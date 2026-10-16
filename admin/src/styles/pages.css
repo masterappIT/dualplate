@@ -269,3 +269,6 @@ body { background: var(--canvas); color: var(--ink); font-family: var(--font-bod
 .fee-summary { padding: 12px 0; border-top: 1px dashed var(--rule); font-variant-numeric: tabular-nums; }
 .fee-stamp { position: fixed; z-index: 190; right: 24px; bottom: 24px; display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-card); }
 @media (max-width: 600px) { .fee-totals > div { min-width: 0; width: 100%; } .fee-actions { justify-content: flex-start; } .fee-stamp { right: 12px; bottom: 12px; } }
+
+/* 工單：全部步驟完成時提示結案 */
+.ready-to-close { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; padding: 10px 14px; border-radius: var(--r-card); background: var(--status-ok-bg); color: var(--status-ok); font-weight: 600; font-size: 13px; }

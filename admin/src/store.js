@@ -709,11 +709,13 @@ function openPlateFromRequest() {
 }
 async function createCustomer() {
   try {
-    await api("/customers", "POST", form.value);
+    const created = await api("/customers", "POST", form.value);
     modal.value = null;
     form.value = {};
     await refresh();
-    showSuccess("客戶已新增");
+    showSuccess("客戶已新增，接著可登記牌照、公司和開通登入");
+    // 新增後直接進入客戶詳情，下一步（牌照、公司組、開通登入）都在那裡
+    if (created?.id) router.push(`/customers/${created.id}`);
   } catch (e) {
     showError(e);
   }

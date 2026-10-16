@@ -1,6 +1,7 @@
 <script setup>
 // 報帳報稅（docs/tasks/bookkeeping-brief.md 第 5 節）：上方進度矩陣（公司 × 最近 6 個月），下方需要跟進的期數；點格子打開該期。
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { api, user, privateFile } from '../api'
 import PageHeader from '../components/ui/PageHeader.vue'
 import StatCard from '../components/ui/StatCard.vue'
@@ -19,6 +20,7 @@ import StampMark from '../components/ui/StampMark.vue'
 import FormDialog from '../components/business/FormDialog.vue'
 
 const emit = defineEmits(['saved', 'error'])
+const route = useRoute()
 const isAdmin = user()?.role === 'admin'
 const matrix = ref({ months: [], rows: [] }), filings = ref([]), firms = ref([]), loading = ref(true), loadError = ref('')
 const firmFilter = ref(''), focus = ref('')
@@ -39,7 +41,8 @@ async function load() {
     matrix.value = m; filings.value = list; firms.value = f
   } catch (cause) { loadError.value = cause.message } finally { loading.value = false }
 }
-onMounted(load)
+// 從今日工作「處理報帳」進來時直接打開該期
+onMounted(async () => { await load(); if (route.query.filingId) openFiling(String(route.query.filingId)) })
 const firmOptions = computed(() => [{ label: '全部會計公司', value: '' }, ...firms.value.map(item => ({ label: item.name, value: item.id }))])
 // 窄螢幕只顯示最近 3 個月，避免第一眼只看到最舊的月份
 const narrow = ref(typeof window !== 'undefined' && window.innerWidth < 720)

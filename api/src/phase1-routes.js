@@ -222,6 +222,9 @@ export async function phase1Routes(req, res, url, user, h) {
     const { rent, deadlines: rentDeadlines } = rentOverview(tenant)
     // 司機證件未填日期時只在司機列表顯示「待錄入」，不計入今日工作（大部分司機不會三種證件都有）
     const deadlines = [...computeDeadlines({ rules: rules(), owners, tracked, completions, scopes: scopeMap(tenant), windowDays: days }).filter(item => item.level !== 'ok' && !(item.ownerType === 'driver' && item.level === 'missing')), ...rentDeadlines, ...filingDeadlines(tenant)]
+    // 統一排序：逾期 → 需處理 → 即將到期 → 待錄入，同級按日期；租金與報帳項目和其他到期一起排
+    const rank = { overdue: 0, due: 1, upcoming: 2, missing: 3 }
+    deadlines.sort((a, b) => (rank[a.level] ?? 9) - (rank[b.level] ?? 9) || String(a.dueOn || '9999').localeCompare(String(b.dueOn || '9999')))
     // Items the client handles themselves are listed (for the client view) but never counted as our work.
     const ours = deadlines.filter(item => item.handler !== 'client')
     const counts = Object.fromEntries(['overdue','due','missing','upcoming'].map(level => [level, ours.filter(item => item.level === level).length]))

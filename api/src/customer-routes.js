@@ -13,7 +13,7 @@ const publicDeadline = item => ({ handledBy: item.handler === 'client' ? 'you' :
 const plateLabel = plate => `${plate.mainland_plate || '內地車牌待補'} · ${plate.local_plate || '港澳車牌待補'}`
 const companyStatus = company => company.status || '存續'
 // 更新紀錄裡的內部狀態字眼換成客戶看得懂的說法
-const customerWords = text => String(text || '').replace(/待客戶提供|待客戶配合|待開始|新要求|待收件/g, word => requestStatus(word))
+const customerWords = text => String(text || '').replace(/待客戶提供|待客戶配合|待開始|新要求|待收件|進行中/g, word => requestStatus(word)).replace(/：待辦$/, '：待處理')
 export const requestStatus = status => ({ '待開始': '已收到', '新要求': '已收到', '進行中': '辦理中', '待收件': '辦理中', '待客戶提供': '需要你提供資料', '待客戶配合': '需要你提供資料', '已完成': '已完成', '已取消': '已取消' }[status] || status)
 
 export async function customerRoutes(req, res, url, user, h) {
