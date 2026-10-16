@@ -49,6 +49,7 @@ V1 之後：納稅記錄（G）、現牌買賣（F）、粵澳特有事項（H�
 | 「已過關」誰按 | 客戶端任何登入都可按；員工也可在後台錄入 | 誰知道誰按，越少門檻越好 |
 | 客戶登入方式 | 手機號碼＋密碼（V1）；微信登入只留框架 | 微信要管理者先註冊 AppID |
 | 通知 | V1 只做站內通知（客戶端紅點和列表）；不發短信、微信 | 短信、微信要開帳戶 |
+| 正式環境（2026-10-17） | Google Cloud，沿用 MasterDriver 做法（獨立專案、香港區、Artifact Registry、Secret Manager、GitHub Actions＋Workload Identity Federation、`masterappinc.com` 子網域、同站 `/api`）；**唯一不同：API 和 SQLite 資料庫跑在 Compute Engine 主機的持久磁碟上，不用 Cloud Run／Cloud SQL**；每日備份到 Cloud Storage＋磁碟快照，發布前必先備份。任務見 `docs/tasks/deploy-gcp-brief.md` | 管理者要求與 MasterDriver 一樣部署在 Google Cloud；本產品用 SQLite（約 580 處同步呼叫），Cloud Run 沒有持久磁碟，改寫 PostgreSQL 要數週且風險高；現階段只有一位客戶。日後做多租戶 SaaS 再遷 Cloud SQL |
 | 收費 | 年費按客戶按年收；每單代辦費在工單完成時記；租金抽成按合約；規費、罰款、保險屬代墊 | 對應同行常見做法 |
 | 月報 | 每月 1 日自動產生上月報告，管理者確認後才對客戶可見 | 避免錯數直接給客戶看 |
 | 出租用語 | 客戶端、承租方連結、合約範本用「車輛使用安排／使用費」，不用「出租指標」 | 降低第二節市場調查提到的合規風險；管理者可改 |
