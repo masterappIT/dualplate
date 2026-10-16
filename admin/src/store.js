@@ -50,6 +50,7 @@ const account = ref(user()),
   statusFilter = ref(""),
   selected = ref(null),
   selectedCustomer = ref(null),
+  recentCustomerAccounts = ref([]),
   customerTab = ref("overview"),
   selectedVehicle = ref(null),
   selectedPlate = ref(null),
@@ -710,15 +711,18 @@ async function createCustomer() {
 }
 async function createCustomerUser() {
   try {
-    await api("/customer-users", "POST", {
-      ...form.value,
-      customerId: selectedCustomer.value.id,
+    const details = { ...form.value, customerId: selectedCustomer.value.id };
+    const created = await api("/customer-users", "POST", {
+      ...details,
     });
+    recentCustomerAccounts.value.unshift({ id: created.id, customerId: details.customerId, name: details.name, email: details.email || '', phone: details.phone || '' });
     modal.value = null;
     form.value = {};
     showSuccess("客戶登入已開通，請以安全渠道交付初始密碼");
+    return { ...details, id: created.id };
   } catch (e) {
     showError(e);
+    return null;
   }
 }
 async function createVehicle() {
@@ -835,6 +839,7 @@ export const adminStore = {
   statusFilter,
   selected,
   selectedCustomer,
+  recentCustomerAccounts,
   customerTab,
   selectedVehicle,
   selectedPlate,

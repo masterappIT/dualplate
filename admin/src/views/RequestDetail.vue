@@ -65,6 +65,11 @@
           </select>
         </div>
       </section>
+      <section class="panel table-panel">
+        <div class="panel-head"><div><h2>客戶上傳的文件</h2><p>逐份確認；全部已確認後由員工決定是否完成步驟。</p></div></div>
+        <p v-if="attachmentError" class="error" role="alert">{{ attachmentError }} <Button size="sm" @click="loadAttachments">重試</Button></p>
+        <template v-else><p v-if="allConfirmed" class="attachment-confirmed"><StampMark text="已收妥" :play="stampPlay" /> 客戶文件已齊</p><DataTable :columns="attachmentColumns" :data="attachments" :loading="attachmentLoading" empty-text="尚未收到文件，請提醒客戶在客戶端上傳。"><template #cell-fileName="{ row }"><Button variant="text" size="sm" :loading="openingFile === row.id" @click="openAttachment(row)">{{ row.fileName }}</Button></template><template #cell-taskId="{ row }">{{ selected.tasks?.find(task => task.id === row.taskId)?.title || '未指定步驟' }}</template><template #cell-size="{ row }"><span class="num">{{ formatSize(row.size) }}</span></template><template #cell-createdAt="{ row }"><span class="num">{{ formatTime(row.createdAt) }}</span></template><template #cell-status="{ row }"><Tag :tone="attachmentTone(row.status)">{{ row.status }}</Tag><small v-if="row.reviewNote" class="attachment-note">{{ row.reviewNote }}</small></template><template #cell-actions="{ row }"><div class="attachment-actions"><Button v-if="row.status !== '已確認'" size="sm" :loading="reviewing === row.id" @click="reviewAttachment(row, '已確認')">確認收妥</Button><Button v-if="row.status !== '需重交'" size="sm" variant="text" :disabled="!!reviewing" @click="reuploadTarget = row; reviewNote = ''; reviewError = ''">要求重交</Button></div></template></DataTable></template>
+      </section>
       <section class="panel">
         <div class="panel-head">
           <div>
@@ -172,10 +177,12 @@
   <div v-else class="panel empty" role="status">正在載入工單資料…</div>
   <Modal :open="completionOpen" title="更新到期日" sub="結案前可更新相關證件或備案到期日；也可略過。" @close="completionOpen = false"><p v-if="selected?.service_code === 'vehicle_change'">換車後請到牌照詳情核對並更新批文卡。</p><div v-for="entry in deadlineEntries" :key="entry.code" class="record-row"><Field :label="entry.label"><DateInput v-model="entry.expiresOn" :label="entry.label" /></Field></div><p v-if="completionError" role="alert">{{ completionError }}</p><template #footer><Button @click="completionOpen = false">返回</Button><Button @click="finish(true)">略過更新並結案</Button><Button variant="primary" :disabled="!deadlineEntries.some(item => item.expiresOn)" @click="finish(false)">更新並結案</Button></template></Modal>
   <Modal :open="cancelOpen" title="取消工單" @close="cancelOpen = false"><Field label="取消原因" required><TextInput v-model="cancelReason" multiline /></Field><template #footer><Button @click="cancelOpen = false">返回</Button><Button variant="primary" :disabled="!cancelReason.trim()" @click="cancelRequest">確認取消</Button></template></Modal>
+  <Modal :open="!!reuploadTarget" title="要求重交文件" :sub="reuploadTarget?.fileName" @close="reuploadTarget = null"><Field label="重交原因" required><TextInput v-model="reviewNote" multiline placeholder="告訴客戶需要修正甚麼" /></Field><p v-if="reviewError" class="error" role="alert">{{ reviewError }}</p><template #footer><Button @click="reuploadTarget = null">取消</Button><Button variant="primary" :loading="!!reviewing" :disabled="!reviewNote.trim()" @click="reviewAttachment(reuploadTarget, '需重交')">送出要求</Button></template></Modal>
+  <Modal :open="!!previewUrl" :title="previewName" @close="closePreview"><img v-if="previewUrl" :src="previewUrl" :alt="previewName" class="attachment-preview" /></Modal>
 </template>
 <script setup>
-import { computed, ref, onMounted } from 'vue'
-import { api, user } from '../api'
+import { computed, ref, onMounted, watch, onBeforeUnmount } from 'vue'
+import { api, user, privateFile } from '../api'
 import Tag from '../components/ui/Tag.vue'
 import Modal from '../components/ui/Modal.vue'
 import DateInput from '../components/ui/DateInput.vue'
@@ -186,6 +193,8 @@ import TextInput from '../components/ui/TextInput.vue'
 import Button from '../components/ui/Button.vue'
 import PlateChip from '../components/ui/PlateChip.vue'
 import KeyValue from '../components/ui/KeyValue.vue'
+import DataTable from '../components/ui/DataTable.vue'
+import StampMark from '../components/ui/StampMark.vue'
 const {
   view,
   selected,
@@ -206,6 +215,18 @@ const {
   openRequest,
 } = useAdminStore();
 const staff = ref([]), completionOpen = ref(false), cancelOpen = ref(false), cancelReason = ref(''), completionError = ref(''), deadlineEntries = ref([])
+const attachments = ref([]), attachmentLoading = ref(false), attachmentError = ref(''), reviewing = ref(''), openingFile = ref(''), reuploadTarget = ref(null), reviewNote = ref(''), reviewError = ref(''), previewUrl = ref(''), previewName = ref(''), stampPlay = ref(false)
+const attachmentColumns = [{ key: 'fileName', title: '檔名' }, { key: 'taskId', title: '步驟' }, { key: 'size', title: '大小', align: 'right' }, { key: 'createdAt', title: '上傳時間', align: 'right' }, { key: 'status', title: '狀態' }, { key: 'actions', title: '操作' }]
+const allConfirmed = computed(() => attachments.value.length > 0 && attachments.value.every(item => item.status === '已確認'))
+const attachmentTone = status => ({ '待確認': 'warning', '已確認': 'ok', '需重交': 'danger' })[status] || 'neutral'
+const formatSize = size => size < 1024 ? `${size} B` : size < 1048576 ? `${(size / 1024).toFixed(1)} KB` : `${(size / 1048576).toFixed(1)} MB`
+const formatTime = value => value ? new Date(value).toLocaleString('zh-HK', { hour12: false }) : '—'
+async function loadAttachments() { if (!selected.value?.id) return; attachmentLoading.value = true; attachmentError.value = ''; try { attachments.value = await api(`/requests/${selected.value.id}/attachments`) } catch (error) { attachments.value = []; attachmentError.value = `未能取得客戶文件：${error.message}` } finally { attachmentLoading.value = false } }
+watch(() => selected.value?.id, () => { attachments.value = []; loadAttachments() }, { immediate: true })
+async function reviewAttachment(item, status) { if (!item || reviewing.value) return; reviewing.value = item.id; reviewError.value = ''; try { const updated = await api(`/requests/${selected.value.id}/attachments/${item.id}`, 'PATCH', { status, reviewNote: status === '需重交' ? reviewNote.value.trim() : '' }); attachments.value = attachments.value.map(row => row.id === item.id ? updated : row); reuploadTarget.value = null; if (updated.allConfirmed) { stampPlay.value = true; showSuccess('客戶文件已齊') } else showSuccess(status === '已確認' ? '文件已確認收妥' : '已通知客戶重交') } catch (error) { reviewError.value = error.message; showError(error) } finally { reviewing.value = '' } }
+async function openAttachment(item) { const tab = item.mime === 'application/pdf' ? window.open('', '_blank') : null; openingFile.value = item.id; try { if (item.mime === 'application/pdf' && !tab) throw new Error('瀏覽器阻擋新分頁，請允許彈出視窗後重試。'); const blob = await privateFile(`/requests/${selected.value.id}/attachments/${item.id}/file`); const fileUrl = URL.createObjectURL(blob); if (tab) { tab.opener = null; tab.location.href = fileUrl; setTimeout(() => URL.revokeObjectURL(fileUrl), 60000) } else if (item.mime.startsWith('image/')) { closePreview(); previewUrl.value = fileUrl; previewName.value = item.fileName } else { URL.revokeObjectURL(fileUrl); throw new Error('此文件格式無法預覽。') } } catch (error) { tab?.close(); showError(error) } finally { openingFile.value = '' } }
+function closePreview() { if (previewUrl.value) URL.revokeObjectURL(previewUrl.value); previewUrl.value = ''; previewName.value = '' }
+onBeforeUnmount(closePreview)
 onMounted(async () => { try { staff.value = user()?.role === 'admin' ? await api('/staff') : [{ id: user()?.id, name: user()?.name, active: true }] } catch (error) { showError(error) } })
 const statusOptions = ['待開始', '進行中', '待客戶提供', '已完成', '已取消']
 const stageOptions = computed(() => ['待內部受理', ...(selected.value?.plan?.stages || [])])

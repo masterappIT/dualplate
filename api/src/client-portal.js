@@ -79,7 +79,9 @@ export async function portalRoutes(req, res, url, user, h) {
   const advisor = path.match(/^\/api\/customers\/([^/]+)\/advisor$/)
   const bindCode = path.match(/^\/api\/customer-users\/([^/]+)\/wechat-bind-code$/)
   const notices = path === '/api/my/notifications' || path === '/api/my/notifications/read'
-  if (!myAttach && !adminAttach && !advisor && !bindCode && !notices && path !== '/api/my/advisor') return false
+  const accounts = path.match(/^\/api\/customers\/([^/]+)\/users$/)
+  const account = path.match(/^\/api\/customer-users\/([^/]+)$/)
+  if (!myAttach && !adminAttach && !advisor && !bindCode && !notices && !accounts && !account && path !== '/api/my/advisor') return false
 
   // ── 客戶 ──
   if (myAttach || notices || path === '/api/my/advisor') {
@@ -138,6 +140,24 @@ export async function portalRoutes(req, res, url, user, h) {
     if (body.phone && !/^[+\d][\d\s-]{6,19}$/.test(body.phone.trim())) return fail(res, 400, '電話號碼格式無效'), true
     db.prepare('UPDATE customers SET advisor_name=?,advisor_phone=?,advisor_wechat=? WHERE id=?').run(text(body.name, 60) || null, text(body.phone, 30) || null, text(body.wechat, 60) || null, customer.id)
     return json(res, 200, { name: text(body.name, 60), phone: text(body.phone, 30), wechat: text(body.wechat, 60) }), true
+  }
+  // 客戶的登入帳號：管理者查看、停用或重新啟用（停用即時失效所有登入）
+  const accountView = row => ({ id: row.id, name: row.name, email: row.email?.endsWith('@phone.invalid') ? '' : row.email || '', phone: row.phone || '', wechatBound: Boolean(row.wechat_openid), active: Boolean(row.active), lastLoginAt: row.last_login_at || null })
+  if (accounts) {
+    if (method !== 'GET') return fail(res, 405, '不支援此操作'), true
+    if (!db.prepare('SELECT id FROM customers WHERE id=? AND tenant_id=?').get(accounts[1], tenant)) return fail(res, 404, '客戶不存在'), true
+    return json(res, 200, db.prepare("SELECT * FROM users WHERE customer_id=? AND role='customer' ORDER BY active DESC, name").all(accounts[1]).map(accountView)), true
+  }
+  if (account) {
+    if (user.role !== 'admin') return fail(res, 403, '無權限'), true
+    if (method !== 'PATCH') return fail(res, 405, '不支援此操作'), true
+    const row = db.prepare("SELECT u.* FROM users u JOIN customers c ON c.id=u.customer_id WHERE u.id=? AND u.role='customer' AND c.tenant_id=?").get(account[1], tenant)
+    if (!row) return fail(res, 404, '客戶帳號不存在'), true
+    const body = await parseBody(req)
+    if (!body || typeof body !== 'object' || Array.isArray(body) || typeof body.active !== 'boolean') return fail(res, 400, '請指定啟用或停用'), true
+    db.prepare('UPDATE users SET active=? WHERE id=?').run(body.active ? 1 : 0, row.id)
+    if (!body.active) db.prepare('DELETE FROM sessions WHERE user_id=?').run(row.id)
+    return json(res, 200, accountView(db.prepare('SELECT * FROM users WHERE id=?').get(row.id))), true
   }
   if (bindCode) {
     if (user.role !== 'admin' || method !== 'POST') return fail(res, user.role !== 'admin' ? 403 : 405, user.role !== 'admin' ? '無權限' : '不支援此操作'), true

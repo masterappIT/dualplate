@@ -132,6 +132,7 @@ export const server = http.createServer(async (req, res) => {
       const token = randomBytes(32).toString('hex')
       const expires = new Date(Date.now() + 7 * 86400000).toISOString()
       db.prepare('INSERT INTO sessions VALUES (?,?,?)').run(token, account.id, expires)
+      db.prepare('UPDATE users SET last_login_at=? WHERE id=?').run(now(), account.id)
       return json(res, 200, { token, user: { id: account.id, name: account.name, email: account.email, role: account.role, customerId: account.customer_id } })
     }
     if (await publicPortalRoutes(req, res, url, { json, fail, parseBody })) return

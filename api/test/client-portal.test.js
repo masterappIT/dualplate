@@ -154,3 +154,19 @@ test('同一工單第二個客戶步驟會再通知一次', async () => {
   const items = (await request('/my/notifications', 'GET', undefined, 'client')).body.items.filter(item => item.kind === 'request' && item.body.includes('簽署授權書'))
   assert.equal(items.length, 1)
 })
+test('管理端可列出客戶的登入帳號，不顯示手機帳號的佔位電郵', async () => {
+  const list = (await request(`/customers/${state.customer}/users`)).body
+  assert.ok(list.some(item => item.phone === '+85291234567' && item.email === ''))
+  assert.ok(list.some(item => item.id === state.clientId && item.wechatBound === true))
+  assert.equal((await request(`/customers/${state.customer}/users`, 'GET', undefined, 'client')).status, 403)
+  assert.equal((await request(`/customers/${state.customer}/users`, 'GET', undefined, 'foreign-admin')).status, 404)
+})
+test('停用客戶帳號後即時不能使用，重新啟用後可再登入', async () => {
+  assert.equal((await request(`/customer-users/${state['other-clientId']}`, 'PATCH', { active: 'no' })).status, 400)
+  assert.equal((await request(`/customer-users/${state['other-clientId']}`, 'PATCH', { active: false }, 'staff')).status, 403)
+  assert.equal((await request(`/customer-users/${state['other-clientId']}`, 'PATCH', { active: false })).body.active, false)
+  assert.equal((await request('/my/notifications', 'GET', undefined, 'other-client')).status, 401)
+  assert.equal((await request('/login', 'POST', { email: 'other-client@test.invalid', password: 'Password12345' }, '')).status, 401)
+  assert.equal((await request(`/customer-users/${state['other-clientId']}`, 'PATCH', { active: true })).body.active, true)
+  assert.equal((await request('/login', 'POST', { email: 'other-client@test.invalid', password: 'Password12345' }, '')).status, 200)
+})

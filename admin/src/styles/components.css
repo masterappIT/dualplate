@@ -104,3 +104,4 @@
 
 @media (max-width: 600px) { .overlay { padding: 12px; } .modal-head, .drawer-head { padding: 18px 18px 4px; } .modal-body, .drawer-body { padding: 12px 18px 18px; } .modal-foot, .drawer-foot { padding: 12px 18px; } }
 .switch.is-disabled { opacity: .45; cursor: not-allowed; }
+.record-form .input-shell input, .record-form .input-shell textarea { width: 100%; min-height: 0; border: 0; border-radius: 0; padding: 0; background: transparent; }
