@@ -77,11 +77,10 @@ function plateDetail(user, plateId) {
   const item = plateFor(user, plateId)
   if (!item) return null
   const images = query('SELECT side,mime,data FROM approval_card_images WHERE plate_asset_id=?', item.id)
-  const photos = query('SELECT kind,mime,data FROM plate_photos WHERE plate_asset_id=?', item.id)
   const imageValue = x => ['admin', 'staff'].includes(user.role) ? `data:${x.mime};base64,${x.data.toString('base64')}` : true
   const companyStatuses = ['admin', 'staff'].includes(user.role) && item.group_id ? query('SELECT c.id,c.jurisdiction,c.name,c.status,c.status_changed_on FROM companies c JOIN company_groups g ON g.id=c.group_id AND g.tenant_id=c.tenant_id WHERE c.tenant_id=? AND c.group_id=? AND g.customer_id=? ORDER BY c.jurisdiction,c.name', user.tenant_id, item.group_id, item.customer_id) : []
   const warnings = companyStatuses.filter(company => company.jurisdiction === '內地' && ['已註銷', '註銷中'].includes(company.status)).map(company => company.status === '已註銷' ? '內承單位已註銷' : '內承單位註銷中')
-  return { ...item, cardData: cardData(item.card_data), rentals: query('SELECT * FROM plate_rentals WHERE plate_asset_id=? ORDER BY created_at DESC', item.id), rentalContracts: query('SELECT id,renter_name,renter_vehicle_plate,starts_on,ends_on,rent_amount,currency,collection_mode,status FROM rental_contracts WHERE plate_asset_id=? ORDER BY starts_on DESC', item.id), cardImages: Object.fromEntries(images.map(x => [x.side, imageValue(x)])), platePhotos: Object.fromEntries(photos.map(x => [x.kind, imageValue(x)])), companyStatuses, warnings: [...new Set(warnings)] }
+  return { ...item, cardData: cardData(item.card_data), rentals: query('SELECT * FROM plate_rentals WHERE plate_asset_id=? ORDER BY created_at DESC', item.id), rentalContracts: query('SELECT id,renter_name,renter_vehicle_plate,starts_on,ends_on,rent_amount,currency,collection_mode,status FROM rental_contracts WHERE plate_asset_id=? ORDER BY starts_on DESC', item.id), cardImages: Object.fromEntries(images.map(x => [x.side, imageValue(x)])), companyStatuses, warnings: [...new Set(warnings)] }
 }
 function plateSummary(item, tenantId) {
   const tracked = query('SELECT code,expires_on FROM tracked_items WHERE tenant_id=? AND owner_type=? AND owner_id=? AND code IN (?,?) ORDER BY code', tenantId, 'plate', item.id, 'hk_crp', 'mo_permit')
@@ -405,11 +404,11 @@ export const server = http.createServer(async (req, res) => {
       return json(res, 200, plateDetail(user, old.id))
     }
     const cardMatch = path.match(/^\/api\/plate-assets\/([^/]+)\/card\/(front|back)$/)
-    const privateImageMatch = path.match(/^\/api\/plate-assets\/([^/]+)\/image\/(card-front|card-back|plate-mainland|plate-local)$/)
+    const privateImageMatch = path.match(/^\/api\/plate-assets\/([^/]+)\/image\/(card-front|card-back)$/)
     if (privateImageMatch && req.method === 'GET') {
       const item = plateFor(user, privateImageMatch[1]); if (!item) return fail(res, 404, '兩地牌不存在')
       const kind = privateImageMatch[2]
-      const row = kind.startsWith('card-') ? one('SELECT mime,data FROM approval_card_images WHERE plate_asset_id=? AND side=?',item.id,kind.slice(5)) : one('SELECT mime,data FROM plate_photos WHERE plate_asset_id=? AND kind=?',item.id,kind.slice(6))
+      const row = one('SELECT mime,data FROM approval_card_images WHERE plate_asset_id=? AND side=?',item.id,kind.slice(5))
       if (!row) return fail(res, 404, '圖片不存在')
       res.writeHead(200, {'content-type':row.mime,'cache-control':'private, no-store','x-content-type-options':'nosniff'})
       return res.end(row.data)
@@ -434,18 +433,6 @@ export const server = http.createServer(async (req, res) => {
         db.exec('COMMIT')
       } catch (error) { db.exec('ROLLBACK'); throw error }
       return json(res, 200, { side, uploaded: true, recognized: recognized.cardData, fieldStatus: recognized.fieldStatus, cardData: proposed, needsReview: true })
-    }
-    const photoMatch = path.match(/^\/api\/plate-assets\/([^/]+)\/photo\/(mainland|local)$/)
-    if (photoMatch && req.method === 'POST') {
-      if (!['admin', 'staff'].includes(user.role)) return fail(res, 403, '無權限')
-      const item = plateFor(user, photoMatch[1]); if (!item) return fail(res, 404, '兩地牌不存在')
-      const b = await parseBody(req)
-      const matched = /^data:(image\/(?:jpeg|png));base64,([A-Za-z0-9+/=]+)$/.exec(b.image || '')
-      if (!matched) return fail(res, 400, '請上傳 JPG 或 PNG 圖片')
-      const bytes = Buffer.from(matched[2], 'base64')
-      if (!bytes.length || bytes.length > 3500000) return fail(res, 400, '圖片不可超過 3.5 MB')
-      db.prepare('INSERT INTO plate_photos VALUES (?,?,?,?) ON CONFLICT(plate_asset_id,kind) DO UPDATE SET mime=excluded.mime,data=excluded.data').run(item.id,photoMatch[2],matched[1],bytes)
-      return json(res, 200, { kind: photoMatch[2], uploaded: true })
     }
     if (path === '/api/plate-rentals' && req.method === 'POST') {
       if (user.role !== 'admin') return fail(res, 403, '無權限')

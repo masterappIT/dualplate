@@ -158,32 +158,6 @@
     </div>
     <button class="button" @click="savePlate">儲存指標資料</button>
   </section>
-  <section class="panel">
-    <div class="panel-head">
-      <div>
-        <h2>實體車牌照片</h2>
-        <p>上傳實拍原圖後，客戶端可一比一查看；未上傳時只顯示號碼示意</p>
-      </div>
-    </div>
-    <div class="card-upload-grid">
-      <div v-for="kind in ['mainland', 'local']" :key="kind">
-        <strong>{{
-          kind === "mainland" ? "內地號牌" : "香港／澳門號牌"
-        }}</strong
-        ><img
-          v-if="selectedPlate.platePhotos?.[kind]"
-          :src="selectedPlate.platePhotos[kind]"
-          class="card-image"
-        />
-        <div v-else class="card-placeholder">尚未上傳</div>
-        <input
-          type="file"
-          accept="image/png,image/jpeg"
-          @change="uploadPlatePhoto(kind, $event)"
-        />
-      </div>
-    </div>
-  </section>
   </template>
   <div v-else class="panel empty" role="status">正在載入牌照資料…</div>
 </template>
@@ -216,7 +190,6 @@ const {
   refresh,
   savePlate,
   plateGroups,
-  uploadPlatePhoto,
   cardDraft,
   cardFields,
   saveCard,

@@ -651,23 +651,6 @@ function fieldStatusText(status) {
 function fieldStatusClass(status) {
   return status?.status === "failed" ? "failed" : "uncertain";
 }
-async function uploadPlatePhoto(kind, event) {
-  try {
-    const image = await readImageFile(event);
-    if (!image) return;
-    await api(
-      "/plate-assets/" + selectedPlate.value.id + "/photo/" + kind,
-      "POST",
-      { image },
-    );
-    await openPlate(selectedPlate.value);
-    showSuccess("實體車牌照片已上傳");
-  } catch (e) {
-    showError(e);
-  } finally {
-    event.target.value = "";
-  }
-}
 async function saveRequest() {
   try {
     await api("/requests/" + selected.value.id, "PATCH", editRequest.value);
@@ -949,7 +932,6 @@ export const adminStore = {
   uploadCard,
   fieldStatusText,
   fieldStatusClass,
-  uploadPlatePhoto,
   saveRequest,
   updateTask,
   updateInspection,

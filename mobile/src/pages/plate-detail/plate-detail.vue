@@ -46,8 +46,8 @@
       <text class="section-title">車牌</text>
       <view class="card">
         <view class="plate-pair">
-          <view class="plate-item"><text class="plate-label">內地港澳入出境號牌</text><image v-if="plateImages[p.id]?.mainland" :src="plateImages[p.id].mainland" mode="widthFix" class="plate-photo"/><MainlandPlate v-else-if="p.mainland_plate" :plate="p.mainland_plate" :width="300"/><view v-else class="plate-missing">未提供號碼</view></view>
-          <view class="plate-item"><text class="plate-label">{{ p.route==='粵港'?'香港':'澳門' }}號牌</text><image v-if="plateImages[p.id]?.local" :src="plateImages[p.id].local" mode="widthFix" class="plate-photo"/><template v-else-if="p.local_plate"><HongKongPlate v-if="p.route==='粵港'" :plate="p.local_plate" :width="300"/><view v-else class="physical-plate macau"><text>{{ formatMacau(p.local_plate) }}</text></view></template><view v-else class="plate-missing">未提供號碼</view></view>
+          <view class="plate-item"><text class="plate-label">內地港澳入出境號牌</text><MainlandPlate v-if="p.mainland_plate" :plate="p.mainland_plate" :width="300"/><view v-else class="plate-missing">未提供號碼</view></view>
+          <view class="plate-item"><text class="plate-label">{{ p.route==='粵港'?'香港':'澳門' }}號牌</text><template v-if="p.local_plate"><HongKongPlate v-if="p.route==='粵港'" :plate="p.local_plate" :width="300"/><view v-else class="physical-plate macau"><text>{{ formatMacau(p.local_plate) }}</text></view></template><view v-else class="plate-missing">未提供號碼</view></view>
         </view>
         <view class="kv facts"><text class="k">上牌狀態</text><text class="v">{{ p.installation_status==='待核對' ? '確認中' : p.installation_status }}</text><text class="k">使用狀態</text><text class="v">{{ usageWord(p.usage_status) }}</text><text class="k">綁定車輛</text><text class="v">{{ boundVehicle(p) }}</text></view>
         <view class="more" @click="showEdit=!showEdit">{{ showEdit ? '收起資料修改' : '修改牌照資料 ›' }}</view>
@@ -98,12 +98,12 @@
 <script setup>
 import { ref,computed } from 'vue'
 import { onLoad,onShow } from '@dcloudio/uni-app'
-import { api,getUser,privateImage,startRequest,requestTone,clientStage,detailText,selfHandled,money } from '../../lib/api'
+import { api,getUser,startRequest,requestTone,clientStage,detailText,selfHandled,money } from '../../lib/api'
 import PlateChip from '../../components/PlateChip.vue'
 import ApprovalCard from '../../components/ApprovalCard.vue'
 import MainlandPlate from '../../components/MainlandPlate.vue'
 import HongKongPlate from '../../components/HongKongPlate.vue'
-const vehicles=ref([]),detail=ref({}),plates=ref([]),plateDetail=ref({}),plateImages=ref({}),sources=ref([])
+const vehicles=ref([]),detail=ref({}),plates=ref([]),plateDetail=ref({}),sources=ref([])
 const crossingBusy=ref(false),justCrossed=ref(false),loaded=ref(false),cardBack=ref(false),allDeadlines=ref(false)
 const healthLabel={ok:'正常',due:'快到期',overdue:'已逾期',pending:'資料整理中'},healthTone={ok:'',due:'amber',overdue:'red',pending:'gray'}
 // 90 天過關有自己的卡片，不在到期清單重複
@@ -154,7 +154,7 @@ function mainlandParts(value){const clean=String(value||'').toUpperCase().replac
 function formatHongKong(value){const clean=String(value||'').toUpperCase().replace(/\s+/g,'');return clean.replace(/^([A-Z]{1,2})([0-9]{1,4})$/,'$1 $2')}
 function formatMacau(value){const clean=String(value||'').toUpperCase().replace(/[\s-]/g,'');return clean.replace(/^([A-Z]{2})([0-9]{2})([0-9]{2})$/,'$1-$2-$3')}
 function openSource(sourceId){const source=sources.value.find(s=>s.id===sourceId);if(source)uni.setClipboardData({data:source.url,success:()=>uni.showToast({title:'官方連結已複製',icon:'none'})})}
-async function load(){if(!getUser())return uni.navigateTo({url:'/pages/login/login'});if(creating.value||!plateId)return;try{const [p,v,catalog,mine]=await Promise.all([api('/plate-assets/'+plateId),api('/vehicles'),api('/catalog'),api('/my/plates/'+plateId)]);summary.value=mine;api('/my/rentals').then(list=>{arrangements.value=list.filter(item=>item.plateId===plateId)}).catch(()=>{arrangements.value=[]});plates.value=[p];plateDetail.value={...plateDetail.value,[p.id]:p};vehicles.value=v;sources.value=catalog.sources;fillPlateForm(p);detail.value=Object.fromEntries(await Promise.all(v.map(async item=>[item.id,await api('/vehicles/'+item.id)])));const images={};for(const [key,path] of [['mainland','plate-mainland'],['local','plate-local']])if(p.platePhotos?.[key])images[key]=await privateImage('/plate-assets/'+p.id+'/image/'+path);plateImages.value={[p.id]:images}}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
+async function load(){if(!getUser())return uni.navigateTo({url:'/pages/login/login'});if(creating.value||!plateId)return;try{const [p,v,catalog,mine]=await Promise.all([api('/plate-assets/'+plateId),api('/vehicles'),api('/catalog'),api('/my/plates/'+plateId)]);summary.value=mine;api('/my/rentals').then(list=>{arrangements.value=list.filter(item=>item.plateId===plateId)}).catch(()=>{arrangements.value=[]});plates.value=[p];plateDetail.value={...plateDetail.value,[p.id]:p};vehicles.value=v;sources.value=catalog.sources;fillPlateForm(p);detail.value=Object.fromEntries(await Promise.all(v.map(async item=>[item.id,await api('/vehicles/'+item.id)])))}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
 onLoad(options=>{plateId=options.id||'';creating.value=options.new==='1';if(!creating.value)load()})
 onShow(load)
 import DueDate from '../../components/DueDate.vue'
@@ -177,7 +177,6 @@ import StampMark from '../../components/StampMark.vue'
 .field-status{margin-left:8px;color:var(--due);font-size:var(--fs-cap);font-weight:700}.field-status.failed{color:var(--overdue)}
 .plate-pair{display:flex;gap:12px}.plate-item{flex:1;min-width:0}
 .plate-label{display:block;font-size:var(--fs-cap);color:var(--ink-3);margin-bottom:8px}
-.plate-photo{width:100%;display:block;border-radius:4px;box-shadow:0 2px 4px rgba(0,0,0,.2)}
 .plate-missing{display:flex;align-items:center;justify-content:center;aspect-ratio:440/140;background:var(--paper);border:1px dashed var(--rule);color:var(--ink-3);border-radius:4px;font-size:var(--fs-cap)}
 .physical-plate.macau{display:flex;align-items:center;justify-content:center;aspect-ratio:460/100;background:#050505;color:#fff;border-radius:2px;font-family:Arial,'Helvetica Neue',sans-serif;font-size:var(--fs-title);font-weight:800;white-space:nowrap}
 .facts{margin-top:16px}
