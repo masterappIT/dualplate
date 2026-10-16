@@ -1,5 +1,6 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { api, user } from '../api'
 import ListPage from '../components/business/ListPage.vue'
 import Button from '../components/ui/Button.vue'
 import Field from '../components/ui/Field.vue'
@@ -17,10 +18,14 @@ import { useAdminStore } from '../store'
 
 const { modal, plateSearch, plateFilter, filteredPlateRows, selectedPlateIds, bulkRule, allowedBulkRules, bulkDate, saveBulkDates, customerName, openPlate, previewPlateImport, confirmPlateImport, importPreview, saveTrackedItem, showError, refresh } = useAdminStore()
 const filters = [{ value: 'all', label: '全部' }, { value: 'attention', label: '需注意' }, { value: 'rental', label: '出租中' }, { value: 'own', label: '自用' }, { value: 'empty', label: '空置' }, { value: 'missing', label: '資料不全' }]
-const list = useListPage(filteredPlateRows, refresh, selectedPlateIds)
+const ownership = ref('all'), crossingFilter = ref(false), crossingSummaries = ref({}), scopeSummaries = ref({}), crossingError = ref('')
+const visiblePlates = computed(() => filteredPlateRows.value.filter(plate => (ownership.value === 'all' || Boolean(useAdminStore().customers.value.find(item => item.id === plate.customer_id)?.is_self) === (ownership.value === 'self')) && (!crossingFilter.value || crossingSummaries.value[plate.id] && (!crossingSummaries.value[plate.id].lastCrossedOn || Date.now() - Date.parse(crossingSummaries.value[plate.id].lastCrossedOn) >= 90 * 86400000))))
+const visibleList = useListPage(visiblePlates, refresh, selectedPlateIds)
+watch(filteredPlateRows, async rows => { try { const [crossings, scopes] = await Promise.all([Promise.all(rows.map(async plate => [plate.id, await api(`/plates/${plate.id}/crossings`)])), user()?.role === 'admin' ? Promise.all(rows.map(async plate => [plate.id, await api(`/service-scopes?ownerType=plate&ownerId=${plate.id}`)])) : []]); crossingSummaries.value = Object.fromEntries(crossings); scopeSummaries.value = Object.fromEntries(scopes); crossingError.value = '' } catch (error) { crossingError.value = error.message } }, { immediate: true })
+const plateHandler = plate => scopeSummaries.value[plate.id]?.services.find(item => item.service === 'plate_service')
 // 使用狀態併入狀態欄的第二行；「待核對」對用戶顯示為「使用待確認」。
 const usageText = status => ({ '待核對': '使用待確認' }[status] || status || '使用待確認')
-const columns = [{ key: 'mainland_plate', title: '車牌', width: 190 }, { key: 'holder_company', title: '持牌公司', width: 150 }, { key: 'customer_id', title: '客戶', width: 120 }, { key: 'port', title: '口岸', width: 72 }, { key: 'card_expires_on', title: '批文到期', width: 128 }, { key: 'permit_expires_on', title: 'CRP／通行證到期', width: 138 }, { key: 'health_status', title: '狀態／使用', width: 96 }, { key: 'action', title: '操作', className: 'col-actions', width: 72 }]
+const columns = [{ key: 'mainland_plate', title: '車牌', width: 190 }, { key: 'holder_company', title: '持牌公司', width: 150 }, { key: 'customer_id', title: '客戶', width: 120 }, { key: 'port', title: '口岸', width: 72 }, { key: 'card_expires_on', title: '批文到期', width: 128 }, { key: 'permit_expires_on', title: 'CRP／通行證到期', width: 138 }, { key: 'lastCrossing', title: '上次過關', width: 150 }, { key: 'health_status', title: '狀態／使用', width: 96 }, { key: 'action', title: '操作', className: 'col-actions', width: 72 }]
 const importOpen = ref(false)
 const importStage = computed(() => importPreview.value ? '預覽' : '選檔')
 const statusLabel = status => ({ overdue: '已逾期', due: '需注意', missing: '資料不全', ok: '正常' }[status] || status)
@@ -45,16 +50,17 @@ function downloadTemplate() {
 }
 </script>
 <template>
-  <ListPage title="牌照" desc="全部牌照集中在一張表，日期可直接填寫或批量更新。" table-title="牌照總表" :list="list" :columns="columns" :min-width="1000" selectable>
-    <template #actions><Button @click="importOpen = true">匯入 CSV</Button><Button @click="modal = 'vehicle'">＋ 登記車輛</Button><Button variant="primary" @click="modal = 'plate'">＋ 登記牌照</Button></template>
+  <ListPage title="牌照" desc="全部牌照集中在一張表，日期可直接填寫或批量更新。" table-title="牌照總表" :list="visibleList" :columns="columns" :min-width="1100" selectable>
+    <template #actions><Button v-if="user()?.role === 'admin'" @click="importOpen = true">匯入 CSV</Button><Button v-if="user()?.role === 'admin'" @click="modal = 'vehicle'">＋ 登記車輛</Button><Button v-if="user()?.role === 'admin'" variant="primary" @click="modal = 'plate'">＋ 登記牌照</Button></template>
     <template #before><Segmented v-model="plateFilter" :options="filters" label="牌照分類" /></template>
-    <template #search><Field label="搜尋牌照"><TextInput v-model="plateSearch" placeholder="搜尋車牌、客戶或公司" /></Field></template>
+    <template #search><Field label="搜尋牌照"><TextInput v-model="plateSearch" placeholder="搜尋車牌、客戶或公司" /></Field><Field label="來源"><select v-model="ownership"><option value="all">全部</option><option value="client">客戶的</option><option value="self">自有的</option></select></Field><Field label="過關"><label><input v-model="crossingFilter" type="checkbox" /> 90 天內未過關</label></Field><p v-if="crossingError" role="alert">{{ crossingError }}</p></template>
     <template #cell-mainland_plate="{ row }"><HoverCard><button class="text-button" @click="openPlate(row)"><PlateChip :plate="row.mainland_plate" /> <PlateChip :plate="row.local_plate" :route="row.route" /></button><template #card><strong>{{ customerName(row.customer_id) }}</strong><p>{{ row.route }} · {{ row.port || '口岸待設定' }}</p><p>批文：{{ row.card_number || '待補' }} · {{ row.card_expires_on || '到期待錄入' }}</p></template></HoverCard><small>{{ row.route }} · {{ row.card_number || '批文卡號待補' }}</small></template>
     <template #cell-holder_company="{ row }"><span :class="{ 'missing-note': !row.holder_company && !row.card_data?.company }">{{ row.holder_company || row.card_data?.company || '持牌公司待補充' }}</span></template>
     <template #cell-customer_id="{ row }">{{ customerName(row.customer_id) }}</template>
     <template #cell-port="{ row }">{{ row.port || '待設定' }}</template>
-    <template #cell-card_expires_on="{ row }"><DueDate :date="row.card_expires_on" /></template>
-    <template #cell-permit_expires_on="{ row }"><DueDate :date="row.permit_expires_on" editable label="CRP／通行證到期" :on-save="value => savePermit(row, value)" /></template>
+    <template #cell-card_expires_on="{ row }"><DueDate :date="row.card_expires_on" /><Tag v-if="plateHandler(row)?.handler === 'client'" tone="neutral">客戶自理</Tag><Tag v-else-if="plateHandler(row)?.handler === 'outsourced'" tone="warning">外包：{{ plateHandler(row).providerName }}</Tag></template>
+    <template #cell-permit_expires_on="{ row }"><DueDate :date="row.permit_expires_on" editable label="CRP／通行證到期" :on-save="value => savePermit(row, value)" /><Tag v-if="plateHandler(row)?.handler === 'client'" tone="neutral">客戶自理</Tag><Tag v-else-if="plateHandler(row)?.handler === 'outsourced'" tone="warning">外包：{{ plateHandler(row).providerName }}</Tag></template>
+    <template #cell-lastCrossing="{ row }"><template v-if="crossingSummaries[row.id]?.lastCrossedOn"><span>{{ crossingSummaries[row.id].lastCrossedOn }}（{{ Math.floor((Date.now() - Date.parse(crossingSummaries[row.id].lastCrossedOn)) / 86400000) }} 天）</span><Tag v-if="!crossingSummaries[row.id].enabled" tone="neutral">未開啟提醒</Tag><Tag v-else :tone="Date.now() - Date.parse(crossingSummaries[row.id].lastCrossedOn) > 90 * 86400000 ? 'danger' : Date.now() - Date.parse(crossingSummaries[row.id].lastCrossedOn) > 75 * 86400000 ? 'warning' : 'ok'">{{ Date.now() - Date.parse(crossingSummaries[row.id].lastCrossedOn) > 90 * 86400000 ? '已逾 90 天' : '提醒中' }}</Tag></template><Tag v-else-if="!crossingSummaries[row.id]?.enabled" tone="neutral">未開啟提醒</Tag><span v-else>尚無過關記錄</span></template>
     <template #cell-health_status="{ row }"><Tag :tone="row.health_status === 'overdue' ? 'danger' : row.health_status === 'due' ? 'warning' : row.health_status === 'ok' ? 'ok' : 'neutral'">{{ statusLabel(row.health_status) }}</Tag><small class="cell-sub">{{ usageText(row.usage_status) }}</small></template>
     <template #cell-action="{ row }"><button class="text-button" @click="openPlate(row)">查看 →</button></template>
     <template #batch><label>到期種類 <select v-model="bulkRule" :disabled="!allowedBulkRules.length"><option v-if="allowedBulkRules.includes('hk_crp')" value="hk_crp">CRP 到期</option><option v-if="allowedBulkRules.includes('mo_permit')" value="mo_permit">澳門通行證到期</option></select></label><DateInput v-model="bulkDate" label="批量到期日" /><Button :disabled="!allowedBulkRules.length" @click="saveBulkDates">批量填日期</Button><span v-if="!allowedBulkRules.length">請按路線分開批量填寫</span></template>

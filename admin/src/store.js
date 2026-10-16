@@ -178,7 +178,7 @@ const newCount = computed(
   activeCount = computed(
     () =>
       requests.value.filter(
-        (r) => r.status !== "已完成" && r.status !== "新要求",
+        (r) => ['待開始', '進行中', '待客戶提供'].includes(r.status),
       ).length,
   ),
   filteredRequests = computed(() =>
@@ -186,7 +186,7 @@ const newCount = computed(
       (r) =>
         (!statusFilter.value ||
           (statusFilter.value === "active"
-            ? r.status !== "已完成" && r.status !== "新要求"
+            ? ['待開始', '進行中', '待客戶提供'].includes(r.status)
             : r.status === statusFilter.value)) &&
         `${r.title} ${r.customer_name} ${r.plate || ""}`
           .toLowerCase()
@@ -258,19 +258,20 @@ function goFilteredRequests(status) {
   view.value = "business";
 }
 const todayDeadlines = computed(() => {
-  const items = overviewData.value.deadlines || [];
-  const visible = todayTab.value === "missing" ? items.filter((item) => item.level === "missing") : todayTab.value === "customer" ? requestDetails.value.flatMap((request) => (request.tasks || []).filter((task) => task.status === "待客戶配合").map((task) => ({ ...task, request }))) : todayTab.value === "active" ? requests.value.filter((request) => request.status !== "已完成") : items.filter((item) => ["overdue", "due"].includes(item.level));
-  return todayCustomerId.value ? visible.filter((item) => item.customerId === todayCustomerId.value || item.customer_id === todayCustomerId.value || item.request?.customer_id === todayCustomerId.value) : visible;
+  const items = (overviewData.value.deadlines || []).filter(item => item.handler !== 'client');
+  const visible = todayTab.value === "missing" ? items.filter((item) => item.level === "missing") : todayTab.value === "customer" ? requestDetails.value.flatMap((request) => (request.tasks || []).filter((task) => task.owner === 'client' && !['已完成', '不適用'].includes(task.status)).map((task) => ({ ...task, request }))) : todayTab.value === "active" ? requests.value.filter((request) => ['待開始', '進行中', '待客戶提供'].includes(request.status)) : items.filter((item) => ["overdue", "due"].includes(item.level));
+  return visible.filter(item => todayOwnership.value === 'all' || Boolean(customers.value.find(customer => customer.id === (item.customerId || item.customer_id || item.request?.customer_id))?.is_self) === (todayOwnership.value === 'self')).filter(item => !todayCustomerId.value || item.customerId === todayCustomerId.value || item.customer_id === todayCustomerId.value || item.request?.customer_id === todayCustomerId.value);
 });
+const todayOwnership = ref('all');
 const todayCounts = computed(() => ({
-  overdue: overviewData.value.counts?.overdue || 0,
-  due: (overviewData.value.deadlines || []).filter((item) => item.dueOn && item.daysLeft >= 0 && item.daysLeft <= 7).length,
-  missing: overviewData.value.counts?.missing || 0,
-  active: requests.value.filter((request) => request.status !== '已完成').length,
+  overdue: (overviewData.value.deadlines || []).filter(item => item.handler !== 'client' && item.level === 'overdue').length,
+  due: (overviewData.value.deadlines || []).filter((item) => item.handler !== 'client' && item.dueOn && item.daysLeft >= 0 && item.daysLeft <= 7).length,
+  missing: (overviewData.value.deadlines || []).filter(item => item.handler !== 'client' && item.level === 'missing').length,
+  active: requests.value.filter((request) => ['待開始', '進行中', '待客戶提供'].includes(request.status)).length,
 }));
 const customerRows = computed(() => {
   const term = customerSearch.value.trim().toLowerCase();
-  return customers.value.filter((customer) => !term || `${customer.name} ${customer.kind}`.toLowerCase().includes(term)).map((customer) => {
+  return [...customers.value].sort((first, second) => Number(!!second.is_self) - Number(!!first.is_self)).filter((customer) => !term || `${customer.name} ${customer.kind}`.toLowerCase().includes(term)).map((customer) => {
     const entries = overviewData.value.customers?.find((item) => item.id === customer.id) || {};
     const customerPlates = plates.value.filter((plate) => plate.customer_id === customer.id);
     const groups = companyGroups.value.filter((group) => group.customer_id === customer.id);
@@ -332,7 +333,7 @@ async function refresh() {
       api("/customers"),
       api("/vehicles"),
       api("/plate-assets?summary=1"),
-      api("/requests"),
+      api("/work-orders"),
       api("/catalog"),
       api("/overview?days=90"),
       api('/company-groups'),
@@ -443,6 +444,8 @@ async function openRequest(r) {
       status: selected.value.status,
       stage: selected.value.stage,
       note: "",
+      assigneeId: selected.value.assignee_id || account.value?.id,
+      dueOn: selected.value.due_on || '',
     };
     view.value = "request-detail";
     return true;
@@ -458,17 +461,14 @@ function openCustomer(c) {
 }
 
 async function createRequestFromDeadline(item) {
+  if (item.handler === 'client') return showError(new Error('客戶自理事項不建立員工工單'));
   const company = item.ownerType === 'company' ? companyRecords.value.find(entry => entry.id === item.ownerId) : null;
   const plate = item.ownerType === "plate" ? plates.value.find((entry) => entry.id === item.ownerId) : company?.group_id ? plates.value.find(entry => entry.group_id === company.group_id && entry.customer_id === item.customerId) : null;
   const vehicle = item.ownerType === "vehicle" ? vehicles.value.find((entry) => entry.id === item.ownerId) : plate?.vehicle_id ? vehicles.value.find((entry) => entry.id === plate.vehicle_id) : null;
-  const serviceCode = item.ruleCode === "inspection" ? "inspection" : ["approval", "hk_crp", "mo_permit"].includes(item.ruleCode) ? "renewal" : "other";
+  const serviceCode = item.ruleCode === "inspection" ? "inspection" : ["approval", "hk_crp", "mo_permit"].includes(item.ruleCode) ? "renewal" : ["customs_filing", "new_card_filing"].includes(item.ruleCode) ? "filing" : "other";
   if (item.ownerType === 'plate' && !plate || item.ownerType === 'vehicle' && !vehicle) return showError(new Error('到期對象不存在'));
-  try {
-    const request = await api("/requests", "POST", { customerId: item.customerId, vehicleId: vehicle?.id || null, plateAssetId: plate?.id || null, route: plate?.route || vehicle?.route || "粵港", serviceCode, title: `${item.name}代辦`, description: `由今日工作建立；對象：${item.ownerLabel}` });
-    await refresh();
-    await openRequest(request);
-    showSuccess("工單已建立");
-  } catch (error) { showError(error) }
+  newRequest.value = { customerId: item.customerId, vehicleId: vehicle?.id || '', plateAssetId: plate?.id || '', route: plate?.route || vehicle?.route || '粵港', serviceCode, title: `${item.name}代辦`, description: `由今日工作帶入；對象：${item.ownerLabel}` };
+  view.value = 'new-request';
 }
 async function openVehicle(v) {
   try {
@@ -671,7 +671,7 @@ async function updateInspection(item, status) {
 }
 async function createRequest() {
   try {
-    const r = await api("/requests", "POST", newRequest.value);
+    const r = await api("/work-orders", "POST", newRequest.value);
     newRequest.value = {
       customerId: "",
       route: "粵港",
@@ -856,6 +856,7 @@ export const adminStore = {
   overviewData,
   todayTab,
   todayCustomerId,
+  todayOwnership,
   todayCounts,
   todayDeadlines,
   saveTrackedItem,

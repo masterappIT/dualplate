@@ -12,7 +12,7 @@
         {{ customerName(selectedPlate.customer_id) }}
       </p>
     </div>
-    <button class="button primary" @click="modal = 'rental'">
+    <button v-if="isAdmin" class="button primary" @click="modal = 'rental'">
       ＋ 登記出租
     </button>
   </div>
@@ -77,6 +77,9 @@
     @saved="showSuccess"
     @error="showError"
   />
+  <ServiceScope v-if="isAdmin" owner-type="plate" :owner-id="selectedPlate.id" :is-self="!!customers.find(item => item.id === selectedPlate.customer_id)?.is_self" @saved="showSuccess" @error="showError" />
+  <CrossingRecords :plate-id="selectedPlate.id" @saved="crossingSaved" @error="showError" />
+  <PlateTransfer v-if="isAdmin" :plate="selectedPlate" :customers="customers" :groups="companyGroups" :vehicles="vehicles" @saved="transferSaved" @error="showError" />
   <div class="grid-two">
     <section class="panel">
       <div class="panel-head">
@@ -191,6 +194,10 @@
 </template>
 <script setup>
 import { computed } from 'vue'
+import { user } from '../api'
+import ServiceScope from '../components/ui/ServiceScope.vue'
+import CrossingRecords from '../components/ui/CrossingRecords.vue'
+import PlateTransfer from '../components/ui/PlateTransfer.vue'
 import { useAdminStore } from "../store";
 import ApprovalCard from "../components/ApprovalCard.vue";
 import ExpiryPanel from "../components/ExpiryPanel.vue";
@@ -206,6 +213,9 @@ const {
   customerName,
   plateForm,
   vehicles,
+  customers,
+  companyGroups,
+  refresh,
   savePlate,
   plateGroups,
   uploadPlatePhoto,
@@ -220,6 +230,9 @@ const {
   showSuccess,
   showError,
 } = useAdminStore();
+const isAdmin = user()?.role === 'admin'
+async function crossingSaved(message) { showSuccess(message); await refresh() }
+async function transferSaved(message) { showSuccess(message); await refresh(); view.value = 'plates' }
 const vehicleOptions = computed(() => [{ value: '', label: '未綁定' }, ...vehicles.value.filter(vehicle => vehicle.customer_id === selectedPlate.value?.customer_id && vehicle.route === selectedPlate.value?.route).map(vehicle => ({ value: vehicle.id, label: `${vehicle.plate} · ${vehicle.brand || ''} ${vehicle.model || ''}` }))]);
 const groupOptions = computed(() => [{ value: '', label: '未分組' }, ...plateGroups.value.map(group => ({ value: group.id, label: group.name }))]);
 </script>

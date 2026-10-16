@@ -11,7 +11,7 @@ export async function entrustmentRoutes(req, res, url, user, h) {
   const path = url.pathname, method = req.method, tenant = user.tenant_id
   const templateMatch = path.match(/^\/api\/customers\/([^/]+)\/apply-template$/)
   const transferMatch = path.match(/^\/api\/plates\/([^/]+)\/transfers?$/)
-  if (path !== '/api/service-scopes' && !templateMatch && !transferMatch) return false
+  if (path !== '/api/service-scopes' && path !== '/api/service-scopes/batch' && !templateMatch && !transferMatch) return false
   if (user.role !== 'admin') return fail(res, 403, '無權限'), true
 
   if (path === '/api/service-scopes' && method === 'GET') {
@@ -28,6 +28,24 @@ export async function entrustmentRoutes(req, res, url, user, h) {
     db.exec('BEGIN IMMEDIATE')
     try { writeScope({ tenantId: tenant, ownerType: body.ownerType, ownerId: owner.id, service: body.service, handler: body.handler, providerName: body.providerName, notes: body.notes, userId: user.id }); db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
     return json(res, 200, scopesFor(tenant, body.ownerType, owner.id)), true
+  }
+  if (path === '/api/service-scopes/batch' && method === 'PUT') {
+    // 委託範圍矩陣一次提交：先逐項驗證，全部合格才在同一交易內寫入，任何一項不合格就全部不改
+    const body = await parseBody(req)
+    if (!isObject(body) || !Array.isArray(body.changes) || !body.changes.length || body.changes.length > 500) return fail(res, 400, '請提供要修改的項目'), true
+    const checked = []
+    for (const [index, change] of body.changes.entries()) {
+      if (!isObject(change) || !['company', 'plate'].includes(change.ownerType) || typeof change.ownerId !== 'string' || typeof change.service !== 'string' || typeof change.handler !== 'string') return fail(res, 400, `第 ${index + 1} 項內容無效`), true
+      const owner = loadOwner(tenant, change.ownerType, change.ownerId)
+      if (!owner) return fail(res, 404, `第 ${index + 1} 項的對象不存在`), true
+      const problem = checkScope(owner, change.ownerType, change)
+      if (problem) return fail(res, 400, `第 ${index + 1} 項：${problem}`), true
+      if (checked.some(item => item.ownerType === change.ownerType && item.ownerId === owner.id && item.service === change.service)) return fail(res, 400, `第 ${index + 1} 項重複`), true
+      checked.push({ ...change, ownerId: owner.id })
+    }
+    db.exec('BEGIN IMMEDIATE')
+    try { for (const change of checked) writeScope({ tenantId: tenant, ownerType: change.ownerType, ownerId: change.ownerId, service: change.service, handler: change.handler, providerName: change.providerName, notes: change.notes, userId: user.id }); db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
+    return json(res, 200, { updated: checked.length }), true
   }
   if (templateMatch && method === 'POST') {
     const body = await parseBody(req)

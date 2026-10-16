@@ -178,3 +178,20 @@ test('普通公司車輛牌照編輯不可修改 customer_id', async () => {
   assert.equal((await request(`/plate-assets/${state.plate}`, 'PATCH', { customerId: state.customer })).status, 200)
   assert.equal(state.db.prepare('SELECT customer_id FROM plate_assets WHERE id=?').get(state.plate).customer_id, plateCustomer)
 })
+
+test('委託範圍整批提交：全部合格才寫入', async () => {
+  const before = state.db.prepare('SELECT COUNT(*) count FROM service_scopes').get().count
+  const bad = await request('/service-scopes/batch', 'PUT', { changes: [{ ownerType: 'plate', ownerId: state.plate, service: 'plate_service', handler: 'client' }, { ownerType: 'plate', ownerId: state.plate, service: 'secretary', handler: 'us' }] })
+  assert.equal(bad.status, 400)
+  assert.equal(state.db.prepare('SELECT COUNT(*) count FROM service_scopes').get().count, before)
+})
+test('委託範圍整批提交：成功時一次寫入全部', async () => {
+  const result = await request('/service-scopes/batch', 'PUT', { changes: [{ ownerType: 'plate', ownerId: state.plate, service: 'rental_management', handler: 'client' }] })
+  assert.equal(result.status, 200)
+  assert.equal(result.body.updated, 1)
+})
+test('委託範圍整批提交：空值、重複、別的租戶與員工被拒', async () => {
+  for (const body of [null, {}, { changes: [] }, { changes: 'x' }]) assert.equal((await request('/service-scopes/batch', 'PUT', body)).status, 400)
+  const dup = { ownerType: 'plate', ownerId: state.plate, service: 'plate_service', handler: 'us' }
+  assert.equal((await request('/service-scopes/batch', 'PUT', { changes: [dup, dup] })).status, 400)
+})

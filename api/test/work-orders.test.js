@@ -250,3 +250,9 @@ test('員工可查看客戶牌照但不可變更委託或客戶帳號', async ()
 test('員工不可讀取權限全景（含全部員工與登入時間）', async () => {
   assert.equal((await request('/permission-matrix', 'GET', undefined, 'staff')).status, 403)
 })
+
+test('管理端工單詳情帶官方依據（plan）', async () => {
+  const created = await request('/work-orders', 'POST', { customerId: state.customer, serviceCode: 'renewal', route: '粵港', title: '續期' })
+  const detail = await request(`/requests/${created.body.id}`)
+  assert.ok(Array.isArray(detail.body.plan?.sourceIds) && detail.body.plan.sourceIds.length > 0)
+})
