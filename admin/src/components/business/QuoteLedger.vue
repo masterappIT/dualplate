@@ -57,7 +57,7 @@ async function printQuote(row) {
   const printWindow = window.open('', '_blank')
   if (!printWindow) { formError.value = '請允許開啟列印視窗後重試。'; return }
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:4100'}/api/quotes/${encodeURIComponent(row.id)}/print`, { headers: { authorization: `Bearer ${token()}` } })
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4100'}/api/quotes/${encodeURIComponent(row.id)}/print`, { headers: { authorization: `Bearer ${token()}` } })
     if (!response.ok) throw new Error('未能取得報價列印內容。')
     const html = await response.text()
     printWindow.document.open(); printWindow.document.write(html); printWindow.document.close()

@@ -1,0 +1,2 @@
+CRON_TZ=Asia/Hong_Kong
+15 3 * * * root GCP_BACKUP_BUCKET=dualplate-511819-backups /srv/dualplate/backup-to-gcs.sh >>/srv/dualplate/logs/backup-cron.log 2>&1

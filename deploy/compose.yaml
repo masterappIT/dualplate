@@ -1,0 +1,25 @@
+services:
+  api:
+    image: ${API_IMAGE:?API_IMAGE required}
+    restart: unless-stopped
+    env_file: /srv/dualplate/app.env
+    volumes:
+      - /srv/dualplate/data:/srv/dualplate/data
+      - /srv/dualplate/backups:/srv/dualplate/backups
+      - /srv/dualplate/logs:/srv/dualplate/logs
+    networks: [app]
+  web:
+    image: ${WEB_IMAGE:?WEB_IMAGE required}
+    restart: unless-stopped
+    depends_on: [api]
+    environment:
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:-dualplateadmin.masterappinc.com}
+      MOBILE_DOMAIN: ${MOBILE_DOMAIN:-dualplate.masterappinc.com}
+      CADDY_EMAIL: ${CADDY_EMAIL:?CADDY_EMAIL required}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - /srv/dualplate/caddy/data:/data
+      - /srv/dualplate/caddy/config:/config
+    networks: [app]
+networks:
+  app:

@@ -36,7 +36,7 @@ const fastForward = () => intro?.timeScale(6)
 async function probeHealth() {
   const start = performance.now()
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:4100'}/api/health`)
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4100'}/api/health`)
     const result = await response.json()
     health.value = { ok: response.ok && result.ok === true, latency: Math.round(performance.now() - start), checked: true }
   } catch { health.value = { ok: false, latency: null, checked: true } }

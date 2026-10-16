@@ -1,4 +1,4 @@
-const base=import.meta.env.VITE_API_BASE_URL||'http://localhost:4100'
+const base=import.meta.env.VITE_API_BASE_URL??'http://localhost:4100'
 export const token=()=>sessionStorage.getItem('adminToken')||localStorage.getItem('adminToken')||''
 export const save=(result,remember=true)=>{clear();const storage=remember?localStorage:sessionStorage;storage.setItem('adminToken',result.token);storage.setItem('adminUser',JSON.stringify(result.user))}
 export const clear=()=>{for(const storage of [localStorage,sessionStorage]){storage.removeItem('adminToken');storage.removeItem('adminUser')}}

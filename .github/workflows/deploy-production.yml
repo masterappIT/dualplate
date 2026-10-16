@@ -1,0 +1,77 @@
+name: Deploy production
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: dualplate-production
+  cancel-in-progress: false
+jobs:
+  quality-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: cd api && npm ci && npm test
+      - run: cd admin && npm ci && npm run check && VITE_API_BASE_URL= npm run build
+      - run: cd mobile && npm ci && VITE_API_BASE_URL= npm run build:h5
+      - run: bash -n deploy/vm/*.sh
+  deploy:
+    needs: quality-gates
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify current main
+        run: |
+          remote_sha="$(git ls-remote origin refs/heads/main | cut -f1)"
+          test "$remote_sha" = "$GITHUB_SHA" || { echo 'Stale commit; stopping.' >&2; exit 1; }
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Build and push immutable images with Cloud Build
+        id: images
+        env:
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+          REGION: ${{ vars.GCP_REGION }}
+          REPO: ${{ vars.GCP_ARTIFACT_REPOSITORY }}
+        run: |
+          set -euo pipefail
+          base="${REGION}-docker.pkg.dev/${PROJECT}/${REPO}"
+          tag="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          gcloud builds submit . \
+            --project="$PROJECT" \
+            --region=global \
+            --config=deploy/cloudbuild.yaml \
+            --service-account="projects/${PROJECT}/serviceAccounts/dualplate-build@${PROJECT}.iam.gserviceaccount.com" \
+            --substitutions="_REGISTRY=${base},_TAG=${tag}" \
+            --quiet
+          for name in api web; do
+            image="${base}/${name}:${tag}"
+            digest="$(gcloud artifacts docker images describe "$image" --project="$PROJECT" --format='value(image_summary.digest)')"
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { printf 'Invalid digest for %s\n' "$image" >&2; exit 1; }
+            printf '%s=%s@%s\n' "$name" "${base}/${name}" "$digest" >> "$GITHUB_OUTPUT"
+          done
+      - name: Verify current main before VM mutation
+        run: |
+          remote_sha="$(git ls-remote origin refs/heads/main | cut -f1)"
+          test "$remote_sha" = "$GITHUB_SHA" || { echo 'Stale commit; stopping.' >&2; exit 1; }
+      - name: Release through IAP SSH
+        env:
+          API_IMAGE: ${{ steps.images.outputs.api }}
+          WEB_IMAGE: ${{ steps.images.outputs.web }}
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+          ZONE: ${{ vars.GCP_ZONE }}
+          VM: ${{ vars.GCP_VM_NAME }}
+        run: |
+          set -euo pipefail
+          gcloud compute ssh "$VM" --project "$PROJECT" --zone "$ZONE" --tunnel-through-iap --quiet \
+            --command="sudo GCP_BACKUP_BUCKET='${{ vars.GCP_BACKUP_BUCKET }}' ADMIN_DOMAIN=dualplateadmin.masterappinc.com MOBILE_DOMAIN=dualplate.masterappinc.com CADDY_EMAIL=info@masterappinc.com /srv/dualplate/deploy.sh '$API_IMAGE' '$WEB_IMAGE'"

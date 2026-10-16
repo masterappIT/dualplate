@@ -1,4 +1,4 @@
-const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4100'
+const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4100'
 export function getToken() { return uni.getStorageSync('token') }
 export function saveSession(result) { uni.setStorageSync('token', result.token); uni.setStorageSync('user', result.user) }
 export function clearSession() { uni.removeStorageSync('token'); uni.removeStorageSync('user') }

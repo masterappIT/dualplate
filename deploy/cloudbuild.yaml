@@ -1,0 +1,22 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file
+      - deploy/api/Dockerfile
+      - --tag
+      - ${_REGISTRY}/api:${_TAG}
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file
+      - deploy/web/Dockerfile
+      - --tag
+      - ${_REGISTRY}/web:${_TAG}
+      - .
+images:
+  - ${_REGISTRY}/api:${_TAG}
+  - ${_REGISTRY}/web:${_TAG}
+options:
+  logging: CLOUD_LOGGING_ONLY
