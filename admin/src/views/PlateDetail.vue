@@ -4,7 +4,7 @@
     <div>
       <button class="back" @click="view = 'plates'">← 返回牌照</button>
       <h1>
-        <PlateChip :plate="selectedPlate.mainland_plate" /> ·
+        <PlateChip :plate="selectedPlate.mainland_plate" />
         <PlateChip :plate="selectedPlate.local_plate" :route="selectedPlate.route" />
       </h1>
       <p>
@@ -12,9 +12,10 @@
         {{ customerName(selectedPlate.customer_id) }}
       </p>
     </div>
-    <button v-if="isAdmin" class="button primary" @click="openRental()">
-      ＋ 新增合約
-    </button>
+    <div class="heading-actions">
+      <button v-if="isAdmin" class="button" @click="openRental()">＋ 新增合約</button>
+      <button class="button primary" @click="startRequest">＋ 開工單</button>
+    </div>
   </div>
   <section class="panel">
     <div class="panel-head">
@@ -25,7 +26,6 @@
           {{ selectedPlate.card_updated_by || "尚未更新" }}
         </p>
       </div>
-      <button class="button primary" @click="saveCard">儲存並核對</button>
     </div>
     <div class="approval-admin-grid">
       <div>
@@ -48,7 +48,7 @@
             ><input v-model="cardDraft[field.key]" />
           </div>
         </div>
-        <button class="button primary" @click="saveCard">儲存並核對</button>
+        <button class="button" @click="saveCard">儲存並核對</button>
       </div>
     </div>
     <details class="scan-details">
@@ -98,7 +98,7 @@
         <Field label="批文卡號"><TextInput v-model="plateForm.cardNumber" /></Field>
         <Field label="批文卡有效期"><DateInput v-model="plateForm.cardExpiresOn" label="批文卡有效期" /></Field>
       </div>
-      <Field label="備註"><TextInput v-model="plateForm.notes" multiline /></Field><button class="button primary" @click="savePlate">儲存兩地牌</button>
+      <Field label="備註"><TextInput v-model="plateForm.notes" multiline /></Field><button class="button" @click="savePlate">儲存兩地牌</button>
     </section>
     <section class="panel">
       <div class="panel-head">
@@ -156,7 +156,7 @@
       <Field label="指標類別"><Select v-model="plateForm.indicatorCategory" :options="['未設定', '投資類', '資格類', '人才類', '投資高新企業類', '捐贈類', '其他'].map(value => ({ value: value === '未設定' ? '' : value, label: value }))" /></Field>
       <Field label="口岸"><Select v-model="plateForm.port" :options="['未設定', '深圳灣', '港珠澳大橋', '蓮塘／香園圍', '落馬洲', '皇崗', '文錦渡', '沙頭角', '拱北', '橫琴', '其他'].map(value => ({ value: value === '未設定' ? '' : value, label: value }))" /></Field>
     </div>
-    <button class="button primary" @click="savePlate">儲存指標資料</button>
+    <button class="button" @click="savePlate">儲存指標資料</button>
   </section>
   <section class="panel">
     <div class="panel-head">
@@ -188,7 +188,7 @@
   <div v-else class="panel empty" role="status">正在載入牌照資料…</div>
 </template>
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { rentMoney } from '../api'
 import { user } from '../api'
@@ -226,10 +226,14 @@ const {
   uploadCard,
   showSuccess,
   showError,
+  newRequest,
 } = useAdminStore();
 const rentalRouter = useRouter()
 function openRental(contractId) { rentalRouter.push({ path: '/rentals', query: contractId ? { contractId } : { plateId: selectedPlate.value.id, new: '1' } }) }
 const isAdmin = user()?.role === 'admin'
+// 為這個牌照開工單：帶入客戶、牌照與路線
+// 改客戶或路線會清空已選牌照，所以等清空跑完再帶入牌照
+function startRequest() { const plate = selectedPlate.value; newRequest.value.customerId = plate.customer_id; newRequest.value.route = plate.route || newRequest.value.route; nextTick(() => { newRequest.value.plateAssetId = plate.id; newRequest.value.vehicleId = plate.vehicle_id || '' }); view.value = 'new-request' }
 const plateDrivers = ref(null)
 watch(() => selectedPlate.value?.cardData, (current, previous) => { if (current && previous && current !== previous) plateDrivers.value?.load() })
 async function crossingSaved(message) { showSuccess(message); await refresh() }

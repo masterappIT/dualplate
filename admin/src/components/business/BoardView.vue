@@ -17,6 +17,8 @@ export interface BoardColumn<Row> {
   items: Row[]
   /** 该列是否接受拖入（默认接受） */
   accepts?: boolean
+  /** 列頭圓點的狀態色：ok／due／overdue／progress／muted */
+  tone?: string
 }
 
 const props = withDefaults(defineProps<{
@@ -205,7 +207,7 @@ onBeforeUnmount(() => {
       :aria-label="`${col.title}，${col.items.length} 項`"
     >
       <header class="board-col-head">
-        <span class="board-dot" aria-hidden="true" />
+        <span :class="['board-dot', `tone-${col.tone || 'progress'}`]" aria-hidden="true" />
         <span class="board-col-title">{{ col.title }}</span>
         <span class="board-col-count tnum">{{ col.items.length }}</span>
       </header>

@@ -46,7 +46,9 @@ onMounted(async () => { await load(); if (route.query.filingId) openFiling(Strin
 const firmOptions = computed(() => [{ label: '全部會計公司', value: '' }, ...firms.value.map(item => ({ label: item.name, value: item.id }))])
 // 窄螢幕只顯示最近 3 個月，避免第一眼只看到最舊的月份
 const narrow = ref(typeof window !== 'undefined' && window.innerWidth < 720)
-const shownMonths = computed(() => narrow.value ? matrix.value.months.slice(-3) : matrix.value.months)
+// 只顯示有記錄的月份（最早一個有記錄的月份起），免得整欄都是「—」
+const trackedMonths = computed(() => { const months = matrix.value.months; const first = months.findIndex(month => matrix.value.rows.some(row => row.cells.some(cell => cell.period === month && cell.status))); return first < 0 ? months.slice(-1) : months.slice(first) })
+const shownMonths = computed(() => narrow.value ? trackedMonths.value.slice(-3) : trackedMonths.value)
 const firstTracked = computed(() => matrix.value.rows.flatMap(row => row.cells).filter(cell => cell.status).map(cell => cell.period).sort()[0] || '')
 const rows = computed(() => matrix.value.rows.filter(row => !firmFilter.value || firms.value.find(item => item.id === firmFilter.value)?.name === row.firmName))
 const counts = computed(() => ({ due: filings.value.filter(item => item.level === 'due').length, overdue: filings.value.filter(item => item.level === 'overdue').length, receipt: filings.value.filter(item => item.missingReceipt).length, filed: filings.value.filter(item => item.period === today.slice(0, 7) && ['已申報', '已完成'].includes(item.status)).length }))
@@ -126,7 +128,7 @@ const periodOptions = computed(() => { const [y, m] = today.split('-').map(Numbe
         <StatCard label="需處理" :value="counts.due" hint="截止前 5 天內未申報" :tone="counts.due ? 'warning' : 'neutral'" :active="focus === 'due'" @click="focus = focus === 'due' ? '' : 'due'" />
         <StatCard label="已逾期" :value="counts.overdue" hint="過了截止日未申報" :tone="counts.overdue ? 'danger' : 'neutral'" :active="focus === 'overdue'" @click="focus = focus === 'overdue' ? '' : 'overdue'" />
         <StatCard label="缺回執" :value="counts.receipt" hint="已申報但未上傳回執" :tone="counts.receipt ? 'warning' : 'neutral'" :active="focus === 'receipt'" @click="focus = focus === 'receipt' ? '' : 'receipt'" />
-        <StatCard label="本月已申報" :value="counts.filed" hint="本月期數已申報或完成" tone="ok" />
+        <StatCard label="本月已申報" :value="counts.filed" hint="本月期數已申報或完成" :tone="counts.filed ? 'ok' : 'neutral'" />
       </div>
 
       <section class="panel">

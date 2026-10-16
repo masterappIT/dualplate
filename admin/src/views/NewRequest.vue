@@ -22,6 +22,9 @@ const plateOptions = computed(() => [
   ...plates.value.filter(plate => plate.customer_id === newRequest.value.customerId && plate.route === newRequest.value.route && plate.card_number).map(plate => ({ value: plate.id, label: `${plate.card_number} · ${plate.mainland_plate || plate.local_plate || plate.route}` })),
 ])
 const templates = ref([]), staff = ref([]), problem = ref('')
+// 工單標題按所選服務自動帶出；員工改過標題就不再覆蓋
+let autoTitle = ''
+watch(() => newRequest.value.serviceCode, code => { const name = services.value.find(service => service.code === code)?.name || ''; if (!newRequest.value.title || newRequest.value.title === autoTitle) { newRequest.value.title = name; autoTitle = name } }, { immediate: true })
 const templateOptions = computed(() => templates.value.filter(item => item.active && item.route === newRequest.value.route && item.service_code === newRequest.value.serviceCode).map(item => ({ value: item.id, label: item.name })))
 const staffOptions = computed(() => staff.value.filter(item => item.active).map(item => ({ value: item.id, label: item.name })))
 async function loadOptions() { try { templates.value = await api('/work-templates'); if (user()?.role === 'admin') staff.value = await api('/staff'); else staff.value = [{ id: user()?.id, name: user()?.name, active: true }]; newRequest.value.assigneeId ||= user()?.id } catch (error) { problem.value = error.message } }

@@ -6,18 +6,18 @@
       <h1>{{ selected.title }}</h1>
       <p>
         {{ selected.route }} · {{ customerName(selected.customer_id) }} ·
-        <PlateChip v-if="selected.vehicle?.plate" :plate="selected.vehicle.plate" :route="selected.route" /><span v-else>未指定車輛</span>
+        <PlateChip v-if="headerPlate" :plate="headerPlate" :route="selected.route" /><span v-else>未指定牌照</span>
       </p>
     </div>
     <span
       class="badge large"
-      :class="selected.status === '新要求' ? 'amber' : ''"
+      :class="statusBadge[selected.status] || 'blue'"
       >{{ selected.status }}</span
     >
   </div>
   <div class="detail-grid">
     <div>
-      <section class="panel guilloche-panel"><div class="panel-head"><div><h2>工單摘要</h2><p>核對客戶、牌照、負責人與截止日。</p></div></div><KeyValue :items="[{ label: '客戶', value: customerName(selected.customer_id) }, { label: '路線', value: selected.route }, { label: '車牌', value: selected.plateAsset?.mainland_plate || selected.vehicle?.plate || '未指定' }, { label: '業務', value: selected.title }, { label: '負責人', value: staff.find(item => item.id === selected.assignee_id)?.name || '未指派' }, { label: '截止日', value: selected.due_on || '未設定' }, { label: '狀態', value: selected.status }]" /></section>
+      <section class="panel guilloche-panel"><div class="panel-head"><div><h2>工單摘要</h2><p>核對客戶、牌照、負責人與截止日。</p></div></div><KeyValue :items="[{ label: '客戶', value: customerName(selected.customer_id) }, { label: '路線', value: selected.route }, { label: '牌照', value: headerPlate || '未指定' }, { label: '業務', value: selected.title }, { label: '負責人', value: staff.find(item => item.id === selected.assignee_id)?.name || '未指派' }, { label: '截止日', value: selected.due_on || '未設定' }]" /></section>
       <section class="panel">
         <div class="panel-head">
           <div>
@@ -50,10 +50,7 @@
           >
           <div class="task-main">
             <strong>{{ task.title }}</strong><Tag v-if="task.owner === 'client'" tone="info">客戶提供</Tag><small v-if="task.documents?.length">所需文件：{{ task.documents.join('、') }}</small
-            ><small
-              >{{ task.jurisdiction }} ·
-              {{ task.source_id || "待確認官方來源" }}</small
-            >
+            ><small>{{ task.jurisdiction }}</small>
           </div>
           <select
             :aria-label="task.title + '：狀態'"
@@ -190,7 +187,7 @@
 </template>
 <script setup>
 import { computed, ref, onMounted, watch, onBeforeUnmount } from 'vue'
-import { api, user, privateFile } from '../api'
+import { api, user, privateFile, dateTime } from '../api'
 import Tag from '../components/ui/Tag.vue'
 import Modal from '../components/ui/Modal.vue'
 import DateInput from '../components/ui/DateInput.vue'
@@ -248,7 +245,7 @@ const attachmentColumns = [{ key: 'fileName', title: '檔名' }, { key: 'taskId'
 const allConfirmed = computed(() => attachments.value.length > 0 && attachments.value.every(item => item.status === '已確認'))
 const attachmentTone = status => ({ '待確認': 'warning', '已確認': 'ok', '需重交': 'danger' })[status] || 'neutral'
 const formatSize = size => size < 1048576 ? `${(size / 1024).toFixed(1)} KB` : `${(size / 1048576).toFixed(1)} MB`
-const formatTime = value => value ? new Date(value).toLocaleString('zh-HK', { hour12: false }) : '—'
+const formatTime = value => value ? dateTime(value) : '—'
 async function loadAttachments() { if (!selected.value?.id) return; attachmentLoading.value = true; attachmentError.value = ''; try { attachments.value = await api(`/requests/${selected.value.id}/attachments`) } catch (error) { attachments.value = []; attachmentError.value = `未能取得客戶文件：${error.message}` } finally { attachmentLoading.value = false } }
 watch(() => selected.value?.id, () => { attachments.value = []; loadAttachments() }, { immediate: true })
 async function reviewAttachment(item, status) { if (!item || reviewing.value) return; reviewing.value = item.id; reviewError.value = ''; try { const updated = await api(`/requests/${selected.value.id}/attachments/${item.id}`, 'PATCH', { status, reviewNote: status === '需重交' ? reviewNote.value.trim() : '' }); attachments.value = attachments.value.map(row => row.id === item.id ? updated : row); reuploadTarget.value = null; if (updated.allConfirmed) { stampPlay.value = true; showSuccess('客戶文件已齊') } else showSuccess(status === '已確認' ? '文件已確認收妥' : '已通知客戶重交') } catch (error) { reviewError.value = error.message; showError(error) } finally { reviewing.value = '' } }
@@ -257,6 +254,10 @@ function closePreview() { if (previewUrl.value) URL.revokeObjectURL(previewUrl.v
 onBeforeUnmount(closePreview)
 onMounted(async () => { try { staff.value = user()?.role === 'admin' ? await api('/staff') : [{ id: user()?.id, name: user()?.name, active: true }] } catch (error) { showError(error) } })
 const statusOptions = ['待開始', '進行中', '待客戶提供', '已完成', '已取消']
+// 標題下和摘要都顯示同一個牌照：內地＋香港／澳門車牌；沒有關聯牌照時用車輛車牌
+const headerPlate = computed(() => selected.value?.plateAsset ? [selected.value.plateAsset.mainland_plate, selected.value.plateAsset.local_plate].filter(Boolean).join(' · ') : selected.value?.vehicle?.plate || '')
+// 狀態色：待開始灰、進行中藍、待客戶提供橙、已完成綠、已取消灰
+const statusBadge = { 新要求: 'gray', 待開始: 'gray', 進行中: 'blue', 待收件: 'blue', 待客戶提供: 'amber', 待客戶配合: 'amber', 已完成: 'success', 已取消: 'gray' }
 const stageOptions = computed(() => ['待內部受理', ...(selected.value?.plan?.stages || [])])
 const deadlineChoices = computed(() => ({ renewal: [{ code: 'approval', label: '批文卡有效期', ownerType: 'plate' }, { code: selected.value?.route === '粵澳' ? 'mo_permit' : 'hk_crp', label: 'CRP／澳門通行證', ownerType: 'plate' }], inspection: [{ code: 'inspection', label: '驗車到期日', ownerType: 'vehicle' }], filing: [{ code: 'customs_filing', label: '海關及邊檢備案到期日', ownerType: 'plate' }] }))
 async function saveProgress() { if (editRequest.value.status === '已完成') { deadlineEntries.value = (deadlineChoices.value[selected.value.service_code] || []).filter(item => item.ownerType === 'vehicle' ? selected.value.vehicle_id : selected.value.plate_asset_id).map(item => ({ ...item, expiresOn: '' })); completionError.value = ''; completionDriverOptions.value = []; completionDriverRecords.value = []; completionDriverDates.value = {}; completionOpen.value = true; if (selected.value.service_code === 'driver_change' && selected.value.plate_asset_id) { try { const [plate, drivers] = await Promise.all([api(`/plates/${selected.value.plate_asset_id}/drivers`), api(`/drivers?customerId=${encodeURIComponent(selected.value.customer_id)}`)]); completionDriverRecords.value = drivers; completionDriverDates.value = Object.fromEntries(drivers.flatMap(driver => driver.documents.map(document => [`${driver.id}:${document.code}`, document.expiresOn || '']))); completionDriverOptions.value = [{ value: '', label: '不登記' }, ...drivers.map(driver => ({ value: driver.id, label: driver.name }))]; completionDrivers.value = { main: plate.drivers.find(driver => driver.role === '主')?.driverId || '', deputies: [...plate.drivers.filter(driver => driver.role === '副').map(driver => driver.driverId), '', ''].slice(0, 2) } } catch (error) { completionError.value = `未能取得司機名單：${error.message}` } } return } if (editRequest.value.status === '已取消') { cancelOpen.value = true; return } await saveRequest() }

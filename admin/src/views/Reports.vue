@@ -2,7 +2,7 @@
 // 月報列表（docs/tasks/monthly-report-brief.md 第 2 節）：打開時後端自動補產生上月草稿；管理者確認後客戶才看得到。
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { api, user } from '../api'
+import { api, user, rentMoney } from '../api'
 import PageHeader from '../components/ui/PageHeader.vue'
 import StatCard from '../components/ui/StatCard.vue'
 import DataTable from '../components/ui/DataTable.vue'
@@ -24,7 +24,8 @@ const periodOptions = computed(() => [{ label: '全部月份', value: '' }, ...p
 const statusOptions = [{ label: '全部狀態', value: '' }, { label: '草稿', value: '草稿' }, { label: '已確認', value: '已確認' }, { label: '已更正', value: '已更正' }]
 const shown = computed(() => rows.value.filter(row => (!period.value || row.period === period.value) && (!status.value || row.status === status.value)))
 const counts = computed(() => ({ draft: rows.value.filter(row => row.status === '草稿').length, confirmed: rows.value.filter(row => row.status === '已確認').length }))
-const money = value => (Math.abs(value) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+// 金額寫法全站一致：HK$／¥／MOP，有角分才顯示小數
+const money = (value, currency) => rentMoney(Math.abs(value || 0), currency)
 const netRows = net => Object.entries(net || {}).filter(([, value]) => value).map(([currency, value]) => ({ currency, value }))
 const tone = value => value === '已確認' ? 'ok' : value === '草稿' ? 'warning' : 'neutral'
 const columns = [{ key: 'customerName', title: '客戶', minWidth: 180 }, { key: 'period', title: '月份' }, { key: 'status', title: '狀態' }, { key: 'net', title: '本月結算', minWidth: 220 }, { key: 'action', title: '' }]
@@ -44,7 +45,7 @@ const columns = [{ key: 'customerName', title: '客戶', minWidth: 180 }, { key:
         <template #cell-customerName="{ row }"><strong>{{ row.customerName }}</strong></template>
         <template #cell-period="{ row }">{{ row.period }}<span v-if="row.version > 1" class="cell-sub"> · 第 {{ row.version }} 版</span></template>
         <template #cell-status="{ row }"><Tag :tone="tone(row.status)">{{ row.status }}</Tag></template>
-        <template #cell-net="{ row }"><div v-for="n in netRows(row.net)" :key="n.currency" class="report-net" :class="n.value < 0 ? 'is-due' : 'is-pay'">{{ n.value < 0 ? '客戶應付' : '應付客戶' }} {{ n.currency }} {{ money(n.value) }}</div><span v-if="!netRows(row.net).length" class="cell-sub">沒有需要結算的款項</span></template>
+        <template #cell-net="{ row }"><div v-for="n in netRows(row.net)" :key="n.currency" class="report-net" :class="n.value < 0 ? 'is-due' : 'is-pay'">{{ n.value < 0 ? '客戶應付' : '應付客戶' }} {{ money(n.value, n.currency) }}</div><span v-if="!netRows(row.net).length" class="cell-sub">沒有需要結算的款項</span></template>
         <template #cell-action="{ row }"><Button variant="text" size="sm" @click="router.push(`/reports/${row.id}`)">打開</Button></template>
         <template #empty><EmptyState title="沒有月報" desc="有客戶後，每月初會自動產生上月報告草稿。" /></template>
       </DataTable>

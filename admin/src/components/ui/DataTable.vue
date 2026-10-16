@@ -178,7 +178,7 @@ defineExpose({ expandAll, collapseAll })
       <slot v-else-if="!flatRows.length" name="empty"><EmptyState :title="emptyText" /></slot>
       <article v-for="item in flatRows" v-else :key="item.row[rowKey]" class="table-card">
         <label v-if="selectable" class="table-card-select"><Checkbox :model-value="selected.includes(item.row[rowKey])" @update:model-value="toggleRow(item.row[rowKey])" /> 選取</label>
-        <div v-for="col in columns" :key="col.key" class="table-card-field"><strong>{{ col.title }}</strong><div><slot :name="`cell-${col.key}`" :row="item.row" :depth="item.depth">{{ item.row[col.key] ?? '—' }}</slot></div></div>
+        <div v-for="(col, index) in columns" :key="col.key" :class="['table-card-field', { 'is-wide': index === 0 || String(col.key).includes('action') }]"><strong>{{ col.title }}</strong><div><slot :name="`cell-${col.key}`" :row="item.row" :depth="item.depth">{{ item.row[col.key] ?? '—' }}</slot></div></div>
       </article>
     </div>
   </div>

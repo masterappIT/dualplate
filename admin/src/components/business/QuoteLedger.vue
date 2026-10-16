@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { api, token, rentCents, rentMoney } from '../../api'
 import { useAdminStore } from '../../store'
 import Button from '../ui/Button.vue'
+import DateInput from '../ui/DateInput.vue'
 import DataTable from '../ui/DataTable.vue'
 import Drawer from '../ui/Drawer.vue'
 import EmptyState from '../ui/EmptyState.vue'
@@ -80,7 +81,7 @@ async function printQuote(row) {
       <Field label="業務"><select v-model="form.serviceCode" :disabled="active && active.status !== '草擬'"><option value="">請選擇</option><option v-for="service in services" :key="service.code" :value="service.code">{{ service.name }}</option></select></Field>
       <Field label="路線"><select v-model="form.route" :disabled="active && active.status !== '草擬'"><option>粵港</option><option>粵澳</option></select></Field>
       <Field label="幣種"><select v-model="form.currency" :disabled="active && active.status !== '草擬'"><option v-for="currency in currencies" :key="currency">{{ currency }}</option></select></Field>
-      <Field label="有效期" required><input v-model="form.validUntil" type="date" :disabled="active && active.status !== '草擬'" /></Field>
+      <Field label="有效期" required><DateInput v-model="form.validUntil" :disabled="active && active.status !== '草擬'" /></Field>
       <div v-for="(item, index) in form.items" :key="index" class="fee-part"><div class="panel-head"><div><h2>項目 {{ index + 1 }}</h2></div><Button v-if="(!active || active.status === '草擬') && form.items.length > 1" size="sm" @click="form.items.splice(index, 1)">移除</Button></div><Field label="類別"><select v-model="item.kind" :disabled="active && active.status !== '草擬'"><option v-for="(label, kind) in kinds" :key="kind" :value="kind">{{ label }}</option></select></Field><Field label="描述"><input v-model="item.description" :disabled="active && active.status !== '草擬'" /></Field><Field label="金額（元）"><input v-model="item.amount" inputmode="decimal" :disabled="active && active.status !== '草擬'" /></Field></div>
       <Button v-if="(!active || active.status === '草擬') && form.items.length < 30" size="sm" @click="form.items.push({ kind: 'gov_fee', description: '', amount: '' })">新增項目</Button>
       <Field label="備註"><input v-model="form.notes" :disabled="active && active.status !== '草擬'" /></Field>

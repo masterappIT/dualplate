@@ -75,7 +75,7 @@
         </select>
       </div>
       <div v-if="!selectedVehicle.inspections?.length" class="empty">
-        尚無驗車任務
+        暫時沒有驗車安排
       </div>
       <div
         v-for="g in selectedVehicle.inspectionGuidance"
@@ -96,6 +96,7 @@
             :href="sources.find((s) => s.id === g.sourceId)?.url"
             target="_blank"
             rel="noopener"
+            class="text-link"
             >官方依據 ↗</a
           ></span
         >

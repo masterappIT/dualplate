@@ -1,7 +1,7 @@
 <script setup>
 // 出租第 B 輪管理端：承租方上傳的憑證待確認、代收結算、合約範本。
 import { ref, computed, watch } from 'vue'
-import { api, privateFile } from '../../api'
+import { api, privateFile, rentMoney } from '../../api'
 import Button from '../ui/Button.vue'
 import Tag from '../ui/Tag.vue'
 import Select from '../ui/Select.vue'
@@ -15,7 +15,7 @@ import FormDialog from './FormDialog.vue'
 
 const props = defineProps({ tab: String })
 const emit = defineEmits(['saved', 'error', 'changed'])
-const money = (value, currency) => `${currency} ${(Math.abs(value || 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+const money = (value, currency) => rentMoney(Math.abs(value || 0), currency)
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Hong_Kong' }).format(new Date())
 
 // ── 待確認憑證 ──

@@ -105,3 +105,37 @@
 @media (max-width: 600px) { .overlay { padding: 12px; } .modal-head, .drawer-head { padding: 18px 18px 4px; } .modal-body, .drawer-body { padding: 12px 18px 18px; } .modal-foot, .drawer-foot { padding: 12px 18px; } }
 .switch.is-disabled { opacity: .45; cursor: not-allowed; }
 .record-form .input-shell input, .record-form .input-shell textarea { width: 100%; min-height: 0; border: 0; border-radius: 0; padding: 0; background: transparent; }
+
+/* ── 2026-10-17 負責人細節修訂 ── */
+/* 分段切換：選中底塊填滿高度（原本高度為 0，只剩一條線）；放在頁面層時按內容寬度，不撐滿整行 */
+.seg-thumb { top: 3px; bottom: 3px; height: auto; }
+.page > .segmented, .stack > .segmented { justify-self: start; }
+/* 原生下拉框與自訂下拉框同一外觀 */
+select:not([multiple]) { appearance: none; -webkit-appearance: none; min-height: var(--control-h); padding: 6px 30px 6px 10px; border: 1px solid var(--border); border-radius: var(--r-control); background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5' fill='none' stroke='%234E5D55' stroke-width='1.4'/%3E%3C/svg%3E") no-repeat right 10px center / 12px 12px; color: var(--ink); font: inherit; cursor: pointer; }
+select:not([multiple]):focus-visible { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(242, 194, 48, .45); }
+/* 篩選欄按內容寬度，不平均撐滿整行 */
+.filter-bar > .field { flex: 0 1 200px; min-width: 160px; max-width: 240px; }
+.filter-bar > .field:first-child { flex-basis: 260px; max-width: 320px; }
+/* 日期輸入：YYYY-MM-DD 文字框＋日曆按鈕 */
+.date-input { position: relative; display: inline-flex; align-items: center; gap: 4px; min-width: 150px; padding: 0 4px 0 10px; }
+.date-input:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(242, 194, 48, .45); }
+.date-input > input.date-text.date-text:not([type='file']) { flex: 1; min-width: 0; width: 100%; min-height: calc(var(--control-h) - 2px); padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: none; color: var(--ink); font: inherit; font-variant-numeric: tabular-nums; }
+.date-input .date-pick { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 28px; height: 28px; border: 0; border-radius: var(--r-control); background: none; color: var(--ink-muted); cursor: pointer; }
+.date-input .date-pick:hover { background: var(--canvas); color: var(--primary); }
+.date-input .date-native { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; pointer-events: none; }
+.date-input.is-disabled { opacity: .6; }
+/* 看板列頭圓點按狀態上色 */
+.board-dot.tone-ok { background: var(--status-ok); }.board-dot.tone-due { background: var(--status-due); }.board-dot.tone-overdue { background: var(--status-overdue); }.board-dot.tone-muted { background: var(--status-muted); }
+.board .text-button { text-align: left; }
+/* 一對車牌徽章 */
+.plate-chip-pair { display: inline-flex; flex-wrap: nowrap; gap: 4px; white-space: nowrap; vertical-align: middle; }
+@media (max-width: 600px) { .segmented button { padding: 7px 8px; } }
+/* 窄螢幕表格卡片：兩欄排列（首欄與操作佔整行），標籤在值上方，高度約減半；沒有可用操作時不顯示操作行 */
+@media (max-width: 600px) {
+  .table-card { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; padding: 12px 16px; }
+  .table-card-select, .table-card-field.is-wide { grid-column: 1 / -1; }
+  .table-card-field { grid-template-columns: 1fr; gap: 2px; padding: 8px 0; border-bottom: 0; }
+  .table-card-field.is-wide:first-of-type { border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 4px; }
+  .table-card-field.is-wide:not(:first-of-type) { border-top: 1px solid var(--border); margin-top: 4px; }
+  .table-card-field:has(.fee-actions:empty), .table-card-field:has(.row-actions:empty) { display: none; }
+}

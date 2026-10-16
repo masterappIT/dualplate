@@ -2,7 +2,7 @@
 // 月報詳情：A4 證件感版面（封面防偽底紋、客戶印章、票根分隔各節），可列印或存 PDF（瀏覽器列印）。
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api, user } from '../api'
+import { api, user, rentMoney } from '../api'
 import Button from '../components/ui/Button.vue'
 import Tag from '../components/ui/Tag.vue'
 import DueDate from '../components/ui/DueDate.vue'
@@ -19,7 +19,8 @@ async function load() {
 }
 watch(() => route.params.id, value => { if (value) { justConfirmed.value = false; load() } }, { immediate: true })
 const report = computed(() => data.value?.report)
-const money = value => (Math.abs(value || 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+// 金額寫法全站一致：HK$／¥／MOP，有角分才顯示小數
+const money = (value, currency) => rentMoney(Math.abs(value || 0), currency)
 const entries = map => Object.entries(map || {}).filter(([, value]) => value).map(([currency, value]) => ({ currency, value }))
 const monthTitle = period => period ? `${period.slice(0, 4)} 年 ${Number(period.slice(5))} 月` : ''
 const statusWord = value => ({ 已收: '已收', 部分收: '部分收', 未收: '未收', 逾期: '未收（已過期）', 待收: '未到期' }[value] || value)
@@ -62,13 +63,13 @@ function print() { window.print() }
       <div class="report-rule" />
       <section class="report-net-box">
         <div class="report-label">本月結算</div>
-        <div v-for="n in entries(report.net.net)" :key="n.currency" class="report-net-line" :class="n.value < 0 ? 'is-due' : 'is-pay'"><span>{{ n.value < 0 ? '客戶應付' : '應付客戶' }}</span><strong class="num">{{ n.currency }} {{ money(n.value) }}</strong></div>
+        <div v-for="n in entries(report.net.net)" :key="n.currency" class="report-net-line" :class="n.value < 0 ? 'is-due' : 'is-pay'"><span>{{ n.value < 0 ? '客戶應付' : '應付客戶' }}</span><strong class="num">{{ money(n.value, n.currency) }}</strong></div>
         <p v-if="!entries(report.net.net).length" class="report-muted">本月沒有需要結算的款項</p>
         <p class="report-muted">應付客戶 ＝ 本月代收的使用費 − 代收服務費 − 未付的收費（含代墊）。不同幣種分開計算，不換算。</p>
         <div class="report-breakdown">
-          <div><span>代收使用費</span><b v-for="n in entries(report.net.collected)" :key="n.currency" class="num">{{ n.currency }} {{ money(n.value) }}</b><b v-if="!entries(report.net.collected).length">—</b></div>
-          <div><span>代收服務費</span><b v-for="n in entries(report.net.commission)" :key="n.currency" class="num">{{ n.currency }} {{ money(n.value) }}</b><b v-if="!entries(report.net.commission).length">—</b></div>
-          <div><span>未付收費</span><b v-for="n in entries(report.net.unpaid)" :key="n.currency" class="num">{{ n.currency }} {{ money(n.value) }}</b><b v-if="!entries(report.net.unpaid).length">—</b></div>
+          <div><span>代收使用費</span><b v-for="n in entries(report.net.collected)" :key="n.currency" class="num">{{ money(n.value, n.currency) }}</b><b v-if="!entries(report.net.collected).length">—</b></div>
+          <div><span>代收服務費</span><b v-for="n in entries(report.net.commission)" :key="n.currency" class="num">{{ money(n.value, n.currency) }}</b><b v-if="!entries(report.net.commission).length">—</b></div>
+          <div><span>未付收費</span><b v-for="n in entries(report.net.unpaid)" :key="n.currency" class="num">{{ money(n.value, n.currency) }}</b><b v-if="!entries(report.net.unpaid).length">—</b></div>
         </div>
       </section>
       <div class="report-rule" />
@@ -76,16 +77,16 @@ function print() { window.print() }
         <table v-if="report.completed.length" class="report-table"><thead><tr><th>業務</th><th>牌照</th><th>結案日</th></tr></thead><tbody><tr v-for="(item, index) in report.completed" :key="index"><td>{{ item.service }}</td><td>{{ item.plate || '—' }}</td><td class="num">{{ item.completedOn }}</td></tr></tbody></table>
         <p v-else class="report-muted">本月沒有結案的工單。</p></section>
       <section class="report-section"><h2>二、已逾期及 60 天內到期 <small>{{ report.upcoming.length }} 項</small></h2>
-        <table v-if="report.upcoming.length" class="report-table"><thead><tr><th>事項</th><th>對象</th><th>辦理</th><th>到期</th></tr></thead><tbody><tr v-for="(item, index) in report.upcoming" :key="index"><td>{{ item.name }}</td><td>{{ item.owner }}</td><td><Tag :tone="item.handledBy === 'you' ? 'warning' : 'ok'">{{ item.handledBy === 'you' ? '請你處理' : '我們辦理' }}</Tag></td><td><DueDate :date="item.dueOn" /></td></tr></tbody></table>
+        <table v-if="report.upcoming.length" class="report-table"><thead><tr><th>事項</th><th>對象</th><th>辦理</th><th>到期</th></tr></thead><tbody><tr v-for="(item, index) in report.upcoming" :key="index"><td>{{ item.name }}</td><td>{{ item.owner }}</td><td><Tag :tone="item.handledBy === 'you' ? 'neutral' : 'ok'">{{ item.handledBy === 'you' ? '自行辦理' : '我們辦理' }}</Tag></td><td><DueDate :date="item.dueOn" /></td></tr></tbody></table>
         <p v-else class="report-muted">沒有已逾期或 60 天內到期的事項。</p></section>
       <section class="report-section"><h2>三、車輛使用與使用費</h2>
-        <table v-if="report.usage.items.length" class="report-table"><thead><tr><th>牌照</th><th>使用人</th><th>收款</th><th class="n">金額</th><th>狀態</th></tr></thead><tbody><tr v-for="(item, index) in report.usage.items" :key="index"><td>{{ item.plate }}</td><td>{{ item.user }}</td><td>{{ item.collectedByUs ? '我們代收' : '直接付給客戶' }}</td><td class="n num">{{ item.currency }} {{ money(item.amount) }}</td><td>{{ statusWord(item.status) }}</td></tr></tbody></table>
+        <table v-if="report.usage.items.length" class="report-table"><thead><tr><th>牌照</th><th>使用人</th><th>收款</th><th class="n">金額</th><th>狀態</th></tr></thead><tbody><tr v-for="(item, index) in report.usage.items" :key="index"><td>{{ item.plate }}</td><td>{{ item.user }}</td><td>{{ item.collectedByUs ? '我們代收' : '直接付給客戶' }}</td><td class="n num">{{ money(item.amount, item.currency) }}</td><td><Tag :tone="item.status === '已收' ? 'ok' : item.status === '逾期' ? 'danger' : 'warning'">{{ statusWord(item.status) }}</Tag></td></tr></tbody></table>
         <p v-else class="report-muted">本月沒有車輛使用安排。</p></section>
       <section class="report-section"><h2>四、本月收費</h2>
-        <table v-if="report.charges.items.length" class="report-table"><thead><tr><th>類別</th><th>說明</th><th class="n">金額</th><th>狀態</th></tr></thead><tbody><tr v-for="(item, index) in report.charges.items" :key="index"><td>{{ item.kindLabel }}</td><td>{{ item.description }}</td><td class="n num">{{ item.currency }} {{ money(item.amount) }}</td><td>{{ feeWord(item.status) }}</td></tr></tbody></table>
+        <table v-if="report.charges.items.length" class="report-table"><thead><tr><th>類別</th><th>說明</th><th class="n">金額</th><th>狀態</th></tr></thead><tbody><tr v-for="(item, index) in report.charges.items" :key="index"><td>{{ item.kindLabel }}</td><td>{{ item.description }}</td><td class="n num">{{ money(item.amount, item.currency) }}</td><td><Tag :tone="item.status === '已收' ? 'ok' : 'warning'">{{ feeWord(item.status) }}</Tag></td></tr></tbody></table>
         <p v-else class="report-muted">本月沒有新的收費。</p></section>
       <section class="report-section"><h2>五、內地公司報帳</h2>
-        <table v-if="report.filings.length" class="report-table"><thead><tr><th>公司</th><th>狀態</th><th>稅額</th><th>回執</th></tr></thead><tbody><tr v-for="(item, index) in report.filings" :key="index"><td>{{ item.company }}</td><td>{{ item.status }}</td><td class="num">{{ item.zeroFiling ? '零申報' : item.taxAmount != null ? `RMB ${money(item.taxAmount)}` : '—' }}</td><td>{{ item.hasReceipt ? '已收回' : '—' }}</td></tr></tbody></table>
+        <table v-if="report.filings.length" class="report-table"><thead><tr><th>公司</th><th>狀態</th><th>稅額</th><th>回執</th></tr></thead><tbody><tr v-for="(item, index) in report.filings" :key="index"><td>{{ item.company }}</td><td><Tag :tone="['已完成', '已申報'].includes(item.status) ? 'ok' : 'info'">{{ item.status }}</Tag></td><td class="num">{{ item.zeroFiling ? '零申報' : item.taxAmount != null ? money(item.taxAmount, 'RMB') : '—' }}</td><td>{{ item.hasReceipt ? '已收回' : '—' }}</td></tr></tbody></table>
         <p v-else class="report-muted">這位客戶沒有需要報帳的內地公司。</p></section>
       <footer class="report-foot">產生日期 {{ report.generatedOn }}{{ data.confirmedAt ? ` · 確認於 ${data.confirmedAt.slice(0, 10)}` : '' }} · 官方審批結果以實際回執及發出的牌證為準。</footer>
     </article>

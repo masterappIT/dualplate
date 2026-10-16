@@ -8,4 +8,5 @@ defineProps<{
   tone?: 'danger' | 'warning' | 'ok' | 'info' | 'neutral'
 }>()
 </script>
-<template><button type="button" :class="['stat-card', `tone-${tone || 'neutral'}`, { 'is-active': active }]"><span>{{ label }}</span><strong><Odometer v-if="typeof value === 'number'" :value="value" /><template v-else>{{ value }}</template></strong><small v-if="hint">{{ hint }}</small></button></template>
+<!-- 數字為 0 時一律用中性色：沒有逾期就不該是紅，沒有申報也不該是綠 -->
+<template><button type="button" :class="['stat-card', `tone-${value === 0 ? 'neutral' : tone || 'neutral'}`, { 'is-active': active }]"><span>{{ label }}</span><strong><Odometer v-if="typeof value === 'number'" :value="value" /><template v-else>{{ value }}</template></strong><small v-if="hint">{{ hint }}</small></button></template>

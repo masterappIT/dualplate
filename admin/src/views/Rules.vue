@@ -13,7 +13,8 @@ const emit = defineEmits(['error', 'saved'])
 const scopes = [['plate', '兩地牌'], ['vehicle', '車輛'], ['company', '公司']]
 const methods = [['expiry', '手動到期日'], ['yearly', '每年固定日期'], ['anniversary', '成立周年'], ['inspection', '驗車週期'], ['periodic', '定期核對'], ['since_last', '上次過關後若干天'], ['after_field', '批文有效期開始後若干天']]
 const matchFields = [['route', '路線'], ['jurisdiction', '司法區'], ['companyStatus', '公司狀態'], ['indicatorCategory', '指標類別'], ['port', '口岸'], ['origin', '車輛來源地']]
-const columns = [{ key: 'name', title: '事項', minWidth: 170 }, { key: 'scope', title: '適用於', minWidth: 240 }, { key: 'method', title: '怎樣計算', minWidth: 220 }, { key: 'remind_days', title: '提前提醒' }, { key: 'customerVisible', title: '客戶看得到' }, { key: 'active', title: '啟用' }, { key: 'action', title: '操作', className: 'col-actions' }]
+// 三組表格用相同欄寬，欄位上下對齊
+const columns = [{ key: 'name', title: '事項', width: 200 }, { key: 'scope', title: '適用於', width: 200 }, { key: 'method', title: '怎樣計算', width: 240 }, { key: 'remind_days', title: '提前提醒', width: 84 }, { key: 'customerVisible', title: '客戶看得到', width: 104 }, { key: 'active', title: '啟用', width: 96 }, { key: 'action', title: '操作', width: 76, className: 'col-actions' }]
 const rules = ref([]), editing = ref(''), dialog = ref(false), saving = ref(''), form = ref({}), conditions = ref({}), params = ref({}), markYears = ref(''), inspectYears = ref(''), periodicMonths = ref(''), suggestedCode = ref('')
 const codeFromName = name => String(name || '').toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '_').replace(/[\u4e00-\u9fff]/g, 'rule').replace(/^_+|_+$/g, '').slice(0, 40).replace(/^[^a-z]+/, 'rule_') || 'custom_rule'
 function suggestCode() { if (!editing.value) suggestedCode.value = codeFromName(form.value.name) }

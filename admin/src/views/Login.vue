@@ -20,14 +20,7 @@ const succeeded = ref(false)
 const netBurst = ref(0)
 const errors = ref({ username: '', password: '' })
 const now = ref(new Date())
-const health = ref<{ ok: boolean; latency: number | null }>({ ok: false, latency: null })
-const clock = computed(() => now.value.toTimeString().slice(0, 8))
-const dateLine = computed(() => now.value.toLocaleDateString('zh-Hant', { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'long' }))
-const ticks = Array.from({ length: 60 }, (_, index) => {
-  const angle = index / 60 * Math.PI * 2 - Math.PI / 2
-  const major = index % 5 === 0
-  return { index, major, x1: 50 + Math.cos(angle) * (major ? 40 : 43), y1: 50 + Math.sin(angle) * (major ? 40 : 43), x2: 50 + Math.cos(angle) * 47, y2: 50 + Math.sin(angle) * 47 }
-})
+const health = ref<{ ok: boolean; latency: number | null; checked?: boolean }>({ ok: false, latency: null })
 const capabilities = [
   { title: '到期提醒', description: '按狀態處理待辦日期' },
   { title: '工單辦理', description: '跟進每一步的進度' },
@@ -45,8 +38,8 @@ async function probeHealth() {
   try {
     const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:4100'}/api/health`)
     const result = await response.json()
-    health.value = { ok: response.ok && result.ok === true, latency: Math.round(performance.now() - start) }
-  } catch { health.value = { ok: false, latency: null } }
+    health.value = { ok: response.ok && result.ok === true, latency: Math.round(performance.now() - start), checked: true }
+  } catch { health.value = { ok: false, latency: null, checked: true } }
 }
 
 function onTilt(event: PointerEvent) {
@@ -90,13 +83,10 @@ function playIntro() {
   if (prefersReducedMotion() || document.hidden) { element.classList.add('is-entrance-ready'); return }
   const query = (selector: string) => element.querySelectorAll(selector)
   intro = gsap.timeline({ paused: true, onComplete: () => { intro = null } })
-  intro.set(['.login-brand', '.hero-line', '.cap-item', '.login-card', '.login-plate', '.login-dial'].flatMap(selector => [...query(selector)]), { opacity: 0, y: 16 })
-  intro.set(query('.dial-tick'), { opacity: 0.15 })
+  intro.set(['.login-brand', '.hero-line', '.cap-item', '.login-card', '.login-plate'].flatMap(selector => [...query(selector)]), { opacity: 0, y: 16 })
   intro.add(() => element.classList.add('is-entrance-ready'))
   intro.to(query('.login-brand'), { opacity: 1, y: 0, duration: 0.7, ease: EASE.reveal }, 0)
   intro.to(query('.hero-line'), { opacity: 1, y: 0, duration: 0.9, ease: EASE.reveal, stagger: 0.08 }, 0.12)
-  intro.to(query('.login-dial'), { opacity: 1, y: 0, duration: 0.9, ease: EASE.reveal }, 0.2)
-  intro.to(query('.dial-tick'), { opacity: 1, duration: 0.3, stagger: { each: 0.008, from: 'start' } }, 0.3)
   intro.to(query('.cap-item'), { opacity: 1, y: 0, duration: 0.7, ease: EASE.reveal, stagger: { each: 0.06, from: 'start' } }, 0.36)
   intro.to(query('.login-plate'), { opacity: 1, y: 0, duration: 0.7, ease: EASE.reveal, stagger: 0.08 }, 0.5)
   intro.to(query('.login-card'), { opacity: 1, y: 0, duration: 0.8, ease: EASE.glide }, 0.22)
@@ -135,13 +125,9 @@ onBeforeUnmount(() => {
           <h1 class="login-title hero-line">車牌管家</h1>
           <p class="login-lead hero-line">兩地牌、公司與到期事項，一處管好。</p>
         </div>
-        <div class="login-dial" aria-hidden="true">
-          <svg viewBox="0 0 100 100"><line v-for="tick in ticks" :key="tick.index" :class="['dial-tick', { 'is-major': tick.major, 'is-on': tick.index <= now.getSeconds() }]" :x1="tick.x1" :y1="tick.y1" :x2="tick.x2" :y2="tick.y2" /></svg>
-          <div class="dial-center"><span class="dial-time">{{ clock }}</span><span class="dial-date">{{ dateLine }}</span></div>
-        </div>
       </div>
       <div class="canvas-plates">
-        <div class="login-plate is-health"><span>服務狀態</span><span :class="['health-dot', { 'is-ok': health.ok }]" /><b>{{ health.ok ? '運行正常' : health.latency === null ? '連線中斷' : '狀態異常' }}</b><small>{{ health.latency === null ? '—' : `${health.latency} ms` }}</small></div>
+        <!-- 伺服器連不上時才提示，正常時不顯示技術資訊 --><div v-if="health.checked && !health.ok" class="login-plate is-health"><span :class="['health-dot', { 'is-ok': health.ok }]" /><b>暫時連不上伺服器，請稍後再試</b></div>
         <ul class="login-plate cap-list"><li v-for="capability in capabilities" :key="capability.title" class="cap-item"><strong>{{ capability.title }}</strong><small>{{ capability.description }}</small></li></ul>
       </div>
     </section>

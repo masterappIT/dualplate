@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { api, user } from '../api'
 import ListPage from '../components/business/ListPage.vue'
 import Button from '../components/ui/Button.vue'
@@ -24,7 +24,8 @@ import { useViewMode } from '../composables/view'
 const { modal, plateSearch, plateFilter, filteredPlateRows, selectedPlateIds, bulkRule, allowedBulkRules, bulkDate, saveBulkDates, customerName, openPlate, previewPlateImport, confirmPlateImport, importPreview, saveTrackedItem, showError, refresh } = useAdminStore()
 const plateView = useViewMode('plates', 'table', ['table', 'panorama', 'ports'], 'table')
 const { categories: panoramaCategories, summary: panoramaSummary, plateDanger } = usePlatePanorama()
-function requestForPlate(id) { useAdminStore().newRequest.value.plateAssetId = id; useAdminStore().view.value = 'new-request' }
+// 改客戶或路線會清空已選牌照，所以等清空跑完再帶入牌照
+function requestForPlate(id) { const store = useAdminStore(), plate = store.plates.value.find(item => item.id === id); if (plate) { store.newRequest.value.customerId = plate.customer_id; store.newRequest.value.route = plate.route || store.newRequest.value.route } nextTick(() => { store.newRequest.value.plateAssetId = id; store.newRequest.value.vehicleId = plate?.vehicle_id || '' }); store.view.value = 'new-request' }
 const filters = [{ value: 'all', label: '全部' }, { value: 'attention', label: '需注意' }, { value: 'rental', label: '出租中' }, { value: 'own', label: '自用' }, { value: 'empty', label: '空置' }, { value: 'missing', label: '資料不全' }]
 const ownership = ref('all'), crossingFilter = ref(false), crossingSummaries = ref({}), scopeSummaries = ref({}), crossingError = ref('')
 const visiblePlates = computed(() => filteredPlateRows.value.filter(plate => (ownership.value === 'all' || Boolean(useAdminStore().customers.value.find(item => item.id === plate.customer_id)?.is_self) === (ownership.value === 'self')) && (!crossingFilter.value || crossingSummaries.value[plate.id] && (!crossingSummaries.value[plate.id].lastCrossedOn || Date.now() - Date.parse(crossingSummaries.value[plate.id].lastCrossedOn) >= 90 * 86400000))))
