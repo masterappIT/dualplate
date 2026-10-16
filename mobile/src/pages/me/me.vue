@@ -15,6 +15,8 @@
     <view class="list-card row" @click="goDeadlines"><text class="list-title">到期提醒</text><text class="link">›</text></view>
     <view class="list-card row" @click="goReports"><text class="list-title">月報</text><text class="link">›</text></view>
     <view class="list-card row" @click="goBilling"><text class="list-title">帳單</text><view class="row"><text v-if="unpaid" class="pill amber">有未付款項</text><text class="link">›</text></view></view>
+    <view class="list-card row guide-entry" @click="guide=true"><text class="list-title">使用導覽</text><text class="link">›</text></view>
+    <WelcomeGuide v-if="guide" force @closed="guide=false" />
     <view class="list-card row" @click="logout"><text class="list-title">退出登入</text><text class="link">›</text></view>
   </view>
 </template>
@@ -23,7 +25,8 @@ import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { api, getUser, clearSession, startRequest } from '../../lib/api'
 import AdvisorCard from '../../components/AdvisorCard.vue'
-const user=ref(getUser()),requests=ref([]),loaded=ref(false),advisor=ref(null),unread=ref(0),unpaid=ref(false)
+import WelcomeGuide from '../../components/WelcomeGuide.vue'
+const user=ref(getUser()),requests=ref([]),loaded=ref(false),advisor=ref(null),unread=ref(0),unpaid=ref(false),guide=ref(false)
 // 只用手機號碼開通的帳戶，電郵是系統佔位，不顯示
 const account=computed(()=>{const email=user.value?.email||'';return email.endsWith('@phone.invalid')?'以手機號碼登入':email})
 async function load(){user.value=getUser();if(!user.value)return uni.navigateTo({url:'/pages/login/login'});try{const [list,overview]=await Promise.all([api('/requests'),api('/my/overview')]);requests.value=list;advisor.value=overview.advisor;unread.value=overview.unreadNotifications||0;api('/my/fees').then(r=>{unpaid.value=Object.keys(r.outstanding||{}).length>0}).catch(()=>{})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}

@@ -41,6 +41,7 @@
     </view>
 
     <AdvisorCard :advisor="data.advisor" />
+    <WelcomeGuide />
 
     <view class="quick">
       <view class="quick-item" @click="goPlates('')"><text class="quick-mark">牌</text><text>我的牌照</text></view>
@@ -55,6 +56,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { api, getUser, openPlate, startRequest } from '../../lib/api'
 import DueDate from '../../components/DueDate.vue'
 import AdvisorCard from '../../components/AdvisorCard.vue'
+import WelcomeGuide from '../../components/WelcomeGuide.vue'
 const user=ref(getUser())
 const data=ref({unreadNotifications:0,advisor:null,customerName:'',counts:{pending:0,ok:0,due:0,overdue:0},plates:[],deadlines:[],todos:[],activeRequests:[]})
 async function load(){user.value=getUser();if(!user.value)return uni.navigateTo({url:'/pages/login/login'});try{data.value=await api('/my/overview')}catch(e){uni.showToast({title:e.message,icon:'none'})}}
