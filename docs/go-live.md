@@ -31,7 +31,7 @@
 
 | # | 項目 | 完成 |
 |---|---|---|
-| 1 | 內部員工試用一週，每日看錯誤記錄（`/srv/plate-crm/logs/日期.log`），有錯誤先修 | ☐ |
+| 1 | 內部員工試用一週，每日看錯誤記錄（`/srv/dualplate/logs/日期.log`），有錯誤先修 | ☐ |
 | 2 | 為客戶填好「顧問」資料（客戶詳情 → 顧問），客戶端才有致電和微信按鈕 | ☐ |
 | 3 | 委託範圍按實際設定（例如李先生：香港公司客戶自理、內地公司委託我們），今日工作不會派錯 | ☐ |
 | 4 | 「開通客戶登入」後，把系統產生的轉發文字傳給客戶；第一次登入會有 3 步導覽 | ☐ |
@@ -39,17 +39,17 @@
 
 ## 四、回滾方法（出事時）
 
-1. `systemctl stop plate-crm-api`
-2. 把出事前的備份（`/srv/plate-crm/backups/` 最新一份，或上線前的 `app.sqlite.before-v1`）複製回 `DB_PATH`。
+1. `systemctl stop dualplate-api`
+2. 把出事前的備份（`/srv/dualplate/backups/` 最新一份，或上線前的 `app.sqlite.before-v1`）複製回 `DB_PATH`。
 3. 如果是新版程式的問題：`git checkout <上一版標籤>`，重新 `npm ci` 和 build。
-4. `systemctl start plate-crm-api`，用 `/api/health` 確認。
+4. `systemctl start dualplate-api`，用 `/api/health` 確認。
 5. 在「設定 → 操作記錄」查出事時段的操作，判斷要補錄哪些資料。
 
 ## 五、出事聯絡
 
 | 情況 | 先做甚麼 | 找誰 |
 |---|---|---|
-| 網站打不開 | 看 `/api/health`；`systemctl status plate-crm-api` | 負責人 |
+| 網站打不開 | 看 `/api/health`；`systemctl status dualplate-api` | 負責人 |
 | 有人說資料不見了 | 先別改資料；看操作記錄誰改過；必要時從備份還原到另一個位置比對 | 負責人＋管理者 |
 | 客戶說看到別人的資料 | 立即停用該客戶帳號（客戶詳情 → 客戶帳號 → 停用），保留截圖 | 管理者，然後負責人 |
 | 帳號被鎖 | 等 15 分鐘，或由管理者重設密碼 | 管理者 |

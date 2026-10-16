@@ -1,6 +1,6 @@
 # 可執行首版與部署說明
 
-日期：2026-10-15。此倉庫位於 `/Users/vincentw/development/cross-border-plate-crm`。
+日期：2026-10-15。此倉庫位於 `/Users/vincentw/development/dualplate`。
 
 ## 兩地牌與批文卡（2026-10-15）
 
@@ -39,18 +39,18 @@
 需 Node.js 24+ 和 npm。分三個終端執行：
 
 ```bash
-cd /Users/vincentw/development/cross-border-plate-crm/api
+cd /Users/vincentw/development/dualplate/api
 DEMO_SEED=1 npm start
 ```
 
 ```bash
-cd /Users/vincentw/development/cross-border-plate-crm/admin
+cd /Users/vincentw/development/dualplate/admin
 npm install
 npm run dev
 ```
 
 ```bash
-cd /Users/vincentw/development/cross-border-plate-crm/mobile
+cd /Users/vincentw/development/dualplate/mobile
 npm install
 npm run dev:h5
 ```
@@ -62,9 +62,9 @@ npm run dev:h5
 ## 編譯
 
 ```bash
-cd /Users/vincentw/development/cross-border-plate-crm/admin && npm run build
-cd /Users/vincentw/development/cross-border-plate-crm/mobile && npm run build:mp-weixin
-cd /Users/vincentw/development/cross-border-plate-crm/mobile && npm run build:app-plus
+cd /Users/vincentw/development/dualplate/admin && npm run build
+cd /Users/vincentw/development/dualplate/mobile && npm run build:mp-weixin
+cd /Users/vincentw/development/dualplate/mobile && npm run build:app-plus
 ```
 
 小程序產物在 `mobile/dist/build/mp-weixin`，App 資源在 `mobile/dist/build/app`。發布前須填寫 `mobile/src/manifest.json` 的微信 AppID 和 App 識別配置，將 `VITE_API_BASE_URL` 指向可訪問的 HTTPS API，並完成微信平台與 iOS／Android 的簽名、審核。此倉庫沒有官方政務系統 API 接入，也不會代客戶自動向政府提交申請。

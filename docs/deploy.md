@@ -20,16 +20,16 @@
 ## 二、目錄
 
 ```
-/srv/plate-crm/app       程式（git 取得）
-/srv/plate-crm/data      資料庫 app.sqlite（只放這裡）
-/srv/plate-crm/backups   每日備份（保留 30 天）
-/srv/plate-crm/logs      錯誤記錄（按日一個檔）
+/srv/dualplate/app       程式（git 取得）
+/srv/dualplate/data      資料庫 app.sqlite（只放這裡）
+/srv/dualplate/backups   每日備份（保留 30 天）
+/srv/dualplate/logs      錯誤記錄（按日一個檔）
 ```
 
 ## 三、API
 
 ```bash
-cd /srv/plate-crm/app/api && npm ci --omit=dev
+cd /srv/dualplate/app/api && npm ci --omit=dev
 cp .env.example .env        # 按註解填寫；DEMO_SEED 保持 0
 ```
 
@@ -41,15 +41,15 @@ cp .env.example .env        # 按註解填寫；DEMO_SEED 保持 0
 ADMIN_USERNAME=boss ADMIN_NAME="負責人" ADMIN_PASSWORD='至少10位的強密碼' node src/create-admin.js
 ```
 
-**用 systemd 常駐**（`/etc/systemd/system/plate-crm-api.service`）：
+**用 systemd 常駐**（`/etc/systemd/system/dualplate-api.service`）：
 
 ```ini
 [Unit]
 Description=Plate CRM API
 After=network.target
 [Service]
-WorkingDirectory=/srv/plate-crm/app/api
-EnvironmentFile=/srv/plate-crm/app/api/.env
+WorkingDirectory=/srv/dualplate/app/api
+EnvironmentFile=/srv/dualplate/app/api/.env
 ExecStart=/usr/bin/node src/server.js
 Restart=always
 User=platecrm
@@ -57,13 +57,13 @@ User=platecrm
 WantedBy=multi-user.target
 ```
 
-`systemctl enable --now plate-crm-api`；`curl https://api.<網域>/api/health` 應回 `{"ok":true,"database":"ok","version":"1.0.0"}`。
+`systemctl enable --now dualplate-api`；`curl https://api.<網域>/api/health` 應回 `{"ok":true,"database":"ok","version":"1.0.0"}`。
 
 ## 四、每日備份
 
 ```bash
 # crontab -u platecrm -e
-15 3 * * * cd /srv/plate-crm/app/api && set -a && . ./.env && set +a && npm run backup >> /srv/plate-crm/logs/backup.log 2>&1
+15 3 * * * cd /srv/dualplate/app/api && set -a && . ./.env && set +a && npm run backup >> /srv/dualplate/logs/backup.log 2>&1
 ```
 
 備份用 SQLite 線上備份，不必停機；每份都做完整性檢查，超過 `BACKUP_KEEP_DAYS`（預設 30）自動刪除。**建議每週把最新一份另存到另一地點**（雲端硬碟或另一台機）。
@@ -71,10 +71,10 @@ WantedBy=multi-user.target
 **還原**（出事時）：
 
 ```bash
-systemctl stop plate-crm-api
-cp /srv/plate-crm/data/app.sqlite /srv/plate-crm/data/app.sqlite.before-restore
-cp /srv/plate-crm/backups/app-<日期時間>.sqlite /srv/plate-crm/data/app.sqlite
-systemctl start plate-crm-api && curl https://api.<網域>/api/health
+systemctl stop dualplate-api
+cp /srv/dualplate/data/app.sqlite /srv/dualplate/data/app.sqlite.before-restore
+cp /srv/dualplate/backups/app-<日期時間>.sqlite /srv/dualplate/data/app.sqlite
+systemctl start dualplate-api && curl https://api.<網域>/api/health
 ```
 
 還原演練已寫成自動測試（`api/test/security.test.js`「備份產生可開啟的完整副本，從備份啟動資料一致」）。
@@ -82,15 +82,15 @@ systemctl start plate-crm-api && curl https://api.<網域>/api/health
 ## 五、管理端與客戶端 H5
 
 ```bash
-cd /srv/plate-crm/app/admin && npm ci && VITE_API_BASE_URL=https://api.<網域> VITE_CLIENT_LOGIN_URL=https://m.<網域> npm run build   # 輸出 admin/dist
-cd /srv/plate-crm/app/mobile && npm ci && VITE_API_BASE_URL=https://api.<網域> npm run build:h5                                  # 輸出 mobile/dist/build/h5
+cd /srv/dualplate/app/admin && npm ci && VITE_API_BASE_URL=https://api.<網域> VITE_CLIENT_LOGIN_URL=https://m.<網域> npm run build   # 輸出 admin/dist
+cd /srv/dualplate/app/mobile && npm ci && VITE_API_BASE_URL=https://api.<網域> npm run build:h5                                  # 輸出 mobile/dist/build/h5
 ```
 
 Nginx（節錄）：
 
 ```nginx
-server { server_name admin.<網域>; root /srv/plate-crm/app/admin/dist; location / { try_files $uri /index.html; } }
-server { server_name m.<網域>;     root /srv/plate-crm/app/mobile/dist/build/h5; location / { try_files $uri /index.html; } }
+server { server_name admin.<網域>; root /srv/dualplate/app/admin/dist; location / { try_files $uri /index.html; } }
+server { server_name m.<網域>;     root /srv/dualplate/app/mobile/dist/build/h5; location / { try_files $uri /index.html; } }
 server { server_name api.<網域>;   client_max_body_size 15m;
          location / { proxy_pass http://127.0.0.1:4100; proxy_set_header Host $host; proxy_set_header X-Forwarded-For $remote_addr; } }
 ```
@@ -107,8 +107,8 @@ server { server_name api.<網域>;   client_max_body_size 15m;
 ## 七、更新版本
 
 ```bash
-cd /srv/plate-crm/app && git pull
-cd api && npm ci --omit=dev && npm run backup && systemctl restart plate-crm-api
+cd /srv/dualplate/app && git pull
+cd api && npm ci --omit=dev && npm run backup && systemctl restart dualplate-api
 # 管理端與 H5 重新 build（第五節）
 ```
 
