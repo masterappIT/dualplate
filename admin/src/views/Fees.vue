@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// 佔位頁：由負責人先建好導航與路由，避免共用檔案衝突；本頁由對應輪次替換。
+import FeeLedger from '../components/business/FeeLedger.vue'
+import QuoteLedger from '../components/business/QuoteLedger.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 </script>
-<template><section><PageHeader title="收費" desc="年費、代辦費、規費、代墊與報價（第 17 輪）" /><div class="empty">此頁正在建設中。</div></section></template>
+<template><section><PageHeader title="收費" desc="收費、分期與報價，按幣種分開管理。" /><FeeLedger /><QuoteLedger /></section></template>
