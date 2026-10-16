@@ -19,6 +19,8 @@ apt-get update
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin google-cloud-cli
 gcloud auth configure-docker asia-east2-docker.pkg.dev --quiet
 systemctl enable --now docker cron
+timedatectl set-timezone Etc/UTC
+systemctl restart cron
 if ! blkid "$DEVICE" >/dev/null 2>&1; then
   [[ "${FORMAT_EMPTY_DISK:-}" == 'yes' ]] || { printf 'Disk has no filesystem. Set FORMAT_EMPTY_DISK=yes only after checking it is empty.\n' >&2; exit 3; }
   mkfs.ext4 -F "$DEVICE"
@@ -38,5 +40,6 @@ install -m 0644 /tmp/dualplate-deploy/compose.yaml "$ROOT/compose.yaml"
 install -m 0755 /tmp/dualplate-deploy/vm/deploy.sh "$ROOT/deploy.sh"
 install -m 0755 /tmp/dualplate-deploy/vm/rollback.sh "$ROOT/rollback.sh"
 install -m 0755 /tmp/dualplate-deploy/vm/backup-to-gcs.sh "$ROOT/backup-to-gcs.sh"
+install -m 0755 /tmp/dualplate-deploy/vm/refresh-env.sh "$ROOT/refresh-env.sh"
 install -m 0644 /tmp/dualplate-deploy/vm/backup.cron /etc/cron.d/dualplate-backup
 printf 'Bootstrap complete.\n'

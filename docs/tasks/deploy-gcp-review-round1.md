@@ -37,6 +37,11 @@
 5. **`deploy.sh` 自動切回舊版後沒有再檢查健康。** 切回後若舊版也起不來，現在仍只回 6，日誌看不出網站是否已恢復。
    → 切回後同樣檢查 `/api/health`（最多 60 秒），結果分別寫「Rollback healthy」或「Rollback unhealthy」，並用不同結束碼（例：6 = 新版失敗已恢復，7 = 新版失敗且恢復也失敗）。在 `docs/deploy.md` 列出全部結束碼的意思。
 
+6. **GitHub Actions 品質閘門失敗**（commit `44c8a84`，run 38959938634）：`ocr.test.js`「synthetic approval cards…」只認對 4/18。原因是 GitHub 的 Ubuntu 機器沒有中文字型，測試用 `sharp` 畫出的合成批文卡全是方塊字。負責人已核實：正式 API 映像檔內字型數為 0，合成卡 0/18；但 4 張真實樣本在映像檔和 Mac 上的逐欄結果完全相同，正式環境辨識正常。
+   → 在 workflow 的品質閘門、跑 `api` 測試之前安裝中文字型（例：`sudo apt-get install -y fonts-noto-cjk`）。**不得放寬或跳過這個測試，也不得把字型裝進正式 API 映像檔**（正式辨識不需要字型）。
+   → CI 只跑 386 項、本機 390 項，差額是真實批文卡樣本（不入 git），屬正常，在報告寫明即可。
+   → 你的沙盒不能連 GitHub；改完後由負責人推送並看結果。
+
 ## 報告必須補上
 
 - 按 `AGENTS.md` 報告要求逐項對應 brief 第二、三、四節。

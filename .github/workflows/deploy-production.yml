@@ -17,6 +17,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Install Chinese fonts for synthetic OCR tests
+        run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
       - run: cd api && npm ci && npm test
       - run: cd admin && npm ci && npm run check && VITE_API_BASE_URL= npm run build
       - run: cd mobile && npm ci && VITE_API_BASE_URL= npm run build:h5
