@@ -420,7 +420,7 @@ router.isReady().then(() => { routeReady.value = true; });
 watch([view, () => selectedCustomer.value?.id, () => selectedPlate.value?.id, () => selectedVehicle.value?.id, () => selected.value?.id], ([target]) => {
   if (syncingRoute) return;
   const path = viewPath[target] || (target === 'customer-detail' && selectedCustomer.value && `/customers/${selectedCustomer.value.id}`) || (target === 'plate-detail' && selectedPlate.value && `/plates/${selectedPlate.value.id}`) || (target === 'vehicle-detail' && selectedVehicle.value && `/vehicles/${selectedVehicle.value.id}`) || (target === 'request-detail' && selected.value && `/requests/${selected.value.id}`);
-  if (path && router.currentRoute.value.path !== path && !(target === 'settings' && router.currentRoute.value.path.startsWith('/settings/'))) router.push(path);
+  if (path && router.currentRoute.value.path !== path && !(target === 'settings' && router.currentRoute.value.path.startsWith('/settings/')) && !(target === 'reports' && router.currentRoute.value.path.startsWith('/reports/'))) router.push(path);
 });
 watch([() => router.currentRoute.value.fullPath, account, routeReady], async () => {
   const { name, params } = router.currentRoute.value;
