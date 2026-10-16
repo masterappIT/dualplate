@@ -146,6 +146,28 @@ export function legacyEnd(tenantId, plateId, endedOn) {
 }
 export const activeContract = plateId => db.prepare("SELECT id FROM rental_contracts WHERE plate_asset_id=? AND status='生效'").get(plateId) || null
 
+// 登記一期收款（管理端收款、確認承租方上傳的憑證都用這裡）。invoice 須帶 collection_mode。回傳 { error } 或 { ok: true }。
+export function receiveInvoice(tenant, invoice, body, userId) {
+  if (!isObject(body) || !validDate(body.receivedOn)) return { error: '收款日期無效' }
+  if (!cents(body.receivedAmount) || body.receivedAmount === 0) return { error: '收款金額須為以「分」為單位的正整數' }
+  const receivedBy = body.receivedBy ?? (invoice.collection_mode === '代收' ? '代辦公司' : '客戶')
+  if (!['代辦公司', '客戶'].includes(receivedBy)) return { error: '收款方須為代辦公司或客戶' }
+  let proof = body.proofFile || null
+  if (!proof && body.proof !== undefined && body.proof !== null) {
+    if (typeof body.proof !== 'string') return { error: '轉帳憑證格式無效' }
+    const data = Buffer.from(body.proof.replace(/^data:[^,]+,/, ''), 'base64')
+    if (!data.length || data.length > 5 * 1024 * 1024) return { error: '轉帳憑證須小於 5 MB' }
+    const mime = sniff(data); if (!mime) return { error: '轉帳憑證只接受 JPG、PNG 或 PDF' }
+    proof = { data, mime }
+  }
+  db.prepare('UPDATE rent_invoices SET received_on=?, received_amount=?, received_by=?, confirmed_by=?, notes=? WHERE id=?').run(body.receivedOn, body.receivedAmount, receivedBy, userId, clean(body.notes, 300) || invoice.notes, invoice.id)
+  // 代收租金入帳時自動產生租金管理費（冪等）
+  rentCommission(tenant, contractFor(tenant, invoice.contract_id), db.prepare('SELECT * FROM rent_invoices WHERE id=?').get(invoice.id), true)
+  if (proof) db.prepare('INSERT INTO rent_invoice_proofs(invoice_id,mime,data,uploaded_at) VALUES (?,?,?,?) ON CONFLICT(invoice_id) DO UPDATE SET mime=excluded.mime, data=excluded.data, uploaded_at=excluded.uploaded_at').run(invoice.id, proof.mime, proof.data, now())
+  return { ok: true }
+}
+export { contractFor, contractView, invoiceView }
+
 export function rentOverview(tenantId) {
   refreshTenant(tenantId)
   const day = today(), month = day.slice(0, 7), scopes = scopeMap(tenantId)
@@ -271,21 +293,7 @@ export async function rentalRoutes(req, res, url, user, { json, fail, parseBody 
     return json(res, 200, invoiceView(db.prepare('SELECT * FROM rent_invoices WHERE id=?').get(invoice.id))), true
   }
   const body = await parseBody(req)
-  if (!isObject(body) || !validDate(body.receivedOn)) return fail(res, 400, '收款日期無效'), true
-  if (!cents(body.receivedAmount) || body.receivedAmount === 0) return fail(res, 400, '收款金額須為以「分」為單位的正整數'), true
-  const receivedBy = body.receivedBy ?? (invoice.collection_mode === '代收' ? '代辦公司' : '客戶')
-  if (!['代辦公司', '客戶'].includes(receivedBy)) return fail(res, 400, '收款方須為代辦公司或客戶'), true
-  let proof = null
-  if (body.proof !== undefined && body.proof !== null) {
-    if (typeof body.proof !== 'string') return fail(res, 400, '轉帳憑證格式無效'), true
-    const data = Buffer.from(body.proof.replace(/^data:[^,]+,/, ''), 'base64')
-    if (!data.length || data.length > 5 * 1024 * 1024) return fail(res, 400, '轉帳憑證須小於 5 MB'), true
-    const mime = sniff(data); if (!mime) return fail(res, 400, '轉帳憑證只接受 JPG、PNG 或 PDF'), true
-    proof = { data, mime }
-  }
-  db.prepare('UPDATE rent_invoices SET received_on=?, received_amount=?, received_by=?, confirmed_by=?, notes=? WHERE id=?').run(body.receivedOn, body.receivedAmount, receivedBy, user.id, clean(body.notes, 300) || invoice.notes, invoice.id)
-  // 代收租金入帳時自動產生租金管理費（冪等）
-  rentCommission(tenant, contractFor(tenant, invoice.contract_id), db.prepare('SELECT * FROM rent_invoices WHERE id=?').get(invoice.id), true)
-  if (proof) db.prepare('INSERT INTO rent_invoice_proofs(invoice_id,mime,data,uploaded_at) VALUES (?,?,?,?) ON CONFLICT(invoice_id) DO UPDATE SET mime=excluded.mime, data=excluded.data, uploaded_at=excluded.uploaded_at').run(invoice.id, proof.mime, proof.data, now())
+  const result = receiveInvoice(tenant, invoice, body, user.id)
+  if (result.error) return fail(res, 400, result.error), true
   return json(res, 200, invoiceView(db.prepare('SELECT * FROM rent_invoices WHERE id=?').get(invoice.id))), true
 }

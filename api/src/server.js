@@ -18,6 +18,7 @@ import { rentalRoutes, legacyStart, legacyEnd, activeContract } from './rentals.
 import { feeRoutes } from './fees.js'
 import { bookkeepingRoutes } from './bookkeeping.js'
 import { reportRoutes } from './reports.js'
+import { renterPublicRoutes, renterAdminRoutes } from './renter-portal.js'
 import { passwordProblem, authenticate, createSession, lockedMinutes, recordFailure, clearFailures, clientIp, audit, auditRoutes, logError, health } from './security.js'
 
 const port = Number(process.env.PORT || 4100)
@@ -111,6 +112,8 @@ export const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`)
   const path = url.pathname
   try {
+    // 承租方專屬連結（不需登入；連結＋電話末 4 碼）
+    if (await renterPublicRoutes(req, res, url)) return
     if (path === '/api/health') { const status = health(); return json(res, status.ok ? 200 : 503, status) }
     if (path === '/api/admin/login' && req.method === 'POST') {
       const body = await parseBody(req)
@@ -151,6 +154,7 @@ export const server = http.createServer(async (req, res) => {
     if (await workOrderRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await driverRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (viewRoutes(req, res, url, user, { json, fail })) return
+    if (await renterAdminRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await rentalRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await feeRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await bookkeepingRoutes(req, res, url, user, { json, fail, parseBody })) return

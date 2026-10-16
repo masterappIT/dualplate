@@ -33,7 +33,7 @@ cd /srv/plate-crm/app/api && npm ci --omit=dev
 cp .env.example .env        # 按註解填寫；DEMO_SEED 保持 0
 ```
 
-`.env` 必填：`PORT`、`DB_PATH`、`CORS_ORIGINS`（管理端與 H5 的 https 網址）、`BACKUP_DIR`、`LOG_DIR`。要開微信登入才填 `WECHAT_APPID`、`WECHAT_SECRET`。
+`.env` 必填：`PORT`、`DB_PATH`、`CORS_ORIGINS`（管理端與 H5 的 https 網址）、`BACKUP_DIR`、`LOG_DIR`、`PUBLIC_BASE_URL`（API 對外網址，承租方專屬連結 `/r/…` 由 API 直接提供）。要開微信登入才填 `WECHAT_APPID`、`WECHAT_SECRET`。
 
 **第一個管理員**（建立後即可登入管理端再新增員工）：
 
