@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.." || exit 1
 mode=${1:-}; round=${2:-}
 [ -n "$mode" ] && [ -n "$round" ] || { echo "用法：$0 snapshot|verify <輪次>"; exit 2; }
 dir=.review/$round
-protected="mobile admin/src/components/ApprovalCard.vue api/src/customer-routes.js api/test/fixtures scripts/lead-review.sh AGENTS.md docs"
+protected="mobile admin/src/components/ApprovalCard.vue api/src/customer-routes.js api/test/fixtures scripts/lead-review.sh scripts/shot-service.mjs AGENTS.md docs"
 
 hash_protected() { for p in $protected; do [ -e "$p" ] && find "$p" -type f -not -path '*/node_modules/*' -not -path '*/dist/*' -not -path '*/unpackage/*' -print0 | xargs -0 shasum; done | sort -k2; }
 count_tests() { grep -rhoE "^\s*(test|it)\(" api/test admin/scripts 2>/dev/null | wc -l | tr -d ' '; }

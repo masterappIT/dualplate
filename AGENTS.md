@@ -24,7 +24,9 @@
 
 ## 長期限制
 
-- **驗收工具**：`scripts/lead-review.sh` 和 `.review/` 屬負責人，不得讀取以外的用途、不得修改。負責人每輪會比對受保護檔案、測試與斷言數量；**不得刪除或放寬現有測試**，確有需要時在報告寫明理由，由負責人決定。
+- **看畫面的方法（2026-10-16 起）**：你的沙盒不能開伺服器、不能開瀏覽器，所以負責人在沙盒外運行截圖服務（`scripts/shot-service.mjs`，不得修改）與開發伺服器（管理端 `http://localhost:5176`、客戶端 `http://127.0.0.1:5177`，以示範資料自動登入）。要看畫面時，在 `.review/shot-requests.txt` 每行寫一個請求 `名稱|網址路徑|寬|高|admin 或 mobile`（例：`plates-390|/#/plates|390|844|admin`），約 10 秒後到 `.review/shots/` 用看圖工具打開 `名稱.png`，並讀 `名稱.txt`（主控台錯誤、是否橫向溢出）。**改了畫面就必須每頁截 1366 與 390 兩張親自看過**，報告附上截圖檔名；不再接受「無法驗證畫面」。
+
+- **驗收工具**：`scripts/lead-review.sh`、`scripts/shot-service.mjs` 和 `.review/`（`shot-requests.txt` 除外）屬負責人，不得讀取以外的用途、不得修改。負責人每輪會比對受保護檔案、測試與斷言數量；**不得刪除或放寬現有測試**，確有需要時在報告寫明理由，由負責人決定。
 
 - **客戶端由負責人親自設計**：`mobile/` 的頁面、`mobile/src/components/MainlandPlate.vue`、`HongKongPlate.vue` 和 `api/src/customer-routes.js` 是負責人按管理者意見做的，任務沒有明確要求時不要改動。
 - **批文卡前端效果必須保留**：不得修改 `admin/src/components/ApprovalCard.vue`、`mobile/src/components/ApprovalCard.vue` 的呈現；`App.vue` 中批文卡預覽、翻轉、上傳辨識、手動修改、原件核對等區塊不得刪改（版本選擇已由管理者決定移除，見 docs/tasks/card-latest-only-brief.md）。後端存檔邏輯可以改，但前端流程必須照常可用。
