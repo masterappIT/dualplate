@@ -5,7 +5,7 @@
       <canvas id="ports" type="2d" class="ports" />
       <view class="hero-text" :style="{ paddingTop: top + 'px' }">
         <view class="brand"><view class="seal"><text>牌</text></view><text class="brand-name">車牌管家</text></view>
-        <text class="hero-title">兩地牌、公司與到期事項，一處管好。</text>
+        <text class="hero-title">兩地牌、公司與到期事項</text><text class="hero-title second">一處管好。</text>
         <view class="hero-plates"><PlateChip plate="粵Z·A1234港" size="sm" /><PlateChip plate="AB 1234" size="sm" /></view>
       </view>
     </view>
@@ -90,7 +90,7 @@ function draw() {
   ctx.lineWidth = 1
   for (const [a, b] of LINKS) { ctx.strokeStyle = 'rgba(227,239,234,.16)'; ctx.beginPath(); ctx.moveTo(...pos[a]); ctx.lineTo(...pos[b]); ctx.stroke() }
   if (!reduced) for (const p of pulses) {
-    p.t += p.speed * p.dir; if (p.t > 1 || p.t < 0) { p.dir *= -1; p.t = Math.min(1, Math.max(0, p.t)) }
+    p.t += p.speed * p.dir; if (p.t > .85 || p.t < .15) { p.dir *= -1; p.t = Math.min(.85, Math.max(.15, p.t)) }
     const [a, b] = p.link, x = pos[a][0] + (pos[b][0] - pos[a][0]) * p.t, y = pos[a][1] + (pos[b][1] - pos[a][1]) * p.t
     ctx.fillStyle = 'rgba(242,194,48,.22)'; ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill()
     ctx.fillStyle = '#F2C230'; ctx.beginPath(); ctx.arc(x, y, 2.2, 0, Math.PI * 2); ctx.fill()
@@ -99,7 +99,9 @@ function draw() {
     const [x, y] = pos[i], breathe = reduced ? 0 : Math.sin(frame / 60 + i * 1.3) * 1.5
     ctx.fillStyle = 'rgba(227,239,234,.12)'; ctx.beginPath(); ctx.arc(x, y, 11 + breathe, 0, Math.PI * 2); ctx.fill()
     ctx.fillStyle = '#E3EFEA'; ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2); ctx.fill()
-    ctx.fillStyle = 'rgba(227,239,234,.62)'; ctx.font = '11px -apple-system, "PingFang TC", sans-serif'; ctx.fillText(name, x + 8, y - 8)
+    // 靠右邊的口岸把名字寫在節點左邊，免得貼邊被切
+    const left = x > width * .7
+    ctx.fillStyle = 'rgba(227,239,234,.62)'; ctx.font = '12px -apple-system, "PingFang TC", sans-serif'; ctx.textAlign = left ? 'right' : 'left'; ctx.fillText(name, left ? x - 14 : x + 14, y - 10)
   })
   if (burstAt) {
     const k = Math.min(1, (frame - burstAt) / 40), cx = width / 2, cy = height * .7
@@ -127,29 +129,28 @@ onBeforeUnmount(() => { if (raf) (canvas?.cancelAnimationFrame || cancelAnimatio
 </script>
 <style scoped>
 .login{min-height:100vh;background:var(--paper);display:flex;flex-direction:column}
-.hero{position:relative;height:56vh;min-height:420rpx;background:var(--jade-deep);color:#E3EFEA}
+.hero{position:relative;height:52vh;min-height:320px;background:var(--jade-deep);color:#E3EFEA}
 .ports{position:absolute;left:0;top:0;width:100%;height:100%}
-.hero-text{position:relative;padding:0 44rpx;pointer-events:none}
-.brand{display:flex;align-items:center;gap:18rpx}
-.seal{width:68rpx;height:68rpx;border-radius:50%;border:3rpx solid var(--plate-yellow);display:flex;align-items:center;justify-content:center}
-.seal text{color:var(--plate-yellow);font-size:32rpx;font-weight:900}
-.brand-name{font-size:34rpx;font-weight:800;letter-spacing:4rpx;color:#fff}
-.hero-title{display:block;margin-top:34rpx;font-size:40rpx;font-weight:800;line-height:1.35;color:#fff;max-width:560rpx}
-.hero-plates{display:flex;gap:14rpx;margin-top:26rpx}
-.sheet{position:relative;margin:-90rpx 28rpx 0;background:var(--card);border-radius:var(--r-panel);border:1rpx solid var(--rule);box-shadow:var(--float);padding:36rpx 32rpx 40rpx}
-.sheet-title{display:block;font-size:34rpx;font-weight:800;color:var(--jade-deep)}
-.sheet-sub{display:block;margin-top:8rpx;font-size:23rpx;color:var(--ink-2)}
-.sheet .ticket-rule{margin:30rpx -32rpx 8rpx}
-.sheet .ticket-rule::before{left:-15rpx}.sheet .ticket-rule::after{right:-15rpx}
+.hero-text{position:relative;padding:0 24px;pointer-events:none}
+.brand{display:flex;align-items:center;gap:8px}
+.seal{width:36px;height:36px;border-radius:50%;border:2px solid var(--plate-yellow);display:flex;align-items:center;justify-content:center}
+.seal text{color:var(--plate-yellow);font-size:var(--fs-h);font-weight:900}
+.brand-name{font-size:var(--fs-h);font-weight:800;letter-spacing:2px;color:#fff}
+.hero-title{display:block;margin-top:20px;font-size:var(--fs-title);font-weight:800;line-height:1.4;color:#fff}.hero-title.second{margin-top:0}
+.hero-plates{display:flex;gap:8px;margin-top:16px}
+.sheet{position:relative;margin:-48px 16px 24px;background:var(--card);border-radius:var(--r-panel);border:1px solid var(--rule);box-shadow:var(--float);padding:20px 16px 24px}
+.sheet-title{display:block;font-size:var(--fs-title);font-weight:800;color:var(--jade-deep)}
+.sheet-sub{display:block;margin-top:4px;font-size:var(--fs-body);color:var(--ink-2)}
+.sheet .ticket-rule{margin:16px -16px 4px}
 .invalid{border-color:var(--overdue)}
-.error{display:block;margin-top:14rpx;color:var(--overdue);font-size:23rpx;font-weight:700}
-.login-button{margin-top:36rpx;transition:width .25s ease,border-radius .25s ease}
+.error{display:block;margin-top:8px;color:var(--overdue);font-size:var(--fs-body);font-weight:700}
+.login-button{margin-top:20px;transition:width .25s ease,border-radius .25s ease}
 .login-button.busy{opacity:.85}
-.help{display:block;margin-top:24rpx;text-align:center;color:var(--ink-3);font-size:21rpx}
-.done{position:absolute;right:30rpx;top:26rpx}
+.help{display:block;margin-top:16px;text-align:center;color:var(--ink-3);font-size:var(--fs-meta)}
+.done{position:absolute;right:16px;top:16px}
 .shake{animation:shake .38s ease}
-@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-14rpx)}40%{transform:translateX(12rpx)}60%{transform:translateX(-8rpx)}80%{transform:translateX(5rpx)}}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(2px)}}
 @media (prefers-reduced-motion:reduce){.shake{animation:none}}
 @media screen and (min-width:780px){.hero{height:46vh}.sheet{width:560px;margin:-80px auto 0}}
-.wechat-button{margin-top:18rpx}.bind{margin-top:10rpx}.bind-actions{display:flex;gap:14rpx;margin-top:18rpx}.bind-actions button{flex:1;margin:0}
+.wechat-button{width:100%;margin-top:12px}.bind{margin-top:8px}.bind-actions{display:flex;gap:8px;margin-top:12px}.bind-actions button{flex:1;margin:0}
 </style>

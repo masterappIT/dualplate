@@ -23,7 +23,7 @@ export function notify({ tenantId, customerId, kind, title, body = '', link = ''
 export function deadlineNotices(customer, deadlines) {
   for (const item of deadlines) {
     if (!['due', 'overdue'].includes(item.level) || !item.dueOn) continue
-    const who = item.handledBy === 'you' ? '請你處理' : '我們會為你辦理'
+    const who = item.handledBy === 'you' ? '請你自行辦理' : '我們會為你辦理'
     notify({
       tenantId: customer.tenant_id, customerId: customer.id, kind: 'deadline',
       title: `${item.name}${item.level === 'overdue' ? '已逾期' : '快到期'}`,

@@ -1,21 +1,21 @@
 <template>
   <view class="page create-page">
-    <text class="page-title">新增牌照</text>
-    <text class="subtle">拍下批文卡正反面，系統會自動辨識，你的顧問會再核對，不用逐欄填寫。</text>
-    <view class="route-switch"><button v-for="item in ['粵港','粵澳']" :key="item" :class="{active:route===item}" @click="route=item">{{ item }}兩地牌</button></view>
-    <view class="section"><text class="section-title">1　拍下批文卡</text><text class="section-note">正面和背面各一張，光線充足、四角入鏡辨識最準。</text>
-      <view class="upload-actions"><button :disabled="busy" @click="pickCard('front')">{{ images.front?'✓ 已上傳正面':'拍正面' }}</button><button :disabled="busy" @click="pickCard('back')">{{ images.back?'✓ 已上傳背面':'拍背面' }}</button></view>
-      <text v-if="busy" class="upload-note">正在辨識，請稍候…</text>
+    <text class="intro">拍下批文卡正反面，系統會自動辨識，你的顧問會再核對，不用逐欄填寫。</text>
+    <view class="segmented route-switch"><text v-for="item in ['粵港','粵澳']" :key="item" class="seg" :class="{on:route===item}" @click="route=item">{{ item }}兩地牌</text></view>
+    <view class="card">
+      <text class="step-title">第一步：拍下批文卡</text><text class="subtle">正面和背面各一張，光線充足、四角入鏡，辨識最準。</text>
+      <view class="upload-actions"><button class="btn-sm" :disabled="busy" @click="pickCard('front')">{{ images.front?'✓ 已拍正面':'拍正面' }}</button><button class="btn-sm" :disabled="busy" @click="pickCard('back')">{{ images.back?'✓ 已拍背面':'拍背面' }}</button></view>
+      <text v-if="busy" class="subtle upload-note">正在辨識，請稍候…</text>
+      <text v-if="!images.front&&!images.back&&!showFields" class="more" @click="showFields=true">沒有照片？手動輸入 ›</text>
     </view>
-    <view v-if="images.front||images.back||showFields" class="section preview"><text class="section-title">2　確認辨識結果</text><ApprovalCard :data="draft"/>
-      <view class="field"><text>批文卡編號 *<text v-if="fieldStatusText(fieldStatus.cardNumber)" class="field-status" :class="fieldStatusClass(fieldStatus.cardNumber)">{{ fieldStatusText(fieldStatus.cardNumber) }}</text></text><input v-model="draft.cardNumber" placeholder="按批文卡正面「編號」填寫"/></view>
-      <text class="section-note">其他內容顧問會對照原件核對。發現辨識錯誤也可以自行修改。</text>
-      <text class="toggle-fields" @click="showFields=!showFields">{{ showFields ? '收起全部欄位' : '查看或修改全部欄位 ›' }}</text>
-      <view v-if="showFields"><view class="field" v-for="field in fields.filter(f=>f.key!=='cardNumber')" :key="field.key"><text>{{ field.label }}<text v-if="fieldStatusText(fieldStatus[field.key])" class="field-status" :class="fieldStatusClass(fieldStatus[field.key])">{{ fieldStatusText(fieldStatus[field.key]) }}</text></text><input v-model="draft[field.key]" :placeholder="'按批文卡填寫'"/></view></view>
+    <view v-if="images.front||images.back||showFields" class="card preview"><text class="step-title">第二步：確認辨識結果</text><ApprovalCard :data="draft"/>
+      <view><text class="field-label">批文卡編號（必填）<text v-if="fieldStatusText(fieldStatus.cardNumber)" class="field-status" :class="fieldStatusClass(fieldStatus.cardNumber)">{{ fieldStatusText(fieldStatus.cardNumber) }}</text></text><input class="field num" v-model="draft.cardNumber" placeholder="按批文卡正面「編號」填寫"/></view>
+      <text class="subtle field-hint">其他內容顧問會對照原件核對；發現辨識錯誤也可以自行修改。</text>
+      <text class="more" @click="showFields=!showFields">{{ showFields ? '收起全部欄位' : '查看或修改全部欄位 ›' }}</text>
+      <view v-if="showFields"><view v-for="field in fields.filter(f=>f.key!=='cardNumber')" :key="field.key"><text class="field-label">{{ field.label }}<text v-if="fieldStatusText(fieldStatus[field.key])" class="field-status" :class="fieldStatusClass(fieldStatus[field.key])">{{ fieldStatusText(fieldStatus[field.key]) }}</text></text><input class="field" v-model="draft[field.key]" placeholder="按批文卡填寫"/></view></view>
     </view>
-    <button class="save-file" :disabled="busy" @click="create">{{ busy?'處理中…':'提交給顧問核對' }}</button>
-    <text v-if="!images.front&&!images.back&&!showFields" class="manual" @click="showFields=true">沒有照片？手動輸入</text>
-    <button class="request-link" @click="goRequests">還沒有批文卡、要申請新牌？前往申請辦理 ›</button>
+    <button class="primary save-file" :disabled="busy" @click="create">{{ busy?'處理中…':'提交給顧問核對' }}</button>
+    <text class="link request-link" @click="goRequests">還沒有批文卡、要申請新牌？前往申請辦理 ›</text>
   </view>
 </template>
 <script setup>
@@ -44,9 +44,14 @@ async function create(){if(busy.value)return;const cardNumber=String(draft.value
 function goRequests(){uni.navigateTo({url:'/pages/requests/requests?service=new_application'})}
 </script>
 <style scoped>
-.field-status{margin-left:8rpx;color:#a26700;font-size:17rpx;font-weight:700}.field-status.failed{color:#a64700}
-</style>
-<style scoped>
-.create-page{padding-top:29rpx;padding-bottom:50rpx}.route-switch{display:flex;gap:10rpx;margin:24rpx 0}.route-switch button{flex:1;margin:0;background:var(--rule);color:var(--ink-2);font-size:21rpx}.route-switch button.active{background:var(--jade);color:white}.section{background:white;border:1rpx solid var(--rule);border-radius:17rpx;padding:22rpx;margin:20rpx 0}.section-title{display:block;color:#214b37;font-size:25rpx;font-weight:800}.section-note{display:block;color:var(--ink-3);font-size:19rpx;line-height:1.5;margin:8rpx 0 12rpx}.upload-actions{display:flex;gap:12rpx}.upload-actions button{flex:1;margin:0;background:#e7f1e9;color:#235b42;font-size:20rpx}.upload-note{display:block;color:#37694f;font-size:18rpx;margin-top:13rpx}.field{margin:17rpx 0}.field text{display:block;color:#496853;font-size:19rpx;font-weight:700;margin-bottom:7rpx}.field input{height:57rpx;border:1rpx solid #cbdacf;border-radius:9rpx;padding:0 12rpx;background:var(--paper);font-size:21rpx}.preview :deep(.flip-controls){margin-top:9rpx}.save-file{background:var(--jade);color:white;font-size:22rpx;font-weight:800;margin:22rpx 0 0}.request-link{background:transparent;color:#347052;font-size:20rpx;margin:13rpx 0 0}
-.toggle-fields{display:block;margin:14rpx 0;color:var(--jade);font-size:23rpx;font-weight:750}.manual{display:block;text-align:center;margin:18rpx 0;color:var(--ink-2);font-size:23rpx;text-decoration:underline}
+.route-switch{margin-bottom:12px}
+.step-title{display:block;margin-bottom:4px;font-size:var(--fs-h);font-weight:800;color:var(--jade-deep)}
+.upload-actions{display:flex;gap:8px;margin-top:12px}.upload-actions .btn-sm{flex:1}
+.upload-note{margin-top:8px}
+.more{display:block;padding-top:12px;color:var(--jade);font-size:var(--fs-body);font-weight:700}
+.preview :deep(.approval-preview){margin-top:12px}
+.field-status{margin-left:8px;color:var(--due);font-size:var(--fs-cap);font-weight:700}.field-status.failed{color:var(--overdue)}
+.field-hint{margin-top:8px}
+.save-file{margin-top:4px}
+.request-link{display:block;text-align:center;padding:16px 0}
 </style>

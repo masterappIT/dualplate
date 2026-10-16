@@ -1,40 +1,41 @@
 <template>
   <view class="page billing">
-    <text class="page-title">帳單</text>
-    <text class="subtle">年費、代辦費、政府規費和代墊款項。不同幣種分開計算。</text>
-    <view class="card due-card guilloche">
-      <text class="due-caption">尚未付款</text>
-      <view v-if="totals.length" class="due-rows"><view v-for="t in totals" :key="t.currency" class="due-row"><text class="due-currency">{{ t.currency }}</text><text class="due-amount num">{{ money(t.value) }}</text></view></view>
+    <text class="intro">年費、代辦費、政府規費和代墊款項。不同幣種分開計算。</text>
+    <view class="card deep guilloche due-card">
+      <text class="kicker">尚未付款</text>
+      <view v-if="totals.length" class="due-rows"><text v-for="t in totals" :key="t.currency" class="due-amount num">{{ money(t.currency, t.value) }}</text></view>
       <text v-else class="due-clear">目前沒有未付款項</text>
     </view>
     <view v-if="toConfirm.length">
-      <text class="section-title">請你確認的分期款項</text>
+      <view class="section-head"><text class="section-title">請你確認的分期款項</text></view>
       <view v-for="item in toConfirm" :key="item.id" class="list-card warn-card">
-        <view class="row"><text class="list-title">{{ item.description }}</text><text class="num amount">{{ item.currency }} {{ money(item.amount) }}</text></view>
-        <text class="list-sub">到期 {{ friendlyDate(item.dueOn) }}。確認金額無誤後，顧問會按此收款。</text>
-        <button class="primary confirm" :disabled="busy === item.id" @click="confirm(item)">{{ busy === item.id ? '確認中' : '確認這期金額' }}</button>
+        <view class="row"><text class="list-title grow">{{ item.description }}</text><text class="num amount">{{ money(item.currency, item.amount) }}</text></view>
+        <text class="list-sub">到期 <text class="num">{{ friendlyDate(item.dueOn) }}</text>。確認金額無誤後，顧問會按此收款。</text>
+        <button class="btn-sm confirm" :disabled="busy === item.id" @click="confirm(item)">{{ busy === item.id ? '確認中' : '確認金額' }}</button>
       </view>
     </view>
-    <view class="chips"><text v-for="f in filters" :key="f.key" class="chip" :class="{ active: filter === f.key }" @click="filter = f.key">{{ f.label }}</text></view>
-    <view v-for="item in shown" :key="item.id" class="list-card">
-      <view class="row"><text class="list-title">{{ item.description }}</text><text class="num amount">{{ item.currency }} {{ money(item.amount) }}</text></view>
-      <view class="row meta"><text class="list-sub">{{ item.kindLabel }}{{ item.dueOn ? ' · 到期 ' + friendlyDate(item.dueOn) : '' }}</text><text class="pill" :class="tone(item)">{{ label(item) }}</text></view>
-      <text v-if="item.status === '部分收'" class="list-note note-amber">已付 {{ item.currency }} {{ money(item.paid) }}，尚欠 {{ money(item.outstanding) }}</text>
+    <view class="section-head"><text class="section-title">款項</text><view class="segmented inline"><text v-for="f in filters" :key="f.key" class="seg" :class="{ on: filter === f.key }" @click="filter = f.key">{{ f.label }}</text></view></view>
+    <view v-if="shown.length" class="card list">
+      <view v-for="item in shown" :key="item.id" class="line">
+        <view class="row"><text class="line-title grow">{{ item.description }}</text><text class="num amount">{{ money(item.currency, item.amount) }}</text></view>
+        <view class="row meta"><text class="line-sub">{{ item.kindLabel }}{{ item.dueOn ? ' · 到期 ' + friendlyDate(item.dueOn) : '' }}</text><text class="pill" :class="tone(item)">{{ label(item) }}</text></view>
+        <text v-if="item.status === '部分收'" class="list-note note-amber">已付 {{ money(item.currency, item.paid) }}，尚欠 {{ money(item.currency, item.outstanding) }}</text>
+      </view>
     </view>
-    <view v-if="loaded && !shown.length" class="card empty">{{ filter === 'open' ? '沒有未付款項' : '還沒有帳單記錄' }}</view>
-    <text class="tip">付款方式與收據請向你的顧問查詢。</text>
+    <view v-if="loaded && !shown.length" class="card empty">{{ filter === 'open' ? '沒有其他未付款項' : '還沒有帳單記錄' }}</view>
+    <text class="subtle tip">付款方式與收據請向你的顧問查詢。</text>
   </view>
 </template>
 <script setup>
 import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { api, getUser, friendlyDate } from '../../lib/api'
+import { api, getUser, friendlyDate, money } from '../../lib/api'
 const items = ref([]), outstanding = ref({}), loaded = ref(false), busy = ref(''), filter = ref('open')
 const filters = [{ key: 'open', label: '未付' }, { key: 'all', label: '全部' }]
 const totals = computed(() => Object.entries(outstanding.value).map(([currency, value]) => ({ currency, value })))
 const toConfirm = computed(() => items.value.filter(item => item.needsConfirm).sort((a, b) => String(a.dueOn || '').localeCompare(String(b.dueOn || ''))))
-const shown = computed(() => filter.value === 'open' ? items.value.filter(item => ['未收', '部分收'].includes(item.status)) : items.value)
-const money = value => (value / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+// 「請你確認」的分期已在上方列出，未付清單不再重複
+const shown = computed(() => filter.value === 'open' ? items.value.filter(item => ['未收', '部分收'].includes(item.status) && !item.needsConfirm) : items.value)
 const label = item => item.status === '已收' ? '已付款' : item.overdue ? '已逾期' : item.status === '部分收' ? '部分付款' : '待付款'
 const tone = item => item.status === '已收' ? 'gray' : item.overdue ? 'red' : 'amber'
 async function load() {
@@ -48,10 +49,14 @@ async function confirm(item) {
 onShow(load)
 </script>
 <style scoped>
-.billing{padding-top:28rpx}.due-card{margin-top:24rpx;background:var(--jade-deep);border-color:var(--jade-deep);color:#E3EFEA}
-.due-caption{display:block;font-size:20rpx;letter-spacing:4rpx;color:var(--plate-yellow);font-weight:800}
-.due-rows{margin-top:12rpx}.due-row{display:flex;align-items:baseline;gap:16rpx;padding:6rpx 0}.due-currency{font-size:22rpx;font-weight:800;color:rgba(227,239,234,.75);width:70rpx}.due-amount{font-size:44rpx;font-weight:800;color:#fff}
-.due-clear{display:block;margin-top:12rpx;font-size:28rpx;font-weight:800;color:#fff}
-.amount{flex:none;font-size:25rpx;font-weight:800;color:var(--ink)}.meta{margin-top:4rpx}.confirm{margin-top:18rpx}
-.tip{display:block;text-align:center;color:var(--ink-3);font-size:20rpx;padding:24rpx}
+.due-rows{margin-top:4px}.due-amount{display:block;font-size:var(--fs-stat);font-weight:800;line-height:1.3;color:#fff}
+.due-clear{display:block;margin-top:4px;font-size:var(--fs-h);font-weight:800;color:#fff}
+.amount{flex:none;font-size:var(--fs-h);font-weight:800;color:var(--ink)}
+.confirm{margin-top:12px;align-self:flex-start;display:inline-flex}
+.list{padding:4px 16px}
+.line{padding:12px 0;border-bottom:1px solid var(--rule)}.line:last-child{border-bottom:0}
+.line-title{font-size:var(--fs-h);font-weight:700;line-height:1.4;color:var(--ink)}
+.line-sub{font-size:var(--fs-meta);color:var(--ink-2)}
+.meta{margin-top:4px}
+.tip{text-align:center;padding:16px 0}
 </style>

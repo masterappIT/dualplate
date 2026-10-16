@@ -11,8 +11,8 @@
       </view>
     </view>
     <view class="actions">
-      <button v-if="advisor.phone" class="secondary act" @click="callAdvisor(advisor.phone)">致電</button>
-      <button v-if="advisor.wechat" class="secondary act" @click="copyText(advisor.wechat, '微信號已複製')">複製微信號</button>
+      <button v-if="advisor.phone" class="btn-sm act" @click="callAdvisor(advisor.phone)">致電</button>
+      <button v-if="advisor.wechat" class="btn-sm act" @click="copyText(advisor.wechat, '微信號已複製')">複製微信號</button>
     </view>
   </view>
   <view v-else-if="placeholder" class="card advisor empty-advisor"><text class="caption">你的顧問</text><text class="meta">顧問資料整理中，稍後會在這裡顯示聯絡方式。</text></view>
@@ -22,11 +22,11 @@ import { callAdvisor, copyText } from '../lib/api'
 defineProps({ advisor: { type: Object, default: null }, placeholder: Boolean })
 </script>
 <style scoped>
-.advisor{margin-top:18rpx}.who-row{display:flex;align-items:center;gap:20rpx}.grow{flex:1;min-width:0}
-.badge{width:76rpx;height:76rpx;flex:none;border-radius:50%;background:var(--jade-deep);border:3rpx solid var(--plate-yellow);display:flex;align-items:center;justify-content:center}
-.badge text{color:#fff;font-size:30rpx;font-weight:800}
-.caption{display:block;color:var(--jade);font-size:20rpx;font-weight:800;letter-spacing:2rpx}
-.name{display:block;font-size:30rpx;font-weight:800;color:var(--ink);margin-top:2rpx}
-.meta{display:block;color:var(--ink-2);font-size:22rpx;margin-top:2rpx}
-.actions{display:flex;gap:14rpx;margin-top:20rpx}.act{flex:1;margin:0;height:72rpx;line-height:72rpx;font-size:24rpx}
+.advisor{margin-top:12px}.who-row{display:flex;align-items:center;gap:12px}.grow{flex:1;min-width:0}
+.badge{width:44px;height:44px;flex:none;border-radius:50%;background:var(--jade-deep);border:2px solid var(--plate-yellow);display:flex;align-items:center;justify-content:center}
+.badge text{color:#fff;font-size:var(--fs-h);font-weight:800}
+.caption{display:block;color:var(--ink-3);font-size:var(--fs-cap);font-weight:700}
+.name{display:block;font-size:var(--fs-h);font-weight:800;color:var(--ink);line-height:1.4}
+.meta{display:block;color:var(--ink-2);font-size:var(--fs-body);line-height:1.5}
+.actions{display:flex;gap:8px;margin-top:16px}.act{flex:1;width:auto}
 </style>

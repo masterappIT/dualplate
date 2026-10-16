@@ -18,7 +18,26 @@ export function api(path, method = 'GET', data) {
 // Shared wording and colours for deadline states on the client screens.
 export const levelLabel = { overdue: '已逾期', due: '快到期', upcoming: '即將到期', ok: '正常' }
 export const levelTone = { overdue: 'red', due: 'amber', upcoming: '', ok: '' }
-export function daysText(item) { return item.daysLeft == null ? '' : item.daysLeft < 0 ? `逾期 ${-item.daysLeft} 天` : item.daysLeft === 0 ? '今天到期' : `${item.daysLeft} 天` }
+export function daysText(item) { return item.daysLeft == null ? '' : item.daysLeft < 0 ? `逾期 ${-item.daysLeft} 天` : item.daysLeft === 0 ? '今天到期' : `還有 ${item.daysLeft} 天` }
+// 客戶自己辦、我們只提醒的事項，全站同一個說法
+export const selfHandled = '自行辦理'
+// 辦理狀態：全站同一套顏色（進行中藍、要你做的橙、結束灰）
+export const requestTone = status => ({ 需要你提供資料: 'amber', 辦理中: 'blue', 已收到: 'blue', 已完成: 'gray', 已取消: 'gray' }[status] || 'blue')
+// 工單步驟名是寫給員工看的（「客戶提供……」），客戶端改成對客戶說話
+export function clientStage(stage) {
+  const text = String(stage || '')
+  if (!text || text === '待內部受理') return '等待顧問受理'
+  return text.replace(/^客戶/, '等你')
+}
+// 到期項目的補充說明：把規則用語改成白話
+export function detailText(detail) { return String(detail || '').replace(/^批文有效期開始\s*(\d{4}-\d{2}-\d{2})$/, '由批文生效日 $1 起計') }
+// 金額：HK$ 1,200／¥ 1,200／MOP 1,200；有角分才顯示小數
+const currencySign = { HKD: 'HK$', RMB: '¥', CNY: '¥', MOP: 'MOP' }
+export function money(currency, cents) {
+  const value = Number(cents || 0) / 100
+  const digits = Number.isInteger(value) ? 0 : 2
+  return `${currencySign[currency] || currency || ''} ${value.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: 2 })}`.trim()
+}
 export function plateName(p) { return [p.mainlandPlate || p.mainland_plate, p.localPlate || p.local_plate].filter(Boolean).join(' · ') || '車牌待補充' }
 export function openPlate(id) { uni.navigateTo({ url: '/pages/plate-detail/plate-detail?id=' + encodeURIComponent(id) }) }
 export function startRequest(serviceCode, plateId) { uni.navigateTo({ url: '/pages/requests/requests?service=' + encodeURIComponent(serviceCode || '') + (plateId ? '&plate=' + encodeURIComponent(plateId) : '') }) }

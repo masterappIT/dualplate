@@ -19,11 +19,11 @@ const kind = computed(() => {
 const label = computed(() => ({ mainland: '內地車牌', hk: '香港車牌', mo: '澳門車牌', unknown: '車牌' })[kind.value])
 </script>
 <style scoped>
-.plate-chip{display:inline-flex;align-items:center;justify-content:center;border-radius:6rpx;padding:4rpx 14rpx;font-weight:800;line-height:1.3;white-space:nowrap;box-shadow:inset 0 0 0 2rpx rgba(0,0,0,.18)}
-.plate-chip text{letter-spacing:.06em}
-.md{font-size:24rpx}.sm{font-size:20rpx;padding:2rpx 10rpx}.lg{font-size:30rpx;padding:6rpx 18rpx}
-.mainland{background:#141414;color:#fff;box-shadow:inset 0 0 0 2rpx #141414,inset 0 0 0 4rpx #fff}
+.plate-chip{display:inline-flex;align-items:center;justify-content:center;flex:none;border-radius:3px;padding:2px 8px;font-weight:800;line-height:1.3;white-space:nowrap;box-shadow:inset 0 0 0 1px rgba(0,0,0,.18)}
+.plate-chip text{letter-spacing:.06em;line-height:1.4}
+.md{font-size:var(--fs-body)}.sm{font-size:var(--fs-cap);padding:1px 6px}.lg{font-size:var(--fs-h);padding:4px 10px}
+.mainland{background:#141414;color:#fff;box-shadow:inset 0 0 0 1px #141414,inset 0 0 0 2px #fff}
 .hk{background:#F2C230;color:#111}
-.mo{background:#fff;color:#111;box-shadow:inset 0 0 0 2rpx #111}
-.unknown{background:var(--muted-bg);color:var(--ink-3);box-shadow:inset 0 0 0 1rpx var(--rule);font-weight:700}
+.mo{background:#fff;color:#111;box-shadow:inset 0 0 0 1px #111}
+.unknown{background:var(--muted-bg);color:var(--ink-3);box-shadow:inset 0 0 0 1px var(--rule);font-weight:700}
 </style>

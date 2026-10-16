@@ -1,51 +1,116 @@
 <template>
-  <view class="page vehicles-page"><text class="page-title">{{ creating ? '新增牌照' : summary.mainlandPlate || plates[0]?.mainland_plate || '牌照詳情' }}</text><text class="subtle">{{ creating ? '拍下批文卡交給我們建檔。' : [summary.localPlate, summary.holder].filter(Boolean).join(' · ') }}</text>
-    <view v-if="creating" class="file-form"><text class="form-title">登記現有批文卡</text><text class="form-note">建檔已移至批文卡核對流程。尚未取得批文卡，請使用申請代辦。</text><button class="save-file" @click="uni.redirectTo({url:'/pages/plate-create/plate-create'})">前往批文卡建檔</button></view>
-      <view v-if="!creating && !plates.length" class="card empty">找不到這個兩地牌檔案。</view>
-      <view v-for="p in plates" :key="p.id" class="asset-block">
-      <view class="card-section top-card"><view class="section-heading"><strong>批文卡 · 模擬卡</strong><text>{{ p.card_status || '待核對' }}</text></view><ApprovalCard :key="p.id" :data="displayCardData(p)"/><text class="card-hint">按提供的批文卡樣式重繪；內容由上傳或手動編輯更新，需以原件核對。</text><view class="card-actions"><button class="card-action" @click="editCard(p)">修改內容</button><button class="card-action" @click="uploadCard(p)">上傳新批文卡</button></view><view v-if="editingCardId===p.id" class="card-editor"><view v-for="field in cardFields" :key="field.key"><text>{{ field.label }}<text v-if="fieldStatusText(fieldStatus[field.key])" class="field-status" :class="fieldStatusClass(fieldStatus[field.key])">{{ fieldStatusText(fieldStatus[field.key]) }}</text></text><input v-model="cardDraft[field.key]" :placeholder="field.label"/></view><button @click="saveCard(p)">更新模擬卡</button><button @click="editingCardId=''">取消</button></view></view>
-      <view v-if="summary.id" class="summary">
-        <view v-if="summary.warnings?.length" class="list-card warn-card"><text class="list-title">{{ summary.warnings.join('、') }}</text><text class="list-sub">牌照仍照常管理，如需處理我們會聯絡你。</text></view>
-        <view class="card crossing-card"><view class="row"><view class="grow"><text class="crossing-title">90 天過關提醒</text><text class="list-sub">{{ summary.crossing?.enabled ? '每 '+(summary.crossing?.days||90)+' 天須過關一次，期限前提醒你' : '車輛不常過關時可開啟，我們會在期限前提醒你' }}</text></view><switch :checked="!!summary.crossing?.enabled" color="#0F5C4A" :disabled="crossingBusy" @change="toggleReminder($event.detail.value)" /></view><view v-if="summary.crossing?.enabled" class="crossing-body"><view class="ticket-rule" /><view class="row"><text class="list-sub">{{ summary.crossing?.lastCrossedOn ? '上次過關 '+summary.crossing.lastCrossedOn : '請記錄最近一次過關日期' }}</text><DueDate v-if="summary.crossing?.nextDueOn" :date="summary.crossing.nextDueOn" /><StampMark v-if="justCrossed" text="已過關" tone="jade" play class="crossing-stamp" /></view><button class="primary crossing-button" :disabled="crossingBusy" @click="markCrossed(todayIso())">{{ crossingBusy ? '記錄中' : '今天已過關' }}</button><picker mode="date" :end="todayIso()" @change="markCrossed($event.detail.value)"><text class="link other-date">其他日期過關 ›</text></picker></view></view>
-        <view class="section-head"><text class="section-title">到期項目</text><text class="pill" :class="{due:'amber',overdue:'red',pending:'gray'}[summary.health]">{{ {ok:'正常',due:'快到期',overdue:'已逾期',pending:'資料整理中'}[summary.health] }}</text></view>
-        <view v-for="(item,index) in summary.deadlines" :key="index" class="list-card row"><view class="grow"><text class="list-title">{{ item.name }}</text><text v-if="item.handledBy==='you'" class="who you">請你處理</text><text class="list-sub">{{ item.dueOn }}{{ item.detail ? ' · '+item.detail : '' }}{{ item.ownerType==='plate' ? '' : ' · '+item.ownerLabel }}</text></view><text class="pill" :class="levelTone[item.level]">{{ daysText(item) }}</text></view>
-        <view v-if="!summary.deadlines?.length" class="list-card"><text class="list-sub">{{ summary.health==='pending' ? '你的顧問正在整理這個牌照的到期資料。' : '半年內沒有到期項目。' }}</text></view>
+  <view class="page plate-page">
+    <view v-if="creating" class="card"><text class="list-title">登記現有批文卡</text><text class="list-sub">尚未取得批文卡，請使用申請辦理。</text><button class="primary go-create" @click="uni.redirectTo({url:'/pages/plate-create/plate-create'})">前往批文卡建檔</button></view>
+    <view v-if="!creating && loaded && !plates.length" class="card empty">找不到這個兩地牌檔案。</view>
+    <view v-for="p in plates" :key="p.id">
+      <!-- 頁首：車牌＋整體狀態 -->
+      <view class="head">
+        <view class="head-plates"><PlateChip :plate="p.mainland_plate || summary.mainlandPlate" region="內地" size="lg" /><PlateChip v-if="p.local_plate" :plate="p.local_plate" :region="p.route==='粵澳'?'澳門':'香港'" size="lg" /><text v-if="summary.health" class="pill" :class="healthTone[summary.health]">{{ healthLabel[summary.health] }}</text></view>
+        <text class="subtle head-sub">{{ [p.route+'兩地牌', summary.holder].filter(Boolean).join(' · ') }}</text>
+      </view>
+      <view v-if="summary.warnings?.length" class="list-card warn-card"><text class="list-title">{{ summary.warnings.join('、') }}</text><text class="list-sub">牌照仍照常管理，如需處理我們會聯絡你。</text></view>
+
+      <!-- 最常用的辦理入口放在最上面 -->
+      <view v-if="summary.id" class="actions"><button v-for="a in quickActions" :key="a.code" class="btn-line action" @click="startRequest(a.code, summary.id)">{{ a.name }}</button></view>
+
+      <view v-if="summary.id">
+        <view class="section-head"><text class="section-title">到期項目</text><text v-if="deadlineList.length" class="subtle num">{{ deadlineList.length }} 項</text></view>
+        <view class="card list">
+          <view v-for="(item,index) in shownDeadlines" :key="index" class="line">
+            <view class="grow"><text class="line-title">{{ item.name }}</text><text v-if="item.handledBy==='you'" class="who">{{ selfHandled }}</text><text v-if="deadlineSub(item)" class="line-sub">{{ deadlineSub(item) }}</text></view>
+            <DueDate :date="item.dueOn" :days="item.daysLeft" :level="item.level" />
+          </view>
+          <text v-if="!deadlineList.length" class="line-sub">{{ summary.health==='pending' ? '你的顧問正在整理這個牌照的到期資料。' : '半年內沒有到期項目。' }}</text>
+          <view v-if="deadlineList.length > 5" class="more" @click="allDeadlines=!allDeadlines">{{ allDeadlines ? '收起' : '顯示全部 '+deadlineList.length+' 項' }}</view>
+        </view>
+
+        <view class="card crossing-card">
+          <view class="row"><view class="grow"><text class="line-title">90 天過關提醒</text><text class="line-sub">{{ summary.crossing?.enabled ? '每 '+(summary.crossing?.days||90)+' 天須過關一次，期限前提醒你' : '車輛不常過關時可開啟，我們會在期限前提醒你' }}</text></view><switch :checked="!!summary.crossing?.enabled" color="#0F5C4A" :disabled="crossingBusy" @change="toggleReminder($event.detail.value)" /></view>
+          <view v-if="summary.crossing?.enabled"><view class="ticket-rule" /><view class="row"><text class="line-sub">{{ summary.crossing?.lastCrossedOn ? '上次過關 '+summary.crossing.lastCrossedOn : '請記錄最近一次過關日期' }}</text><DueDate v-if="summary.crossing?.nextDueOn" :date="summary.crossing.nextDueOn" /><StampMark v-if="justCrossed" text="已過關" tone="jade" play class="crossing-stamp" /></view><button class="primary crossing-button" :disabled="crossingBusy" @click="markCrossed(todayIso())">{{ crossingBusy ? '記錄中' : '今天已過關' }}</button><picker mode="date" :end="todayIso()" @change="markCrossed($event.detail.value)"><text class="link other-date">其他日期過關 ›</text></picker></view>
+        </view>
+      </view>
+
+      <!-- 批文卡：保留預覽、翻面、上傳辨識、手動修改 -->
+      <view class="section-head"><text class="section-title">批文卡</text><text class="pill" :class="p.card_status==='已核對'?'':'gray'">{{ p.card_status || '待核對' }}</text></view>
+      <view class="card approval">
+        <ApprovalCard :key="p.id" :data="displayCardData(p)" :back="cardBack" :flip-on-tap="false" :tap-label="cardBack ? '翻到批文卡正面' : '翻到批文卡背面'" @card-tap="cardBack=!cardBack"/>
+        <view class="segmented flip-switch"><text class="seg" :class="{on:!cardBack}" @click="cardBack=false">正面</text><text class="seg" :class="{on:cardBack}" @click="cardBack=true">背面</text></view>
+        <view class="card-actions"><button class="btn-sm" @click="editCard(p)">修改內容</button><button class="btn-sm" @click="uploadCard(p)">上傳新批文卡</button></view>
+        <view v-if="editingCardId===p.id" class="card-editor">
+          <view v-for="field in cardFields" :key="field.key"><text class="field-label">{{ field.label }}<text v-if="fieldStatusText(fieldStatus[field.key])" class="field-status" :class="fieldStatusClass(fieldStatus[field.key])">{{ fieldStatusText(fieldStatus[field.key]) }}</text></text><input class="field" v-model="cardDraft[field.key]" :placeholder="field.label"/></view>
+          <view class="editor-actions"><button class="btn-sm" @click="editingCardId=''">取消</button><button class="btn-sm solid" @click="saveCard(p)">儲存批文卡內容</button></view>
+        </view>
+      </view>
+
+      <!-- 車牌實物樣式與牌照資料 -->
+      <text class="section-title">車牌</text>
+      <view class="card">
+        <view class="plate-pair">
+          <view class="plate-item"><text class="plate-label">內地港澳入出境號牌</text><image v-if="plateImages[p.id]?.mainland" :src="plateImages[p.id].mainland" mode="widthFix" class="plate-photo"/><MainlandPlate v-else-if="p.mainland_plate" :plate="p.mainland_plate" :width="300"/><view v-else class="plate-missing">未提供號碼</view></view>
+          <view class="plate-item"><text class="plate-label">{{ p.route==='粵港'?'香港':'澳門' }}號牌</text><image v-if="plateImages[p.id]?.local" :src="plateImages[p.id].local" mode="widthFix" class="plate-photo"/><template v-else-if="p.local_plate"><HongKongPlate v-if="p.route==='粵港'" :plate="p.local_plate" :width="300"/><view v-else class="physical-plate macau"><text>{{ formatMacau(p.local_plate) }}</text></view></template><view v-else class="plate-missing">未提供號碼</view></view>
+        </view>
+        <view class="kv facts"><text class="k">上牌狀態</text><text class="v">{{ p.installation_status==='待核對' ? '確認中' : p.installation_status }}</text><text class="k">使用狀態</text><text class="v">{{ usageWord(p.usage_status) }}</text><text class="k">綁定車輛</text><text class="v">{{ boundVehicle(p) }}</text></view>
+        <view class="more" @click="showEdit=!showEdit">{{ showEdit ? '收起資料修改' : '修改牌照資料 ›' }}</view>
+        <view v-if="showEdit" class="edit-file">
+          <text class="field-label">內地車牌號</text><input class="field" v-model="plateForm.mainlandPlate" placeholder="尚未上牌可留空"/>
+          <text class="field-label">香港／澳門車牌號</text><input class="field" v-model="plateForm.localPlate" placeholder="尚未上牌可留空"/>
+          <text class="field-label">上牌狀態</text><picker :range="['待核對','未上牌','已上牌']" @change="plateForm.installationStatus=['待核對','未上牌','已上牌'][Number($event.detail.value)]"><view class="field picker"><text>{{ plateForm.installationStatus }}</text><text class="chev">›</text></view></picker>
+          <text class="field-label">綁定車輛</text><picker :range="vehicleOptions(p)" range-key="label" @change="plateForm.vehicleId=vehicleOptions(p)[Number($event.detail.value)]?.id||''"><view class="field picker"><text>{{ vehicleOptions(p).find(v=>v.id===plateForm.vehicleId)?.label || '未綁定' }}</text><text class="chev">›</text></view></picker>
+          <text class="field-label">批文卡有效期至</text><input class="field num" v-model="plateForm.cardExpiresOn" placeholder="YYYY-MM-DD"/>
+          <text class="field-label">備註</text><textarea class="field notes" v-model="plateForm.notes" placeholder="補充這個兩地牌的資料"/>
+          <text class="line-sub">使用狀態由顧問記錄；批文卡編號請在上方「修改內容」更新。</text>
+          <button class="primary save-file" :disabled="savingFile" @click="savePlate(p)">{{ savingFile ? '正在儲存…' : '儲存牌照資料' }}</button>
+        </view>
+      </view>
+
+      <view v-if="summary.id">
         <text class="section-title">使用情況</text>
-        <view class="list-card"><text class="list-title">{{ summary.rental ? '使用安排：'+summary.rental.renter : summary.usageStatus==='自用' ? '自用' : summary.installationStatus==='未上牌' ? '空置（未上牌）' : '使用狀況確認中' }}</text><text class="list-sub">{{ summary.rental ? [summary.rental.vehiclePlate, (summary.rental.startsOn||'—')+' 至 '+(summary.rental.endsOn||'未定')].filter(Boolean).join(' · ') : [summary.indicatorCategory, summary.port].filter(Boolean).join(' · ') || summary.route+'兩地牌' }}</text></view>
-        <view class="list-card"><text class="list-sub">持牌公司：{{ summary.holder || '待補充' }}</text><text class="list-sub">內承單位：{{ summary.contractor || '待補充' }}</text></view>
-        <text class="section-title">需要辦理？</text>
-        <view class="actions"><text v-for="a in quickActions" :key="a.code" class="action" @click="startRequest(a.code, summary.id)">{{ a.name }}</text></view>
-        <view v-if="arrangements.length"><text class="section-title">車輛使用安排</text><view v-for="a in arrangements" :key="a.id" class="card arrangement"><view class="row"><view><text class="list-title">{{ a.user.name }}</text><text class="list-sub">{{ a.user.vehiclePlate ? '使用車輛 ' + a.user.vehiclePlate + ' · ' : '' }}{{ a.startsOn }} 起{{ a.endsOn ? ' 至 ' + a.endsOn : '' }}</text></view><text class="pill" :class="a.status==='生效'?'':'gray'">{{ a.status==='生效' ? '使用中' : a.status }}</text></view><text class="list-sub">使用費 {{ a.currency }} {{ (a.amount/100).toLocaleString('en-US',{minimumFractionDigits:2}) }} / {{ cycleLabel[a.cycle] }} · {{ a.collectionMode==='代收' ? '由我們代收' : '直接付給你' }}</text><view class="ticket-rule" /><view v-for="i in a.invoices" :key="i.id" class="fee-row"><text class="num">{{ i.period }}</text><text class="pill" :class="feeTone[i.status]">{{ feeLabel(a, i) }}</text></view><text v-if="!a.invoices.length" class="subtle">暫時沒有使用費記錄</text></view></view>
-        <view v-if="summary.drivers?.length"><text class="section-title">登記司機</text><view class="card drivers"><view v-for="d in summary.drivers" :key="d.name" class="driver-row"><text class="driver-name">{{ d.name }}</text><text class="pill" :class="d.role==='主'?'':'gray'">{{ d.role==='主' ? '主司機' : '副司機' }}</text></view><text class="subtle driver-note">司機證件到期會出現在到期提醒。要更換司機，按上方「換司機」。</text></view></view>
-        <view v-if="summary.requests?.length"><text class="section-title">辦理記錄</text><view v-for="r in summary.requests" :key="r.id" class="list-card row" @click="openRequest(r.id)"><view class="grow"><text class="list-title">{{ r.title }}</text><text class="list-sub">目前：{{ r.stage==='待內部受理' ? '等待顧問受理' : r.stage }}</text></view><text class="pill" :class="r.status==='需要你提供資料'?'amber':['已完成','已取消'].includes(r.status)?'gray':''">{{ r.status }}</text></view></view>
-        <text class="section-title">車牌</text>
+        <view class="card kv">
+          <text class="k">用途</text><text class="v">{{ summary.rental ? '使用安排：'+summary.rental.renter : summary.usageStatus==='自用' ? '自用' : summary.installationStatus==='未上牌' ? '空置（未上牌）' : '確認中' }}</text>
+          <template v-if="summary.rental"><text class="k">使用期</text><text class="v num">{{ (summary.rental.startsOn||'—')+' 至 '+(summary.rental.endsOn||'未定') }}</text></template>
+          <text v-if="summary.indicatorCategory" class="k">指標類別</text><text v-if="summary.indicatorCategory" class="v">{{ summary.indicatorCategory }}</text>
+          <text v-if="summary.port" class="k">口岸</text><text v-if="summary.port" class="v">{{ summary.port }}</text>
+          <text class="k">持牌公司</text><text class="v">{{ summary.holder || '待補充' }}</text>
+          <text class="k">內承單位</text><text class="v">{{ summary.contractor || '待補充' }}</text>
+        </view>
+
+        <view v-if="arrangements.length"><text class="section-title">車輛使用安排</text><view v-for="a in arrangements" :key="a.id" class="card"><view class="row"><view class="grow"><text class="line-title">{{ a.user.name }}</text><text class="line-sub">{{ a.user.vehiclePlate ? '使用車輛 ' + a.user.vehiclePlate + ' · ' : '' }}{{ a.startsOn }} 起{{ a.endsOn ? ' 至 ' + a.endsOn : '' }}</text></view><text class="pill" :class="a.status==='生效'?'':'gray'">{{ a.status==='生效' ? '使用中' : a.status }}</text></view><text class="line-sub">使用費 {{ money(a.currency, a.amount) }} / {{ cycleLabel[a.cycle] }} · {{ a.collectionMode==='代收' ? '由我們代收' : '直接付給你' }}</text><view class="ticket-rule" /><view v-for="i in a.invoices" :key="i.id" class="fee-row"><text class="num">{{ i.period }}</text><text class="pill" :class="feeTone[i.status]">{{ feeLabel(a, i) }}</text></view><text v-if="!a.invoices.length" class="line-sub">暫時沒有使用費記錄</text></view></view>
+
+        <view v-if="summary.drivers?.length"><text class="section-title">登記司機</text><view class="card list"><view v-for="d in summary.drivers" :key="d.name" class="line"><text class="line-title grow">{{ d.name }}</text><text class="pill" :class="d.role==='主'?'':'gray'">{{ d.role==='主' ? '主司機' : '副司機' }}</text></view><text class="line-sub driver-note">司機證件到期會列在到期項目。要更換司機，按頁面上方「換司機」。</text></view></view>
+
+        <view v-if="summary.requests?.length"><text class="section-title">辦理記錄</text><view class="card list"><view v-for="r in summary.requests" :key="r.id" class="line" @click="openRequest(r.id)"><view class="grow"><view class="row"><text class="line-title grow">{{ r.title }}</text><text class="pill" :class="requestTone(r.status)">{{ r.status }}</text></view><text class="line-sub">{{ clientStage(r.stage) }}</text></view><text class="chev">›</text></view></view></view>
       </view>
-      <view class="asset-heading"><view><text class="asset-route">{{ p.route }}兩地牌</text><text class="asset-number">{{ p.mainland_plate || '內地車牌待補充' }}</text></view><text class="asset-status">{{ p.installation_status==='待核對' ? '上牌狀態確認中' : p.installation_status }}</text></view>
-      <view class="plate-pair">
-        <view class="plate-item"><text class="plate-label">內地港澳入出境號牌</text><image v-if="plateImages[p.id]?.mainland" :src="plateImages[p.id].mainland" mode="widthFix" class="plate-photo"/><MainlandPlate v-else-if="p.mainland_plate" :plate="p.mainland_plate" :width="300"/><view v-else class="plate-missing">未提供號碼</view></view>
-        <view class="plate-item"><text class="plate-label">{{ p.route==='粵港'?'香港':'澳門' }}號牌</text><image v-if="plateImages[p.id]?.local" :src="plateImages[p.id].local" mode="widthFix" class="plate-photo"/><template v-else-if="p.local_plate"><template v-if="p.route==='粵港'"><HongKongPlate :plate="p.local_plate" :width="300"/></template><view v-else class="physical-plate macau"><text>{{ formatMacau(p.local_plate) }}</text></view></template><view v-else class="plate-missing">未提供號碼</view></view>
-        <text v-if="!plateImages[p.id]?.mainland || !plateImages[p.id]?.local" class="plate-disclaimer">按官方號牌規格顯示號碼；實物照片以專員上傳為準。</text>
-      </view>
-      <view class="asset-facts"><view><text>上牌狀態</text><strong>{{ p.installation_status==='待核對' ? '確認中' : p.installation_status }}</strong></view><view><text>使用狀態</text><strong>{{ usageWord(p.usage_status) }}</strong></view><view><text>綁定車輛</text><strong>{{ boundVehicle(p) }}</strong></view></view>
-      <view class="toggle-edit" @click="showEdit=!showEdit">{{ showEdit ? '收起資料修改' : '修改牌照資料 ›' }}</view><view v-if="showEdit" class="file-form edit-file"><text class="form-title">兩地牌資料</text><text class="form-label">內地車牌號</text><input v-model="plateForm.mainlandPlate" placeholder="尚未上牌可留空"/><text class="form-label">香港／澳門車牌號</text><input v-model="plateForm.localPlate" placeholder="尚未上牌可留空"/><text class="form-label">上牌狀態</text><picker :range="['待核對','未上牌','已上牌']" @change="plateForm.installationStatus=['待核對','未上牌','已上牌'][Number($event.detail.value)]"><view class="form-picker">{{ plateForm.installationStatus }} ▾</view></picker><text class="form-label">使用狀態</text><text class="form-readonly">{{ usageWord(p.usage_status) }} · 使用安排由顧問記錄</text><text class="form-label">綁定車輛</text><picker :range="vehicleOptions(p)" range-key="label" @change="plateForm.vehicleId=vehicleOptions(p)[Number($event.detail.value)]?.id||''"><view class="form-picker">{{ vehicleOptions(p).find(v=>v.id===plateForm.vehicleId)?.label || '未綁定' }} ▾</view></picker><text class="form-label">批文卡編號</text><text class="form-readonly">{{ p.card_number || '待專員核對' }} · 請在下方「修改內容」更新</text><text class="form-label">批文卡有效期至</text><input v-model="plateForm.cardExpiresOn" placeholder="YYYY-MM-DD"/><text class="form-label">備註</text><textarea v-model="plateForm.notes" placeholder="補充這個兩地牌的資料"/><button class="save-file" :disabled="savingFile" @click="savePlate(p)">{{ savingFile ? '正在儲存…' : '儲存兩地牌資料' }}</button><text class="form-note">車牌檔案資料與批文卡模擬內容分開更新；請在下方修改或上傳批文卡。</text></view>
-      
     </view>
-    <view v-if="!creating && vehicles.some(v=>v.id===plates[0]?.vehicle_id)"><text class="section-title vehicle-section-title">綁定車輛與驗車</text>
-    <view v-for="v in vehicles.filter(v=>v.id===plates[0]?.vehicle_id)" :key="v.id" class="vehicle-block"><view class="vehicle-head"><view class="vehicle-top"><text class="route">{{ v.route }} · {{ v.origin }}車</text><text class="vehicle-type">{{ v.type }}</text></view><text class="plate">{{ v.plate }}</text><text class="vehicle-model">{{ [v.brand,v.model].filter(Boolean).join(' ') || '車輛資料待補充' }}</text></view>
-      <view class="card record-card"><view class="row record-heading"><text>驗車安排</text><text class="pill gray">{{ detail[v.id]?.inspections?.length || 0 }} 項</text></view><view v-if="detail[v.id]?.inspections?.length"><view v-for="i in detail[v.id].inspections" :key="i.id" class="record-row"><view class="record-main"><text class="credential-name">{{ i.title }}</text><text class="record-sub">{{ i.appointment_on || '日期待安排' }}</text></view><text class="pill">{{ i.status }}</text></view></view><text v-else class="record-empty">目前沒有已建立的驗車任務</text></view>
-      <view class="guidance"><text class="guidance-title">官方要求核對</text><view v-for="g in detail[v.id]?.inspectionGuidance || []" :key="g.label" class="guidance-line" @click="openSource(g.sourceId)"><view class="guidance-dot"></view><text>{{ g.label }}</text><text v-if="g.sourceId" class="official-link">來源 ›</text></view><text class="guidance-note">具體適用條件由專員按車輛與官方指引核對。</text></view>
-    </view></view>
+
+    <view v-if="!creating && boundVehicles.length"><text class="section-title">綁定車輛與驗車</text>
+      <view v-for="v in boundVehicles" :key="v.id" class="card">
+        <view class="row"><PlateChip :plate="v.plate" :region="v.origin==='內地'?'內地':v.origin==='澳門'?'澳門':'香港'" /><text class="pill gray">{{ v.type }}</text></view>
+        <view class="kv facts"><text class="k">車型</text><text class="v">{{ [v.brand,v.model].filter(Boolean).join(' ') || '待補充' }}</text><text class="k">類別</text><text class="v">{{ v.route }} · {{ v.origin }}車</text></view>
+        <view class="ticket-rule" />
+        <text class="line-title">驗車安排</text>
+        <view v-for="i in detail[v.id]?.inspections || []" :key="i.id" class="line"><view class="grow"><text class="line-title">{{ i.title }}</text><text class="line-sub num">{{ i.appointment_on || '日期待安排' }}</text></view><text class="pill blue">{{ i.status }}</text></view>
+        <text v-if="!detail[v.id]?.inspections?.length" class="line-sub">暫時沒有驗車安排。</text>
+        <view v-if="detail[v.id]?.inspectionGuidance?.length" class="guidance"><text class="line-sub guidance-title">相關官方規定</text><view v-for="g in detail[v.id].inspectionGuidance" :key="g.label" class="guidance-line" @click="openSource(g.sourceId)"><text class="grow">{{ g.label }}</text><text v-if="g.sourceId" class="link">來源 ›</text></view></view>
+      </view>
+    </view>
   </view>
 </template>
 <script setup>
-import { ref } from 'vue'
+import { ref,computed } from 'vue'
 import { onLoad,onShow } from '@dcloudio/uni-app'
-import { api,getUser,friendlyDate,daysLeft,privateImage,levelTone,daysText,startRequest } from '../../lib/api'
+import { api,getUser,privateImage,startRequest,requestTone,clientStage,detailText,selfHandled,money } from '../../lib/api'
+import PlateChip from '../../components/PlateChip.vue'
 import ApprovalCard from '../../components/ApprovalCard.vue'
 import MainlandPlate from '../../components/MainlandPlate.vue'
 import HongKongPlate from '../../components/HongKongPlate.vue'
 const vehicles=ref([]),detail=ref({}),plates=ref([]),plateDetail=ref({}),plateImages=ref({}),sources=ref([])
-const crossingBusy=ref(false),justCrossed=ref(false)
+const crossingBusy=ref(false),justCrossed=ref(false),loaded=ref(false),cardBack=ref(false),allDeadlines=ref(false)
+const healthLabel={ok:'正常',due:'快到期',overdue:'已逾期',pending:'資料整理中'},healthTone={ok:'',due:'amber',overdue:'red',pending:'gray'}
+// 90 天過關有自己的卡片，不在到期清單重複
+const deadlineList=computed(()=>(summary.value.deadlines||[]).filter(item=>!(summary.value.crossing?.enabled&&item.name==='90 天過關')))
+const shownDeadlines=computed(()=>allDeadlines.value?deadlineList.value:deadlineList.value.slice(0,5))
+function deadlineSub(item){return [item.ownerType==='plate'?'':item.ownerLabel,detailText(item.detail)].filter(Boolean).join(' · ')}
+const boundVehicles=computed(()=>vehicles.value.filter(v=>v.id===plates.value[0]?.vehicle_id))
 const todayIso=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 // 客戶按「今天已過關」或選其他日期；成功後蓋章並重新整理到期項目
 async function toggleReminder(on){if(crossingBusy.value)return;crossingBusy.value=true;try{await api('/my/plates/'+plateId+'/crossing-reminder','PUT',{enabled:!!on});summary.value=await api('/my/plates/'+plateId);uni.showToast({title:on?'已開啟 90 天過關提醒':'已關閉提醒',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{crossingBusy.value=false}}
@@ -63,12 +128,12 @@ let plateId=''
 const cardFields=[['cardNumber','編號'],['company','商號'],['contractor','內承單位'],['crossing','通行口岸'],['serial','卡面流水號'],['mainlandPlate','內地車牌號'],['localPlate','港澳車牌號'],['driver1','駕駛人 1'],['driver2','駕駛人 2'],['driver3','駕駛人 3'],['currentApproval','現批文號'],['previousApproval','原批文號'],['color','顏色'],['seats','座位／噸位'],['purpose','請予辦理'],['validFrom','有效期開始'],['validTo','有效期結束'],['notes','備註']].map(([key,label])=>({key,label}))
 function vehicleOptions(p){return [{id:'',label:'未綁定'},...vehicles.value.filter(v=>v.customer_id===p.customer_id&&v.route===p.route).map(v=>({id:v.id,label:[v.plate,v.brand,v.model].filter(Boolean).join(' · ')}))]}
 function fillPlateForm(p){plateForm.value={mainlandPlate:p.mainland_plate||'',localPlate:p.local_plate||'',installationStatus:p.installation_status||'待核對',usageStatus:p.usage_status||'待核對',vehicleId:p.vehicle_id||'',cardNumber:p.card_number||'',cardExpiresOn:p.card_expires_on||'',notes:p.notes||''}}
-async function savePlate(p){if(savingFile.value)return;savingFile.value=true;try{const updated=await api('/plate-assets/'+p.id,'PATCH',plateForm.value);plates.value=[updated];plateDetail.value={...plateDetail.value,[p.id]:updated};fillPlateForm(updated);uni.showToast({title:'兩地牌資料已更新',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{savingFile.value=false}}
+async function savePlate(p){if(savingFile.value)return;savingFile.value=true;try{const updated=await api('/plate-assets/'+p.id,'PATCH',plateForm.value);plates.value=[updated];plateDetail.value={...plateDetail.value,[p.id]:updated};fillPlateForm(updated);uni.showToast({title:'牌照資料已更新',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{savingFile.value=false}}
 function displayCardData(p){return editingCardId.value===p.id?cardDraft.value:plateDetail.value[p.id]?.cardData||{}}
 function editCard(p){cardDraft.value={...(plateDetail.value[p.id]?.cardData||{})};editingCardId.value=p.id}
 function fieldStatusText(status){return status?.status==='uncertain'?'請核對':status?.status==='failed'?'未能辨識，請手動填寫':''}
 function fieldStatusClass(status){return status?.status==='failed'?'failed':'uncertain'}
-async function saveCard(p){try{const updated=await api('/plate-assets/'+p.id,'PUT',{cardData:cardDraft.value});plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editingCardId.value='';uni.showToast({title:'模擬卡已更新',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}}
+async function saveCard(p){try{const updated=await api('/plate-assets/'+p.id,'PUT',{cardData:cardDraft.value});plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editingCardId.value='';uni.showToast({title:'批文卡內容已更新',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}}
 async function selectedImageData(result){
   // #ifdef H5
   const picked=result.tempFiles?.[0]?.file||result.tempFiles?.[0]
@@ -89,28 +154,38 @@ function mainlandParts(value){const clean=String(value||'').toUpperCase().replac
 function formatHongKong(value){const clean=String(value||'').toUpperCase().replace(/\s+/g,'');return clean.replace(/^([A-Z]{1,2})([0-9]{1,4})$/,'$1 $2')}
 function formatMacau(value){const clean=String(value||'').toUpperCase().replace(/[\s-]/g,'');return clean.replace(/^([A-Z]{2})([0-9]{2})([0-9]{2})$/,'$1-$2-$3')}
 function openSource(sourceId){const source=sources.value.find(s=>s.id===sourceId);if(source)uni.setClipboardData({data:source.url,success:()=>uni.showToast({title:'官方連結已複製',icon:'none'})})}
-async function load(){if(!getUser())return uni.navigateTo({url:'/pages/login/login'});if(creating.value||!plateId)return;try{const [p,v,catalog,mine]=await Promise.all([api('/plate-assets/'+plateId),api('/vehicles'),api('/catalog'),api('/my/plates/'+plateId)]);summary.value=mine;api('/my/rentals').then(list=>{arrangements.value=list.filter(item=>item.plateId===plateId)}).catch(()=>{arrangements.value=[]});plates.value=[p];plateDetail.value={...plateDetail.value,[p.id]:p};vehicles.value=v;sources.value=catalog.sources;fillPlateForm(p);detail.value=Object.fromEntries(await Promise.all(v.map(async item=>[item.id,await api('/vehicles/'+item.id)])));const images={};for(const [key,path] of [['mainland','plate-mainland'],['local','plate-local']])if(p.platePhotos?.[key])images[key]=await privateImage('/plate-assets/'+p.id+'/image/'+path);plateImages.value={[p.id]:images}}catch(e){uni.showToast({title:e.message,icon:'none'})}}
+async function load(){if(!getUser())return uni.navigateTo({url:'/pages/login/login'});if(creating.value||!plateId)return;try{const [p,v,catalog,mine]=await Promise.all([api('/plate-assets/'+plateId),api('/vehicles'),api('/catalog'),api('/my/plates/'+plateId)]);summary.value=mine;api('/my/rentals').then(list=>{arrangements.value=list.filter(item=>item.plateId===plateId)}).catch(()=>{arrangements.value=[]});plates.value=[p];plateDetail.value={...plateDetail.value,[p.id]:p};vehicles.value=v;sources.value=catalog.sources;fillPlateForm(p);detail.value=Object.fromEntries(await Promise.all(v.map(async item=>[item.id,await api('/vehicles/'+item.id)])));const images={};for(const [key,path] of [['mainland','plate-mainland'],['local','plate-local']])if(p.platePhotos?.[key])images[key]=await privateImage('/plate-assets/'+p.id+'/image/'+path);plateImages.value={[p.id]:images}}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
 onLoad(options=>{plateId=options.id||'';creating.value=options.new==='1';if(!creating.value)load()})
 onShow(load)
 import DueDate from '../../components/DueDate.vue'
 import StampMark from '../../components/StampMark.vue'
 </script>
 <style scoped>
-.crossing-card{margin-top:18rpx}.crossing-title{display:block;font-size:28rpx;font-weight:800;color:var(--jade-deep)}.crossing-button{margin-top:22rpx}.crossing-body .ticket-rule{margin:24rpx -27rpx 20rpx}.other-date{display:block;text-align:center;margin-top:16rpx}.crossing-stamp{position:absolute;right:24rpx;top:-30rpx;pointer-events:none}.crossing-card{position:relative}.grow{flex:1;min-width:0}
-.vehicles-page{padding-top:29rpx}.summary-strip{display:flex;align-items:center;justify-content:space-between;background:var(--jade-soft);border-radius:16rpx;color:var(--ink-2);padding:17rpx 21rpx;margin:27rpx 0 20rpx;font-size:22rpx;font-weight:750}.summary-strip strong{font-size:27rpx;color:#1d6e51}.vehicle-block{margin-bottom:30rpx}.vehicle-head{border-radius:22rpx 22rpx 0 0;background:var(--jade-deep);color:#fff;padding:25rpx 29rpx;min-height:166rpx}.vehicle-top{display:flex;align-items:center;justify-content:space-between}.route{font-size:20rpx;color:#c4e0ce;font-weight:700}.vehicle-type{font-size:19rpx;color:#d0e4d5;border:1rpx solid #679580;border-radius:99rpx;padding:4rpx 11rpx}.plate{display:block;font-size:39rpx;font-weight:850;letter-spacing:1rpx;margin:14rpx 0 3rpx}.vehicle-model{display:block;font-size:21rpx;color:#bdd8c8}.record-card{border-radius:0;padding:21rpx 27rpx;margin-bottom:0;border-top:0;box-shadow:none}.record-card:last-of-type{border-radius:0 0 22rpx 22rpx}.record-heading{font-size:25rpx;font-weight:800;margin-bottom:8rpx}.record-row{display:flex;align-items:center;justify-content:space-between;gap:14rpx;border-top:1rpx solid var(--muted-bg);padding:17rpx 0}.record-main{min-width:0;flex:1}.credential-name{display:block;font-size:23rpx;font-weight:750;line-height:1.4}.record-sub{display:block;font-size:19rpx;color:#83978a;margin-top:4rpx}.record-side{text-align:right;flex:none}.date{display:block;font-size:22rpx;font-weight:750}.status{display:block;font-size:19rpx;color:#718679;margin-top:4rpx}.status.warning{color:#ad711e}.record-empty{display:block;border-top:1rpx solid var(--muted-bg);padding:20rpx 0 3rpx;color:var(--ink-3);font-size:21rpx}.compact{padding:20rpx 5rpx}.guidance{padding:21rpx 10rpx 5rpx}.guidance-title{display:block;font-size:22rpx;color:#476958;font-weight:800;margin-bottom:9rpx}.guidance-line{display:flex;align-items:flex-start;gap:9rpx;font-size:21rpx;color:#5f7967;line-height:1.55;margin-top:9rpx}.guidance-line text:nth-child(2){flex:1}.guidance-dot{flex:none;width:7rpx;height:7rpx;border-radius:50%;background:#7eac8c;margin-top:13rpx}.official-link{color:#247b5c;font-weight:750;white-space:nowrap}.guidance-note{display:block;font-size:19rpx;color:#8b9c90;line-height:1.5;margin-top:13rpx}
-.asset-block{background:white;border:1rpx solid #e3eae5;border-radius:22rpx;overflow:hidden;margin:0 0 23rpx;box-shadow:0 8rpx 25rpx #1c493609}.asset-heading{display:flex;align-items:flex-start;justify-content:space-between;background:var(--jade-deep);color:white;padding:24rpx}.asset-route{display:block;color:#c4e0ce;font-size:20rpx}.asset-number{display:block;font-size:32rpx;font-weight:800;margin-top:5rpx}.asset-status{background:#ffffff22;border-radius:30rpx;padding:7rpx 14rpx;font-size:20rpx}.plate-pair{display:flex;flex-wrap:wrap;gap:18rpx;padding:24rpx}.plate-item{flex:1;min-width:0}.plate-label,.scan-label{display:block;font-size:19rpx;color:#728a7d;margin-bottom:9rpx}.physical-plate{position:relative;display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden;box-shadow:0 3rpx 6rpx #0003}.physical-plate.mainland{aspect-ratio:440/140;border-radius:6rpx;background:#231f20;color:#fff}.plate-rim{position:absolute;inset:4rpx;border:2rpx solid #fff;border-radius:4rpx}.plate-slot{position:absolute;width:13rpx;height:5rpx;background:#fff;border-radius:3rpx;z-index:1}.slot-top-left,.slot-bottom-left{left:24%}.slot-top-right,.slot-bottom-right{right:24%}.slot-top-left,.slot-top-right{top:6%}.slot-bottom-left,.slot-bottom-right{bottom:6%}.mainland-letters{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;width:100%;white-space:nowrap;font-family:Arial,'Helvetica Neue',sans-serif;font-size:54rpx;font-weight:800;letter-spacing:-2rpx;line-height:1}.mainland-letters .plate-dot{font-size:34rpx;margin:0 -2rpx;align-self:center}.mainland-letters .plate-serial{letter-spacing:-2rpx}.physical-plate.hongkong{aspect-ratio:520/110;background:#f9f9f5;color:#111;border:1rpx solid #383838;border-radius:2rpx;font-family:Arial,'Helvetica Neue',sans-serif;font-size:48rpx;font-weight:750;letter-spacing:2rpx}.physical-plate.hongkong.rear{background:#ffd400;margin-top:7rpx}.plate-side{display:block;font-size:16rpx;color:#8b998c;margin-top:4rpx}.physical-plate.macau{aspect-ratio:460/100;background:#050505;color:#fff;border:1rpx solid #050505;border-radius:1rpx;font-family:Arial,'Helvetica Neue',sans-serif;font-size:47rpx;font-weight:800;letter-spacing:1rpx}.plate-missing{display:flex;align-items:center;justify-content:center;aspect-ratio:440/140;background:#f3f6f3;border:1rpx dashed #b7c7bb;color:#7d9283;border-radius:7rpx;font-size:19rpx}.plate-disclaimer{width:100%;color:#8b9b8f;font-size:17rpx;margin-top:-8rpx}.asset-facts{display:grid;grid-template-columns:repeat(3,1fr);gap:12rpx;padding:0 24rpx 23rpx}.asset-facts view{min-width:0}.asset-facts text{display:block;color:#7b8f82;font-size:18rpx}.asset-facts strong{display:block;color:#284d3b;font-size:21rpx;margin-top:5rpx;overflow-wrap:anywhere}.rental-strip{background:#f6f2e9;padding:19rpx 24rpx;font-size:20rpx}.rental-strip>text{display:block;font-weight:800;color:#765c36;margin-bottom:8rpx}.rental-strip view{display:flex;justify-content:space-between;gap:8rpx;margin-top:5rpx}.rental-strip view text{color:#8b7759;font-size:18rpx}.card-section{border-top:1rpx solid var(--rule);padding:22rpx 24rpx 26rpx}.section-heading{display:flex;justify-content:space-between;align-items:center;gap:10rpx;margin-bottom:16rpx}.section-heading strong{font-size:23rpx}.section-heading text{font-size:18rpx;color:#829588}.card-scans{display:grid;gap:18rpx}.card-scan{width:100%;display:block;border-radius:13rpx;box-shadow:0 5rpx 15rpx #0002}.scan-empty{font-size:20rpx;color:#7c8e81;line-height:1.5}.vehicle-section-title{display:block;margin:32rpx 0 17rpx}
-.plate-photo{width:100%;display:block;border-radius:7rpx;box-shadow:0 3rpx 6rpx #0003}
-.summary{padding:0 24rpx 28rpx;border-top:1rpx solid var(--rule)}.summary .section-head{margin:30rpx 0 14rpx}.summary .section-title{margin:30rpx 0 14rpx;font-size:27rpx}.summary .list-card{background:var(--paper);border-color:#e6eee8;margin-bottom:12rpx}.summary .actions{margin-bottom:4rpx}.top-card{border-top:0}.grow{flex:1;min-width:0}.actions{display:grid;grid-template-columns:repeat(4,1fr);gap:12rpx}.action{background:#fff;border:1rpx solid #d9e6dc;border-radius:16rpx;padding:20rpx 0;text-align:center;font-size:24rpx;font-weight:800;color:var(--jade)}.action:active{background:#eef6f0}.toggle-edit{margin:22rpx 24rpx 26rpx;color:var(--jade);font-size:23rpx;font-weight:750}
-.arrangement{padding:22rpx 27rpx}.fee-row{display:flex;align-items:center;justify-content:space-between;padding:8rpx 0;font-size:23rpx;color:var(--ink-2)}.drivers{padding:10rpx 27rpx 22rpx}.driver-row{display:flex;align-items:center;justify-content:space-between;padding:16rpx 0;border-bottom:1rpx solid var(--rule)}.driver-name{font-size:26rpx;font-weight:750;color:var(--ink)}.driver-note{display:block;margin-top:14rpx;font-size:21rpx}
+.head{margin-bottom:16px}.head-plates{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.head-sub{margin-top:8px}
+.actions{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:4px}.action{width:auto;padding:0 4px}
+.list{padding:4px 16px}
+.line{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--rule)}.line:last-child{border-bottom:0}
+.line-title{display:block;font-size:var(--fs-h);font-weight:700;line-height:1.4;color:var(--ink)}
+.line-sub{display:block;margin-top:2px;font-size:var(--fs-body);line-height:1.5;color:var(--ink-2)}
+.list>.line-sub{padding:12px 0}
+.more{display:block;padding:12px 0;color:var(--jade);font-size:var(--fs-body);font-weight:700;text-align:center}
+.crossing-card{position:relative;margin-top:12px}.crossing-button{margin-top:16px}.other-date{display:block;text-align:center;padding-top:12px}.crossing-stamp{position:absolute;right:16px;top:-12px;pointer-events:none}
+.approval :deep(.flip-controls){display:none}.flip-switch{margin-top:12px}
+.card-actions{display:flex;gap:8px;margin-top:12px}.card-actions .btn-sm{flex:1}
+.card-editor{margin-top:16px;padding:0 12px 12px;border-radius:var(--r-card);background:var(--paper)}
+.editor-actions{display:flex;gap:8px;margin-top:16px}.editor-actions .btn-sm{flex:1}
+.field-status{margin-left:8px;color:var(--due);font-size:var(--fs-cap);font-weight:700}.field-status.failed{color:var(--overdue)}
+.plate-pair{display:flex;gap:12px}.plate-item{flex:1;min-width:0}
+.plate-label{display:block;font-size:var(--fs-cap);color:var(--ink-3);margin-bottom:8px}
+.plate-photo{width:100%;display:block;border-radius:4px;box-shadow:0 2px 4px rgba(0,0,0,.2)}
+.plate-missing{display:flex;align-items:center;justify-content:center;aspect-ratio:440/140;background:var(--paper);border:1px dashed var(--rule);color:var(--ink-3);border-radius:4px;font-size:var(--fs-cap)}
+.physical-plate.macau{display:flex;align-items:center;justify-content:center;aspect-ratio:460/100;background:#050505;color:#fff;border-radius:2px;font-family:Arial,'Helvetica Neue',sans-serif;font-size:var(--fs-title);font-weight:800;white-space:nowrap}
+.facts{margin-top:16px}
+.edit-file{padding-top:4px}.picker{display:flex;align-items:center;justify-content:space-between}.notes{height:96px}.save-file{margin-top:16px}
+.edit-file>.line-sub{margin-top:12px}
+.fee-row{display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:var(--fs-body);color:var(--ink-2)}
+.guidance{margin-top:16px;padding:12px;border-radius:var(--r-card);background:var(--paper)}
+.guidance-title{margin:0 0 4px;color:var(--ink-3);font-size:var(--fs-meta)}
+.guidance-line{display:flex;align-items:flex-start;gap:12px;padding:4px 0;font-size:var(--fs-body);line-height:1.5;color:var(--ink-2)}
+.go-create{margin-top:16px}
 </style>
-
-<style scoped>
-.field-status{margin-left:8rpx;color:#a26700;font-size:17rpx;font-weight:700}.field-status.failed{color:#a64700}
-.card-hint{display:block;color:#7d8f82;font-size:18rpx;line-height:1.5;margin-top:17rpx}.card-actions{display:flex;gap:12rpx;margin-top:15rpx}.card-action{flex:1;background:#edf4ee;color:#275c43;font-size:20rpx;font-weight:750;border-radius:10rpx}.card-editor{display:grid;gap:12rpx;margin-top:18rpx;padding:18rpx;background:var(--paper);border-radius:13rpx}.card-editor view text{display:block;color:#6d8174;font-size:18rpx;margin-bottom:5rpx}.card-editor input{height:56rpx;border:1rpx solid #cddbd0;border-radius:8rpx;background:white;padding:0 12rpx;font-size:20rpx}.card-editor button{font-size:20rpx;background:var(--jade-deep);color:white}
-</style>
-
-<style scoped>
-.file-form{display:grid;gap:8rpx;background:white;border:1rpx solid #e1e9e3;border-radius:18rpx;padding:22rpx;margin:23rpx 0;box-shadow:0 7rpx 20rpx var(--jade-deep)0b}.file-form.edit-file{margin:0 20rpx 22rpx;box-shadow:none;background:var(--paper)}.form-title{font-size:24rpx;font-weight:800;color:#244d3b;margin-bottom:5rpx}.form-label{font-size:19rpx;font-weight:700;color:#5b7565;margin-top:11rpx}.file-form input,.file-form textarea,.form-picker,.form-readonly{box-sizing:border-box;width:100%;min-height:58rpx;padding:11rpx 13rpx;border:1rpx solid #ccdbd0;border-radius:9rpx;background:#fff;font-size:21rpx;color:#294c3b}.file-form textarea{min-height:100rpx}.form-readonly{background:#f2f6f3;color:#6c8172}.route-options{display:flex;gap:10rpx}.route-options button{margin:0;flex:1;background:#edf3ee;color:#456a55;font-size:21rpx}.route-options button.active{background:#285e48;color:#fff}.save-file{margin:15rpx 0 0;background:#1e6048;color:white;font-size:22rpx;font-weight:800}.save-file[disabled]{opacity:.6}
-</style>
-
-<style scoped>.form-note{display:block;color:#73897a;font-size:18rpx;line-height:1.45;margin-top:8rpx}</style>

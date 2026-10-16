@@ -1,5 +1,5 @@
 <template>
-  <!-- 到期徽章：左側狀態色條＋等寬日期＋「還有／逾期 N 天」（docs/design-system.md 第二節）。 -->
+  <!-- 到期徽章：左側狀態色條＋等寬日期＋「還有／逾期 N 天」（docs/design-system.md 第二節）；全站到期日都用它。 -->
   <view class="due-badge" :class="tone">
     <text class="date num">{{ date || '待錄入' }}</text>
     <text v-if="date" class="left">{{ phrase }}</text>
@@ -18,9 +18,9 @@ const phrase = computed(() => daysLeft.value === null ? '' : daysLeft.value < 0 
 const tone = computed(() => props.level || (!props.date ? 'muted' : daysLeft.value < 0 ? 'overdue' : daysLeft.value <= 30 ? 'due' : 'ok'))
 </script>
 <style scoped>
-.due-badge{display:inline-flex;flex-direction:column;align-items:flex-end;gap:2rpx;padding-right:14rpx;border-right:6rpx solid currentColor}
-.date{font-size:24rpx;font-weight:800;color:var(--ink)}
-.left{font-size:20rpx;font-weight:750}
+.due-badge{flex:none;display:inline-flex;flex-direction:column;align-items:flex-start;gap:2px;padding-left:10px;border-left:3px solid currentColor}
+.date{font-size:var(--fs-body);font-weight:700;line-height:1.4;color:var(--ink)}
+.left{font-size:var(--fs-meta);font-weight:700;line-height:1.4}
 .overdue{color:var(--overdue)}.due{color:var(--due)}.ok{color:var(--ok)}.upcoming{color:var(--ok)}.muted{color:var(--muted)}
 .muted .date{color:var(--ink-3)}
 </style>
