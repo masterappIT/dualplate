@@ -6,6 +6,7 @@
     <StatCard label="待錄入資料" tone="neutral" :value="todayCounts.missing" hint="補上日期或資料" :active="todayTab === 'missing'" @click="choose('missing')" />
     <StatCard label="進行中業務" tone="info" :value="todayCounts.active" hint="未完成工單" :active="todayTab === 'active'" @click="choose('active')" />
   </div>
+  <section v-if="overviewData.rent" class="panel"><div class="panel-head"><div><h2>本月租金 · {{ overviewData.rent.month }}</h2><p>不同幣種分開顯示；逾期應收請在工作隊列登記收款。</p></div></div><div v-for="[key, title] in [['due', '應收'], ['received', '已收'], ['overdue', '逾期']]" :key="key" class="record-row"><strong>{{ title }} {{ overviewData.rent[key].count }} 期</strong><span>{{ moneyByCurrency(overviewData.rent[key].amount) }}</span></div></section>
   <Segmented v-model="dashboardView" :options="[{ value: 'table', label: '表格' }, { value: 'calendar', label: '到期日曆' }]" label="今日工作視圖" />
   <div class="today-visuals"><section class="panel"><div class="panel-head"><div><h2>本週進度</h2><p>本週到期事項已辦／總數</p></div></div><TickRing v-if="weekTotal" :value="weekDone / weekTotal * 100" :display="weekDone" :decimals="0" unit="項" label="已辦" :size="140" /><div v-else class="week-empty-ring">本週沒有<br />到期項目</div><p v-if="weekTotal">{{ weekDone }}／{{ weekTotal }} 項</p></section><section class="panel"><div class="panel-head"><div><h2>到期趨勢</h2><p>未來六個月的到期數量；點月份可篩選。</p></div></div><TrendChart :values="monthlyCounts" :labels="shortMonthLabels" primary-label="到期事項" unit="項" :height="180" @select="selectMonth" /></section></div>
   <p v-if="visualError" role="alert">到期視圖載入失敗：{{ visualError }} <button class="text-button" @click="loadVisuals">重試</button></p>
@@ -20,7 +21,7 @@
       <template #cell-customer="{ row }">{{ row.customerName || row.request?.customer_name || row.customer_name || '—' }}</template>
       <template #cell-due="{ row }"><DueDate v-if="row.ruleCode" :date="row.dueOn" :editable="row.method === 'expiry' && row.ruleCode !== 'approval'" label="到期日" :on-save="value => saveDate(row, value)" /><span v-else>—</span></template>
       <template #cell-status="{ row }"><Tag :tone="row.ruleCode ? ({ danger: 'danger', amber: 'warning', muted: 'neutral' }[tone(row.level)] || 'neutral') : 'info'">{{ row.ruleCode ? label(row.level) : row.request ? '待客戶提供' : row.status }}</Tag><Tag v-if="row.handler === 'outsourced'" tone="warning">外包：{{ row.providerName }}</Tag></template>
-      <template #cell-action="{ row }"><div class="row-actions"><template v-if="row.ruleCode"><button v-if="row.ruleCode === 'crossing_90'" class="text-button" @click="crossingPlate = row.ownerId; crossingOpen = true">已過關</button><button v-else-if="row.ruleCode === 'approval'" class="text-button" @click="openPlateById(row.ownerId)">修改批文卡</button><button v-else-if="row.completable" class="text-button" @click="complete(row, $event)">已辦好</button><button v-if="row.ownerType === 'driver'" class="text-button" @click="openDriverCustomer(row)">查看司機</button><button v-else class="text-button" @click="createRequestFromDeadline(row)">開工單</button></template><button v-else class="text-button" @click="openRequest(row.request || row)">查看工單 →</button></div></template>
+      <template #cell-action="{ row }"><div class="row-actions"><template v-if="row.ruleCode"><button v-if="row.ruleCode === 'rent_overdue'" class="text-button" @click="router.push({ path: '/rentals', query: { contractId: row.contractId, invoiceId: row.invoiceId } })">登記收款</button><template v-else><button v-if="row.ruleCode === 'crossing_90'" class="text-button" @click="crossingPlate = row.ownerId; crossingOpen = true">已過關</button><button v-else-if="row.ruleCode === 'approval'" class="text-button" @click="openPlateById(row.ownerId)">修改批文卡</button><button v-else-if="row.completable" class="text-button" @click="complete(row, $event)">已辦好</button><button v-if="row.ownerType === 'driver'" class="text-button" @click="openDriverCustomer(row)">查看司機</button><button v-else class="text-button" @click="createRequestFromDeadline(row)">開工單</button></template></template><button v-else class="text-button" @click="openRequest(row.request || row)">查看工單 →</button></div></template>
     </DataTable>
   </section>
   <StampMark v-if="stamp" :key="stamp.key" class="stamp-float" :style="{ left: stamp.x + 'px', top: stamp.y + 'px' }" text="已辦好" play />
@@ -32,6 +33,7 @@ import Modal from '../components/ui/Modal.vue'
 import Field from '../components/ui/Field.vue'
 import DateInput from '../components/ui/DateInput.vue'
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import DueHeatGrid from '../components/charts/DueHeatGrid.vue'
 import TickRing from '../components/charts/TickRing.vue'
 import TrendChart from '../components/charts/TrendChart.vue'
@@ -46,8 +48,10 @@ import DataTable from '../components/ui/DataTable.vue'
 import Tag from '../components/ui/Tag.vue'
 import FilterBar from '../components/business/FilterBar.vue'
 import { useAdminStore } from '../store'
-import { api } from '../api'
-const { view, customers, customerTab, openCustomer, todayTab, todayCustomerId, todayOwnership, todayCounts, todayDeadlines, saveTrackedItem, createRequestFromDeadline, openPlateById, openRequest, showSuccess, showError } = useAdminStore()
+import { api, rentMoney } from '../api'
+const { view, customers, customerTab, openCustomer, todayTab, todayCustomerId, todayOwnership, todayCounts, todayDeadlines, overviewData, saveTrackedItem, createRequestFromDeadline, openPlateById, openRequest, showSuccess, showError } = useAdminStore()
+const router = useRouter()
+const moneyByCurrency = amounts => Object.entries(amounts || {}).filter(([, amount]) => amount).map(([currency, amount]) => rentMoney(amount, currency)).join(' · ') || '—'
 function openDriverCustomer(item) { const customer = customers.value.find(entry => entry.id === item.customerId); if (!customer) return showError(new Error('找不到司機所屬客戶')); openCustomer(customer); customerTab.value = 'vehicles' }
 const dashboardView = useViewMode('dashboard', 'table', ['table', 'calendar'], 'table')
 const selectedDate = ref(''), selectedMonth = ref('')

@@ -12,8 +12,8 @@
         {{ customerName(selectedPlate.customer_id) }}
       </p>
     </div>
-    <button v-if="isAdmin" class="button primary" @click="modal = 'rental'">
-      ＋ 登記出租
+    <button v-if="isAdmin" class="button primary" @click="openRental()">
+      ＋ 新增合約
     </button>
   </div>
   <section class="panel">
@@ -93,7 +93,7 @@
         <Field label="內地車牌"><TextInput v-model="plateForm.mainlandPlate" /></Field>
         <Field label="港／澳車牌"><TextInput v-model="plateForm.localPlate" /></Field>
         <Field label="上牌狀態"><Select v-model="plateForm.installationStatus" :options="['待核對', '未上牌', '已上牌']" /></Field>
-        <Field label="使用狀態"><Select v-model="plateForm.usageStatus" :options="[{ value: '待核對', label: '待核對' }, { value: '自用', label: '自用' }, { value: '出租中', label: '出租中（由出租記錄更新）', disabled: true }, { value: '暫停使用', label: '暫停使用' }]" /></Field>
+        <Field label="使用狀態"><Select v-model="plateForm.usageStatus" :options="[{ value: '待核對', label: '待核對' }, { value: '自用', label: '自用' }, { value: '出租中', label: '出租中（由合約推算）', disabled: true }, { value: '暫停使用', label: '暫停使用' }]" /></Field>
         <Field label="綁定車輛"><Select v-model="plateForm.vehicleId" :options="vehicleOptions" /></Field>
         <Field label="批文卡號"><TextInput v-model="plateForm.cardNumber" /></Field>
         <Field label="批文卡有效期"><DateInput v-model="plateForm.cardExpiresOn" label="批文卡有效期" /></Field>
@@ -104,31 +104,25 @@
       <div class="panel-head">
         <div>
           <h2>出租記錄</h2>
-          <p>內部業務記錄，不代表官方轉讓批准</p>
+          <p>合約與收款記錄，不代表官方轉讓批准</p>
         </div>
       </div>
-      <div v-for="r in selectedPlate.rentals" :key="r.id" class="record-row">
+      <div v-for="r in selectedPlate.rentalContracts" :key="r.id" class="record-row">
         <div>
           <strong>{{ r.renter_name }}</strong
           ><small
             >{{ r.renter_vehicle_plate || "承租車牌待補充" }} ·
             {{ r.starts_on || "開始待補充" }} 至
-            {{ r.ends_on || "未定" }}</small
+            {{ r.ends_on || "未定" }} · {{ rentMoney(r.rent_amount, r.currency) }}／期 · {{ r.collection_mode }}</small
           >
         </div>
         <div class="record-right">
           <strong>{{ r.status }}</strong
-          ><button
-            v-if="r.status === '出租中'"
-            class="text-button"
-            @click="endRental(r)"
-          >
-            結束出租
-          </button>
+          ><button class="text-button" @click="openRental(r.id)">查看合約與收款 →</button>
         </div>
       </div>
-      <div v-if="!selectedPlate.rentals?.length" class="empty">
-        尚無出租記錄
+      <div v-if="!selectedPlate.rentalContracts?.length" class="empty">
+        尚無合約，可在頁首新增合約。
       </div>
     </section>
   </div>
@@ -195,6 +189,8 @@
 </template>
 <script setup>
 import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { rentMoney } from '../api'
 import { user } from '../api'
 import ServiceScope from '../components/ui/ServiceScope.vue'
 import CrossingRecords from '../components/ui/CrossingRecords.vue'
@@ -228,10 +224,11 @@ const {
   cardFieldStatus,
   fieldStatusClass,
   uploadCard,
-  endRental,
   showSuccess,
   showError,
 } = useAdminStore();
+const rentalRouter = useRouter()
+function openRental(contractId) { rentalRouter.push({ path: '/rentals', query: contractId ? { contractId } : { plateId: selectedPlate.value.id, new: '1' } }) }
 const isAdmin = user()?.role === 'admin'
 const plateDrivers = ref(null)
 watch(() => selectedPlate.value?.cardData, (current, previous) => { if (current && previous && current !== previous) plateDrivers.value?.load() })
