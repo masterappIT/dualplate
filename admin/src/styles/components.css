@@ -10,6 +10,7 @@
 .field-label { color: var(--ink); font-weight: 600; }
 .field-error { color: var(--status-overdue); font-size: 12px; }
 .input-shell { display: flex; align-items: center; min-height: var(--control-h); border: 1px solid var(--border); border-radius: var(--r-control); background: var(--surface); padding: 0 10px; }
+.input-shell.is-disabled { opacity: .6; cursor: not-allowed; }
 .input-shell.is-invalid { border-color: var(--status-overdue); }
 .input-shell:focus-within { border-color: var(--plate-yellow); outline: 2px solid var(--plate-yellow); outline-offset: 1px; }
 .switch input:focus-visible + .switch-track { outline-color: var(--plate-yellow); }

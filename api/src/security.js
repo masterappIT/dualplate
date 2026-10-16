@@ -137,6 +137,8 @@ export function auditRoutes(req, res, url, user, { json, fail, parseBody }) {
       const problem = passwordProblem(body?.password, account); if (problem) return fail(res, 400, problem), true
       db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hashPassword(body.password), account.id)
       db.prepare('DELETE FROM sessions WHERE user_id=?').run(account.id)
+      if (account.email) clearFailures('customer', account.email)
+      if (account.phone) clearFailures('customer', account.phone)
       return json(res, 200, { ok: true }), true
     })()
   }

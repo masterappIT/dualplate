@@ -99,7 +99,7 @@ body { background: var(--canvas); color: var(--ink); font-family: var(--font-bod
 /* 委託人證件卡（客戶詳情頁首）：深通行綠、防偽底紋、四項數字——與客戶端首頁同一視覺。 */
 .guilloche-panel { position: relative; isolation: isolate; overflow: hidden; }
 .guilloche-panel::before { content: ''; position: absolute; inset: 0; z-index: -1; background: url('./guilloche.svg') repeat; background-size: 360px 180px; opacity: .08; pointer-events: none; }
-.holder-card { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 24px; margin: 8px 0 16px; padding: 20px 24px; border-radius: var(--r-panel); background: var(--jade-deep); color: var(--canvas-ink); }
+.holder-card { display: grid; grid-template-columns: minmax(200px, 1fr) auto minmax(0, max-content); align-items: center; gap: 24px; margin: 8px 0 16px; padding: 20px 24px; border-radius: var(--r-panel); background: var(--jade-deep); color: var(--canvas-ink); }
 .holder-kicker { color: var(--plate-yellow); font-size: 12px; font-weight: 700; letter-spacing: .2em; }
 .holder-main h1 { margin: 4px 0 2px; color: var(--card); font-size: 22px; }
 .holder-main p { margin: 0; color: var(--canvas-secondary); }
@@ -107,12 +107,12 @@ body { background: var(--canvas); color: var(--ink); font-family: var(--font-bod
 .holder-counts > div { padding: 0 20px; border-left: 1px solid var(--canvas-line); text-align: center; }
 .holder-counts dt { color: var(--canvas-secondary); font-size: 12px; }
 .holder-counts dd { margin: 2px 0 0; color: var(--card); font-size: 22px; font-weight: 700; }
-.holder-actions { display: flex; gap: 8px; }
+.holder-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .button.on-dark { background: transparent; border-color: var(--canvas-line); color: var(--card); }
 .button.on-dark option { color: var(--ink); }
 .stat-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
 .num { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
-@media (max-width: 900px) { .holder-card { grid-template-columns: 1fr; gap: 16px; }.holder-counts > div:first-child { border-left: 0; padding-left: 0; }.stat-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .holder-card { grid-template-columns: 1fr; gap: 16px; }.holder-actions { justify-content: flex-start; }.holder-counts > div:first-child { border-left: 0; padding-left: 0; }.stat-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* TextInput 外框已有邊線；頁面通用輸入框樣式不可再套在它內部（避免雙重邊框）。 */
 .panel .input-shell input, .panel .input-shell textarea { min-height: 0; padding: 0; border: 0; background: transparent; }
 /* 批文卡編輯欄位：標籤一律在輸入框上方，兩欄對齊。 */

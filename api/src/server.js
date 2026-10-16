@@ -475,6 +475,35 @@ export const server = http.createServer(async (req, res) => {
       return json(res, 201, one('SELECT * FROM customers WHERE id=?', customerId))
     }
     const customerMatch = path.match(/^\/api\/customers\/([^/]+)$/)
+    if (customerMatch && req.method === 'PATCH') {
+      if (user.role !== 'admin') return fail(res, 403, '無權限')
+      const customer = one('SELECT * FROM customers WHERE id=? AND tenant_id=?', customerMatch[1], user.tenant_id)
+      if (!customer) return fail(res, 404, '客戶不存在')
+      let body
+      try { body = await parseBody(req) } catch { return fail(res, 400, '內容無效') }
+      const has = key => Object.hasOwn(body, key)
+      let name = customer.name, kind = customer.kind, phone = customer.phone
+      if (has('name')) {
+        if (typeof body.name !== 'string') return fail(res, 400, '內容無效')
+        name = body.name.trim()
+        if (!name) return fail(res, 400, '請填寫客戶名稱')
+        if (name.length > 120) return fail(res, 400, '客戶名稱不可超過 120 個字元')
+        if (one('SELECT id FROM customers WHERE tenant_id=? AND name=? AND id<>?', user.tenant_id, name, customer.id)) return fail(res, 409, '已有同名客戶')
+      }
+      if (has('kind')) {
+        if (!['個人', '公司'].includes(body.kind)) return fail(res, 400, '客戶類型無效')
+        if (customer.is_self && body.kind !== customer.kind) return fail(res, 409, '本公司（自有）的類型不可更改')
+        kind = body.kind
+      }
+      if (has('phone')) {
+        if (typeof body.phone !== 'string') return fail(res, 400, '內容無效')
+        phone = body.phone.trim()
+        if (phone.length > 40) return fail(res, 400, '聯絡電話不可超過 40 個字元')
+        phone ||= null
+      }
+      db.prepare('UPDATE customers SET name=?,kind=?,phone=? WHERE id=? AND tenant_id=?').run(name, kind, phone, customer.id, user.tenant_id)
+      return json(res, 200, one('SELECT * FROM customers WHERE id=? AND tenant_id=?', customer.id, user.tenant_id))
+    }
     if (customerMatch && req.method === 'DELETE') {
       if (user.role !== 'admin') return fail(res, 403, '無權限')
       const customer = one('SELECT * FROM customers WHERE id=? AND tenant_id=?', customerMatch[1], user.tenant_id)
