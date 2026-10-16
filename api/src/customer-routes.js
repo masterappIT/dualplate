@@ -2,6 +2,7 @@ import { computeDeadlines } from './rules.js'
 import { plateFacts } from './plate-facts.js'
 import { addCrossing, crossingSummary, setReminder } from './crossings.js'
 import { scopeMap } from './entrustment.js'
+import { deadlineNotices } from './client-portal.js'
 import { services, planFor } from './catalog.js'
 
 // Customer-facing summaries for the client app. Customers only see their own records, never
@@ -32,7 +33,7 @@ export async function customerRoutes(req, res, url, user, h) {
   const crossingPost = req.method === 'POST' && /^\/api\/my\/plates\/[^/]+\/crossings$/.test(path)
   const reminderPut = req.method === 'PUT' && /^\/api\/my\/plates\/[^/]+\/crossing-reminder$/.test(path)
   if (req.method !== 'GET' && !crossingPost && !reminderPut) { fail(res, 405, '不支援此操作'); return true }
-  const customer = one('SELECT id,name,tenant_id FROM customers WHERE id=? AND tenant_id=?', user.customer_id, user.tenant_id)
+  const customer = one('SELECT id,name,tenant_id,advisor_name,advisor_phone,advisor_wechat FROM customers WHERE id=? AND tenant_id=?', user.customer_id, user.tenant_id)
   if (!customer) { fail(res, 404, '客戶不存在'); return true }
 
   const plates = query("SELECT * FROM plate_assets WHERE customer_id=? AND card_number IS NOT NULL AND TRIM(card_number)<>'' ORDER BY created_at DESC", customer.id)
@@ -89,7 +90,11 @@ export async function customerRoutes(req, res, url, user, h) {
       ...waiting.map(item => ({ kind: 'task', requestId: item.request_id, title: item.title, subtitle: [item.mainland_plate, item.request_title].filter(Boolean).join(' · ') })),
       ...requests.filter(item => item.status === '待客戶配合' && !waiting.some(task => task.request_id === item.id)).map(item => ({ kind: 'request', requestId: item.id, title: item.stage, subtitle: [item.mainland_plate, item.title].filter(Boolean).join(' · ') }))
     ]
+    deadlineNotices(customer, visible(all))
+    const unread = one('SELECT COUNT(*) count FROM notifications WHERE customer_id=? AND tenant_id=? AND read_at IS NULL', customer.id, customer.tenant_id).count
     return json(res, 200, {
+      unreadNotifications: unread,
+      advisor: { name: customer.advisor_name || '', phone: customer.advisor_phone || '', wechat: customer.advisor_wechat || '' },
       customerName: customer.name,
       counts: { pending: summaries.filter(item => item.health === 'pending').length, ok: summaries.filter(item => item.health === 'ok').length, due: summaries.filter(item => item.health === 'due').length, overdue: summaries.filter(item => item.health === 'overdue').length },
       plates: summaries,

@@ -10,6 +10,7 @@ import { computeDeadlines } from './rules.js'
 import { plateFacts } from './plate-facts.js'
 import { addCrossing, deleteCrossing, crossingSummary, setReminder } from './crossings.js'
 import { entrustmentRoutes } from './entrustment-routes.js'
+import { portalRoutes, publicPortalRoutes } from './client-portal.js'
 import { workOrderRoutes } from './work-order-routes.js'
 
 const port = Number(process.env.PORT || 4100)
@@ -121,13 +122,16 @@ export const server = http.createServer(async (req, res) => {
     }
     if (path === '/api/login' && req.method === 'POST') {
       const body = await parseBody(req)
-      const account = one("SELECT * FROM users WHERE role='customer' AND email=?", clean(body.email, 160).toLowerCase())
+      // 客戶可用電郵或手機號碼登入（第 15 輪）
+      const login = clean(body.email ?? body.phone ?? body.login, 160)
+      const account = login.includes('@') ? one("SELECT * FROM users WHERE role='customer' AND active=1 AND email=?", login.toLowerCase()) : one("SELECT * FROM users WHERE role='customer' AND active=1 AND phone=?", login.replace(/[\s-]/g, ''))
       if (!account || !verifyPassword(String(body.password || ''), account.password_hash)) return fail(res, 401, '帳號或密碼不正確')
       const token = randomBytes(32).toString('hex')
       const expires = new Date(Date.now() + 7 * 86400000).toISOString()
       db.prepare('INSERT INTO sessions VALUES (?,?,?)').run(token, account.id, expires)
       return json(res, 200, { token, user: { id: account.id, name: account.name, email: account.email, role: account.role, customerId: account.customer_id } })
     }
+    if (await publicPortalRoutes(req, res, url, { json, fail, parseBody })) return
     const user = auth(req)
     if (!user) return fail(res, 401, '請先登入')
     if (path === '/api/me' && req.method === 'GET') return json(res, 200, { id: user.id, name: user.name, email: user.email, role: user.role, customerId: user.customer_id })
@@ -135,6 +139,7 @@ export const server = http.createServer(async (req, res) => {
     if (await phase1Routes(req, res, url, user, { json, fail, parseBody, canAccessCustomer, vehicleFor, plateFor, query, one, clean })) return
     if (await entrustmentRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await workOrderRoutes(req, res, url, user, { json, fail, parseBody })) return
+    if (await portalRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await customerRoutes(req, res, url, user, { json, fail, query, one, plateFor, parseBody })) return
     if (path === '/api/import/plates' && req.method === 'POST') {
       if (user.role !== 'admin') return fail(res, 403, '無權限')
@@ -456,12 +461,16 @@ export const server = http.createServer(async (req, res) => {
     if (path === '/api/customer-users' && req.method === 'POST') {
       if (user.role !== 'admin') return fail(res, 403, '無權限')
       const body = await parseBody(req)
-      if (!required(body, ['customerId', 'name', 'email', 'password'])) return fail(res, 400, '資料不完整')
+      if (!required(body, ['customerId', 'name', 'password']) || !(required(body, ['email']) || required(body, ['phone']))) return fail(res, 400, '請填寫姓名、密碼，以及電郵或手機號碼')
+      const phone = body.phone ? clean(body.phone, 30).replace(/[\s-]/g, '') : null
+      if (phone && !/^\+?\d{8,15}$/.test(phone)) return fail(res, 400, '手機號碼格式無效')
+      if (phone && one('SELECT id FROM users WHERE phone=?', phone)) return fail(res, 409, '這個手機號碼已被使用')
+      if (body.email && one('SELECT id FROM users WHERE email=?', clean(body.email, 160).toLowerCase())) return fail(res, 409, '這個電郵已被使用')
       if (!canAccessCustomer(user, body.customerId)) return fail(res, 404, '客戶不存在')
       if (one('SELECT is_self FROM customers WHERE id=?', body.customerId)?.is_self) return fail(res, 409, '本公司（自有）不開通客戶端登入')
       if (body.password.length < 12) return fail(res, 400, '密碼至少 12 字元')
       const userId = id()
-      db.prepare('INSERT INTO users(id,role,name,email,password_hash,customer_id,tenant_id) VALUES (?,?,?,?,?,?,?)').run(userId, 'customer', clean(body.name, 100), clean(body.email, 160).toLowerCase(), hashPassword(body.password), body.customerId, user.tenant_id)
+      db.prepare('INSERT INTO users(id,role,name,email,password_hash,customer_id,tenant_id,phone) VALUES (?,?,?,?,?,?,?,?)').run(userId, 'customer', clean(body.name, 100), body.email ? clean(body.email, 160).toLowerCase() : `${phone}@phone.invalid`, hashPassword(body.password), body.customerId, user.tenant_id, phone)
       return json(res, 201, { id: userId })
     }
     if (path === '/api/vehicles' && req.method === 'GET') {

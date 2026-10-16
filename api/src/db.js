@@ -151,6 +151,18 @@ addColumn('rules', 'customer_visible', 'INTEGER NOT NULL DEFAULT 1')
 addColumn('rules', 'service', 'TEXT')
 // 90-day crossing reminders are opt-in per plate: many plates cross often and need no reminder.
 addColumn('plate_assets', 'crossing_reminder', 'INTEGER NOT NULL DEFAULT 0')
+// 客戶端補強（第 15 輪）：顧問聯絡、手機號碼登入、微信綁定、上傳文件、站內通知
+addColumn('customers', 'advisor_name', 'TEXT')
+addColumn('customers', 'advisor_phone', 'TEXT')
+addColumn('customers', 'advisor_wechat', 'TEXT')
+addColumn('users', 'phone', 'TEXT')
+addColumn('users', 'wechat_openid', 'TEXT')
+db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS users_phone_unique ON users(phone) WHERE phone IS NOT NULL AND phone<>'';
+CREATE UNIQUE INDEX IF NOT EXISTS users_openid_unique ON users(wechat_openid) WHERE wechat_openid IS NOT NULL;
+CREATE TABLE IF NOT EXISTS wechat_bind_codes(code TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT);
+CREATE TABLE IF NOT EXISTS request_attachments(id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, request_id TEXT NOT NULL, task_id TEXT, uploaded_by TEXT, file_name TEXT NOT NULL, mime TEXT NOT NULL, size INTEGER NOT NULL, data BLOB NOT NULL, status TEXT NOT NULL DEFAULT '待確認', review_note TEXT, reviewed_by TEXT, reviewed_at TEXT, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS notifications(id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, customer_id TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT, link TEXT, dedupe_key TEXT, read_at TEXT, created_at TEXT NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS notifications_dedupe ON notifications(customer_id, dedupe_key) WHERE dedupe_key IS NOT NULL`)
 addColumn('customers', 'is_self', 'INTEGER NOT NULL DEFAULT 0')
 // Entrustment per company / plate and service, with history: a change ends the current row and adds a new one.
 db.exec(`CREATE TABLE IF NOT EXISTS service_scopes(id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, owner_type TEXT NOT NULL, owner_id TEXT NOT NULL, service TEXT NOT NULL, handler TEXT NOT NULL, provider_name TEXT, started_on TEXT NOT NULL, ended_on TEXT, notes TEXT, updated_by TEXT, updated_at TEXT NOT NULL);

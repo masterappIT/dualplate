@@ -1,5 +1,6 @@
 import { db, id, now, hashPassword } from './db.js'
 import { services, planFor } from './catalog.js'
+import { notify } from './client-portal.js'
 
 const statuses = ['待開始', '進行中', '待客戶提供', '已完成', '已取消']
 const taskStatuses = ['待辦', '進行中', '已完成', '不適用']
@@ -31,11 +32,18 @@ function nextStatus(requestId, currentStatus) {
   return next?.owner === 'client' ? '待客戶提供' : currentStatus === '待開始' && !progressed ? '待開始' : '進行中'
 }
 function taskDays(steps) { return steps.reduce((total, step) => total + (Number.isInteger(step.days) ? step.days : 0), 0) }
+// 工單狀態改變時通知客戶（每張工單每種狀態只通知一次）
+const customerWords = { '進行中': '辦理中', '待客戶提供': '需要你提供資料', '已完成': '已完成', '已取消': '已取消' }
+function notifyStatus(requestId, status) {
+  const request = db.prepare('SELECT r.id,r.title,r.customer_id,c.tenant_id FROM requests r JOIN customers c ON c.id=r.customer_id WHERE r.id=?').get(requestId)
+  if (!request || !customerWords[status]) return
+  notify({ tenantId: request.tenant_id, customerId: request.customer_id, kind: 'request', title: `${request.title}：${customerWords[status]}`, body: status === '待客戶提供' ? '請查看需要提供的資料並上傳。' : '', link: `/pages/request-detail/request-detail?id=${request.id}`, dedupeKey: `request:${request.id}:${status}` })
+}
 function updateRequestStatus(requestId) {
   const request = db.prepare('SELECT status FROM requests WHERE id=?').get(requestId)
   if (!request || ['已完成', '已取消'].includes(request.status)) return request?.status
   const status = nextStatus(requestId, request.status)
-  if (status !== request.status) db.prepare('UPDATE requests SET status=?,updated_at=? WHERE id=?').run(status, now(), requestId)
+  if (status !== request.status) { db.prepare('UPDATE requests SET status=?,updated_at=? WHERE id=?').run(status, now(), requestId); notifyStatus(requestId, status) }
   return status
 }
 function ensureScope(user, request) { return request && request.customer_id && customerFor(user.tenant_id, request.customer_id) ? request : null }
@@ -203,6 +211,7 @@ export async function workOrderRoutes(req, res, url, user, h) {
     const nextStatusValue = body.status || request.status
     db.prepare('UPDATE requests SET status=?,stage=COALESCE(?,stage),assignee_id=COALESCE(?,assignee_id),due_on=COALESCE(?,due_on),priority=COALESCE(?,priority),completed_at=?,cancelled_reason=?,updated_at=? WHERE id=?').run(nextStatusValue, body.stage || null, body.assigneeId || null, body.dueOn || null, body.priority || null, nextStatusValue === '已完成' ? now() : null, nextStatusValue === '已取消' ? clean(body.cancelledReason, 500) : null, now(), request.id)
     db.prepare('INSERT INTO activities VALUES (?,?,?,?,?,?)').run(id(), request.id, user.id, 'status', `${nextStatusValue}${body.note ? ` · ${clean(body.note, 1000)}` : ''}`, now())
+    if (nextStatusValue !== request.status) notifyStatus(request.id, nextStatusValue)
     return json(res, 200, requestFor(tenant, request.id)), true
   }
   if (taskMatch && method === 'PATCH') {
