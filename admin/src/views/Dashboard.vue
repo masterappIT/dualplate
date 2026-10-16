@@ -6,9 +6,14 @@
     <StatCard label="待錄入資料" tone="neutral" :value="todayCounts.missing" hint="補上日期或資料" :active="todayTab === 'missing'" @click="choose('missing')" />
     <StatCard label="進行中業務" tone="info" :value="todayCounts.active" hint="未完成工單" :active="todayTab === 'active'" @click="choose('active')" />
   </div>
+  <Segmented v-model="dashboardView" :options="[{ value: 'table', label: '表格' }, { value: 'calendar', label: '到期日曆' }]" label="今日工作視圖" />
+  <div class="today-visuals"><section class="panel"><div class="panel-head"><div><h2>本週進度</h2><p>本週到期事項已辦／總數</p></div></div><TickRing v-if="weekTotal" :value="weekDone / weekTotal * 100" :display="weekDone" :decimals="0" unit="項" label="已辦" :size="140" /><div v-else class="week-empty-ring">本週沒有<br />到期項目</div><p v-if="weekTotal">{{ weekDone }}／{{ weekTotal }} 項</p></section><section class="panel"><div class="panel-head"><div><h2>到期趨勢</h2><p>未來六個月的到期數量；點月份可篩選。</p></div></div><TrendChart :values="monthlyCounts" :labels="shortMonthLabels" primary-label="到期事項" unit="項" :height="180" @select="selectMonth" /></section></div>
+  <p v-if="visualError" role="alert">到期視圖載入失敗：{{ visualError }} <button class="text-button" @click="loadVisuals">重試</button></p>
+  <DueHeatGrid v-if="dashboardView === 'calendar'" :deadlines="allDeadlines" @date="selectDate" @overdue="selectOverdue" />
   <section class="panel">
     <div class="panel-head"><div><h2>工作隊列</h2><p>日期可直接錄入；批文卡有效期請回到批文卡修改。</p></div></div>
     <FilterBar><Segmented v-model="todayTab" :options="tabs" label="工作隊列分類" /><label>來源<select v-model="todayOwnership"><option value="all">全部</option><option value="client">客戶的</option><option value="self">自有的</option></select></label><label>客戶<select v-model="todayCustomerId"><option value="">全部客戶</option><option v-for="customer in customers" :key="customer.id" :value="customer.id">{{ customer.name }}</option></select></label><label>狀態<select v-model="todayStatus"><option value="">全部狀態</option><option value="overdue">已逾期</option><option value="due">需處理</option><option value="missing">待錄入</option><option value="待開始">待開始</option><option value="進行中">進行中</option><option value="待客戶提供">待客戶提供</option></select></label></FilterBar>
+    <p v-if="selectedDate || selectedMonth" class="date-filter">到期篩選：{{ selectedDate || selectedMonth }} <button class="text-button" @click="selectedDate = ''; selectedMonth = ''">清除</button></p>
     <DataTable :columns="columns" :data="visibleRows" row-key="_key" :min-width="880" empty-text="目前沒有符合條件的工作，請調整篩選或新增工單">
       <template #cell-title="{ row }"><strong>{{ row.ruleCode ? row.name : row.title }}</strong><small v-if="row.request">{{ row.request.title }}</small><small v-else-if="!row.ruleCode">{{ row.stage }}</small></template>
       <template #cell-owner="{ row }"><PlateChip v-if="row.ruleCode && row.ownerType === 'plate'" :plate="row.ownerLabel" :route="row.route" /><span v-else>{{ row.ruleCode ? row.ownerLabel : row.request?.title || '工單' }}</span></template>
@@ -26,7 +31,11 @@ import StampMark from '../components/ui/StampMark.vue'
 import Modal from '../components/ui/Modal.vue'
 import Field from '../components/ui/Field.vue'
 import DateInput from '../components/ui/DateInput.vue'
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import DueHeatGrid from '../components/charts/DueHeatGrid.vue'
+import TickRing from '../components/charts/TickRing.vue'
+import TrendChart from '../components/charts/TrendChart.vue'
+import { useViewMode } from '../composables/view'
 import StatCard from '../components/ui/StatCard.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Button from '../components/ui/Button.vue'
@@ -39,11 +48,36 @@ import FilterBar from '../components/business/FilterBar.vue'
 import { useAdminStore } from '../store'
 import { api } from '../api'
 const { view, customers, todayTab, todayCustomerId, todayOwnership, todayCounts, todayDeadlines, saveTrackedItem, createRequestFromDeadline, openPlateById, openRequest, showSuccess, showError } = useAdminStore()
+const dashboardView = useViewMode('dashboard', 'table', ['table', 'calendar'], 'table')
+const selectedDate = ref(''), selectedMonth = ref('')
+const yearDeadlines = ref([])
+const weeklyProgress = ref({ done: 0, total: 0 })
+const visualError = ref('')
+async function loadVisuals() {
+  const [overview, progress] = await Promise.allSettled([api('/overview?days=365'), api('/views/weekly-progress')])
+  if (overview.status === 'fulfilled') yearDeadlines.value = overview.value.deadlines
+  if (progress.status === 'fulfilled') weeklyProgress.value = progress.value
+  visualError.value = [overview, progress].filter(result => result.status === 'rejected').map(result => result.reason.message).join('；')
+}
+onMounted(loadVisuals)
+const allDeadlines = computed(() => yearDeadlines.value)
+const weekTotal = computed(() => weeklyProgress.value.total)
+const weekDone = computed(() => weeklyProgress.value.done)
+const monthLabels = Array.from({ length: 6 }, (_, index) => { const date = new Date(); date.setMonth(date.getMonth() + index); return date.toLocaleDateString('zh-HK', { year: 'numeric', month: '2-digit' }) })
+const shortMonthLabels = Array.from({ length: 6 }, (_, index) => { const date = new Date(); date.setMonth(date.getMonth() + index); return `${date.getMonth() + 1}月${date.getMonth() === 0 ? ` ${date.getFullYear()}` : ''}` })
+const monthlyCounts = computed(() => monthLabels.map(month => allDeadlines.value.filter(item => item.dueOn && new Date(item.dueOn).toLocaleDateString('zh-HK', { year: 'numeric', month: '2-digit' }) === month).length))
+function selectDate(date) { selectedDate.value = date; selectedMonth.value = ''; todayTab.value = 'due' }
+function selectOverdue() { selectedDate.value = ''; selectedMonth.value = ''; todayStatus.value = 'overdue'; todayTab.value = 'due' }
+function selectMonth(index) { if (typeof index !== 'number') return; selectedMonth.value = monthLabels[index]; selectedDate.value = ''; todayTab.value = 'due' }
 const crossingOpen = ref(false), crossingPlate = ref(''), crossedOn = ref(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Hong_Kong' })), crossingBusy = ref(false)
 async function recordCrossing() { crossingBusy.value = true; try { await api(`/plates/${crossingPlate.value}/crossings`, 'POST', { crossedOn: crossedOn.value }); crossingOpen.value = false; await useAdminStore().refresh(); showSuccess('已記錄過關') } catch (error) { showError(error) } finally { crossingBusy.value = false } }
 const todayStatus = ref('')
 function choose(tab, status = '') { todayTab.value = tab; todayStatus.value = status }
-const visibleRows = computed(() => todayDeadlines.value.filter(item => !todayStatus.value || (item.ruleCode ? item.level : item.status) === todayStatus.value).map((item, index) => ({ ...item, _key: `${item.id || item.ruleCode || 'row'}:${item.ownerId || index}` })))
+const visibleRows = computed(() => {
+  const selectingDate = Boolean(selectedDate.value || selectedMonth.value)
+  const source = selectingDate ? allDeadlines.value.filter(item => item.handler !== 'client' && (todayOwnership.value === 'all' || Boolean(customers.value.find(customer => customer.id === item.customerId)?.is_self) === (todayOwnership.value === 'self')) && (!todayCustomerId.value || item.customerId === todayCustomerId.value)) : todayDeadlines.value
+  return source.filter(item => (!todayStatus.value || selectingDate || (item.ruleCode ? item.level : item.status) === todayStatus.value) && (!selectedDate.value || item.dueOn?.slice(0, 10) === selectedDate.value) && (!selectedMonth.value || (item.dueOn && new Date(item.dueOn).toLocaleDateString('zh-HK', { year: 'numeric', month: '2-digit' }) === selectedMonth.value))).map((item, index) => ({ ...item, _key: `${item.id || item.ruleCode || 'row'}:${item.ownerId || index}` }))
+})
 const columns = [{ key: 'title', title: '事項', minWidth: 160 }, { key: 'owner', title: '對象', minWidth: 130 }, { key: 'customer', title: '客戶', minWidth: 120 }, { key: 'due', title: '到期', minWidth: 140, align: 'right' }, { key: 'status', title: '狀態', minWidth: 80 }, { key: 'action', title: '操作', className: 'col-actions', minWidth: 150 }]
 const tabs = [{ value: 'due', label: '到期待辦' }, { value: 'active', label: '進行中業務' }, { value: 'missing', label: '待錄入' }, { value: 'customer', label: '待客戶提供' }]
 const label = level => ({ overdue: '已逾期', due: '需處理', missing: '待錄入' }[level] || level)

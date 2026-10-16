@@ -7,6 +7,7 @@ import './styles/materials.css'
 import './styles/components.css'
 import './styles/layout.css'
 import './styles/pages.css'
+import './styles/dynamic.css'
 import { installPressFeedback, installRipple } from './composables/motion'
 createApp(App).use(router).mount('#app')
 installPressFeedback()

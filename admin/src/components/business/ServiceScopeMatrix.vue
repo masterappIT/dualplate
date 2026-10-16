@@ -6,7 +6,7 @@ import Tag from '../ui/Tag.vue'
 const props = defineProps({ rows: { type: Array, required: true }, services: { type: Array, required: true }, pending: { type: Object, required: true }, isSelf: Boolean, saving: Boolean })
 const emit = defineEmits(['change'])
 const hoverRow = ref(''), hoverColumn = ref('')
-const choices = [{ value: 'us', label: '我們做', tone: 'ok' }, { value: 'outsourced', label: '外包', tone: 'warning' }, { value: 'client', label: '客戶自理', tone: 'neutral' }]
+const choices = [{ value: 'us', label: '我們做', tone: 'ok' }, { value: 'outsourced', label: '外包', tone: 'info' }, { value: 'client', label: '客戶自理', tone: 'neutral' }]
 function state(row, service) { return props.pending[`${row.type}:${row.id}:${service}`]?.handler || row.services.find(item => item.service === service)?.handler }
 function cycle(row, service) {
   const available = props.isSelf ? choices.slice(0, 2) : choices

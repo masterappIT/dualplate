@@ -5,13 +5,14 @@ import { services, sources, inspectionGuidance, planFor } from './catalog.js'
 import { cardData, cleanCard, recognizeCard } from './card.js'
 import { phase1Routes } from './phase1-routes.js'
 import { customerRoutes, requestStatus } from './customer-routes.js'
-import { parseCsv, requiredHeaders } from './plate-import.js'
+import { parseCsv, crossingPorts } from './plate-import.js'
 import { computeDeadlines } from './rules.js'
 import { plateFacts } from './plate-facts.js'
 import { addCrossing, deleteCrossing, crossingSummary, setReminder } from './crossings.js'
 import { entrustmentRoutes } from './entrustment-routes.js'
 import { portalRoutes, publicPortalRoutes } from './client-portal.js'
 import { workOrderRoutes } from './work-order-routes.js'
+import { viewRoutes } from './view-routes.js'
 
 const port = Number(process.env.PORT || 4100)
 const allowedOrigins = new Set((process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174').split(','))
@@ -139,6 +140,7 @@ export const server = http.createServer(async (req, res) => {
     if (await phase1Routes(req, res, url, user, { json, fail, parseBody, canAccessCustomer, vehicleFor, plateFor, query, one, clean })) return
     if (await entrustmentRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await workOrderRoutes(req, res, url, user, { json, fail, parseBody })) return
+    if (viewRoutes(req, res, url, user, { json, fail })) return
     if (await portalRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await customerRoutes(req, res, url, user, { json, fail, query, one, plateFor, parseBody })) return
     if (path === '/api/import/plates' && req.method === 'POST') {
@@ -162,6 +164,7 @@ export const server = http.createServer(async (req, res) => {
         else if (customerMatches.length > 1) errors.push('客戶名稱不唯一，請先整理客戶資料')
         if (!['粵港', '粵澳'].includes(value['路線'])) errors.push('路線必須是粵港或粵澳')
         if (!value['批文卡號']) errors.push('批文卡號不可為空')
+        if (value['口岸'] && !crossingPorts.includes(value['口岸'])) errors.push('未知口岸名稱')
         for (const header of ['批文到期', 'CRP／通行證到期']) {
           const normalized = normalizeImportDate(value[header])
           if (normalized === null) errors.push(`${header}格式錯誤，請使用 YYYY-MM-DD，例如 2026-11-20`)
@@ -230,9 +233,9 @@ export const server = http.createServer(async (req, res) => {
             const importedCard = cleanCard({ ...oldCard, ...Object.fromEntries(Object.entries(incomingCard).filter(([, entry]) => entry)) })
             const plateId = current?.id || id()
             if (current) {
-              db.prepare('UPDATE plate_assets SET mainland_plate=?,local_plate=?,card_expires_on=?,group_id=?,card_data=?,updated_at=? WHERE id=?').run(value['內地車牌'] || current.mainland_plate, value['港澳車牌'] || current.local_plate, value['批文到期'] || current.card_expires_on, groupId || current.group_id, JSON.stringify(importedCard), now(), plateId)
+              db.prepare('UPDATE plate_assets SET mainland_plate=?,local_plate=?,card_expires_on=?,group_id=?,card_data=?,port=?,indicator_category=?,updated_at=? WHERE id=?').run(value['內地車牌'] || current.mainland_plate, value['港澳車牌'] || current.local_plate, value['批文到期'] || current.card_expires_on, groupId || current.group_id, JSON.stringify(importedCard), value['口岸'] || current.port, value['指標類別'] || current.indicator_category, now(), plateId)
             } else {
-              db.prepare('INSERT INTO plate_assets(id,customer_id,route,mainland_plate,local_plate,card_number,card_expires_on,group_id,usage_status,installation_status,notes,created_at,updated_at,card_data,card_status,card_updated_by,card_updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(plateId, row.customerId, value['路線'], value['內地車牌'] || null, value['港澳車牌'] || null, value['批文卡號'], value['批文到期'] || null, groupId || null, '待核對', '待核對', '', now(), now(), JSON.stringify(importedCard), '待核對', user.name, now())
+              db.prepare('INSERT INTO plate_assets(id,customer_id,route,mainland_plate,local_plate,card_number,card_expires_on,group_id,usage_status,installation_status,notes,created_at,updated_at,card_data,card_status,card_updated_by,card_updated_at,port,indicator_category) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(plateId, row.customerId, value['路線'], value['內地車牌'] || null, value['港澳車牌'] || null, value['批文卡號'], value['批文到期'] || null, groupId || null, '待核對', '待核對', '', now(), now(), JSON.stringify(importedCard), '待核對', user.name, now(), value['口岸'] || null, value['指標類別'] || null)
             }
             const code = value['路線'] === '粵港' ? 'hk_crp' : 'mo_permit'
             if (value['CRP／通行證到期']) db.prepare('INSERT INTO tracked_items(tenant_id,owner_type,owner_id,code,expires_on,notes,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(owner_type,owner_id,code) DO UPDATE SET expires_on=excluded.expires_on,notes=excluded.notes,updated_by=excluded.updated_by,updated_at=excluded.updated_at').run(user.tenant_id, 'plate', plateId, code, value['CRP／通行證到期'], 'CSV 匯入', user.id, now())
@@ -244,7 +247,7 @@ export const server = http.createServer(async (req, res) => {
         }
         importPreviews.delete(previewId)
       }
-      return json(res, 200, { dryRun, previewKey, headers: requiredHeaders, rows: rows.map(({ key, ...row }) => row), summary })
+      return json(res, 200, { dryRun, previewKey, headers: parsed.headers, rows: rows.map(({ key, ...row }) => row), summary })
     }
     if (path === '/api/card-recognize' && req.method === 'POST') {
       const body = await parseBody(req)
@@ -346,6 +349,7 @@ export const server = http.createServer(async (req, res) => {
       const groupId = b.groupId === undefined ? old.group_id : b.groupId || null
       if (groupId) { const parent = one('SELECT * FROM company_groups WHERE id=? AND tenant_id=?', groupId, user.tenant_id); if (!parent) return fail(res, 404, '公司組不存在'); if (parent.customer_id !== old.customer_id) return fail(res, 400, '公司組與客戶不符') }
       if (user.role !== 'admin' && (b.groupId !== undefined || b.indicatorCategory !== undefined || b.port !== undefined)) return fail(res, 403, '指標類別、口岸和公司組須由專員維護')
+      if (b.port !== undefined && b.port !== null && b.port !== '' && !crossingPorts.includes(b.port)) return fail(res, 400, '未知口岸名稱')
       if (usage === '出租中' && !one("SELECT id FROM plate_rentals WHERE plate_asset_id=? AND status='出租中'", old.id)) return fail(res, 400, '出租中須先建立出租記錄')
       if (usage !== '出租中' && one("SELECT id FROM plate_rentals WHERE plate_asset_id=? AND status='出租中'", old.id)) return fail(res, 400, '請先結束出租記錄')
       const nextCardNumber = clean(b.cardNumber ?? old.card_number,80)

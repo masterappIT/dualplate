@@ -1,8 +1,7 @@
 import { db, id, now } from './db.js'
 import { plateFacts } from './plate-facts.js'
+import { deadlineOwners } from './deadline-owners.js'
 import { scopeMap } from './entrustment.js'
-// Vehicle items follow the entrustment of the plate the vehicle is mounted on.
-const mountedOn = (plates, vehicleId) => { const plate = plates.find(item => item.vehicle_id === vehicleId); return plate ? { type: 'plate', id: plate.id } : null }
 import { computeDeadlines, ruleMatches, ruleScopes, ruleMethods, matchKeys, dateFields } from './rules.js'
 
 const date = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value + 'T00:00:00Z')) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value
@@ -213,16 +212,7 @@ export async function phase1Routes(req, res, url, user, h) {
   if (path === '/api/overview' && method === 'GET') {
     const days = url.searchParams.has('days') ? Number(url.searchParams.get('days')) : 90
     if (!integer(days, 7, 365)) return error(400, '天數須為 7–365')
-    const customers = query('SELECT id,name FROM customers WHERE tenant_id=? ORDER BY name', tenant)
-    const plates = query('SELECT p.* FROM plate_assets p JOIN customers c ON c.id=p.customer_id WHERE c.tenant_id=?', tenant)
-    const companies = query('SELECT * FROM companies WHERE tenant_id=?', tenant)
-    const vehicles = query('SELECT v.* FROM vehicles v JOIN customers c ON c.id=v.customer_id WHERE c.tenant_id=?', tenant)
-    const names = new Map(customers.map(item => [item.id, item.name]))
-    const owners = [
-      ...plates.map(item => ({ ownerType: 'plate', ownerId: item.id, label: `${item.mainland_plate || '內地車牌待補'} · ${item.local_plate || '港澳車牌待補'}`, customerId: item.customer_id, customerName: names.get(item.customer_id), facts: facts('plate', item) })),
-      ...companies.map(item => ({ ownerType: 'company', ownerId: item.id, label: item.name, customerId: item.customer_id, customerName: names.get(item.customer_id), facts: facts('company', item) })),
-      ...vehicles.map(item => ({ ownerType: 'vehicle', ownerId: item.id, label: item.plate, customerId: item.customer_id, customerName: names.get(item.customer_id), facts: facts('vehicle', item), scopeOwner: mountedOn(plates, item.id) }))
-    ]
+    const { customers, plates, companies, owners } = deadlineOwners(tenant)
     const tracked = new Map(query('SELECT * FROM tracked_items WHERE tenant_id=?', tenant).map(item => [`${item.owner_type}:${item.owner_id}:${item.code}`, item]))
     const completions = new Set(query('SELECT * FROM rule_completions WHERE tenant_id=?', tenant).map(item => `${item.code}:${item.owner_id}:${item.period}`))
     const deadlines = computeDeadlines({ rules: rules(), owners, tracked, completions, scopes: scopeMap(tenant), windowDays: days }).filter(item => item.level !== 'ok')

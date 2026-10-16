@@ -9,6 +9,9 @@ const headers = [
   '香港／澳門公司',
   '內地公司',
 ]
+const optionalHeaders = ['口岸', '指標類別']
+// 系統認可的口岸名稱；匯入、表內修改與管理端選單共用同一份
+export const crossingPorts = ['深圳灣', '港珠澳大橋', '蓮塘／香園圍', '落馬洲', '皇崗', '文錦渡', '沙頭角', '拱北', '橫琴', '其他']
 
 const normalizeHeader = value => String(value || '').replace(/^\ufeff/, '').replace(/[\s]/g, '').replace(/\//g, '／')
 
@@ -61,11 +64,13 @@ export function parseCsv(text) {
   const missing = headers.filter(header => !actualHeaders.includes(normalizeHeader(header)))
   if (missing.length) return { rows: [], errors: [`缺少欄位：${missing.join('、')}`] }
   if (new Set(actualHeaders).size !== actualHeaders.length) return { rows: [], errors: ['CSV 表頭有重複欄位'] }
-  const positions = Object.fromEntries(headers.map(header => [header, actualHeaders.indexOf(normalizeHeader(header))]))
+  const selectedHeaders = [...headers, ...optionalHeaders.filter(header => actualHeaders.includes(normalizeHeader(header)))]
+  const positions = Object.fromEntries(selectedHeaders.map(header => [header, actualHeaders.indexOf(normalizeHeader(header))]))
   return {
+    headers: selectedHeaders,
     rows: rows.map(({ values, rowNumber }) => ({
       rowNumber,
-      values: Object.fromEntries(headers.map(header => [header, String(values[positions[header]] || '').trim()])),
+      values: Object.fromEntries(selectedHeaders.map(header => [header, String(values[positions[header]] || '').trim()])),
       columnError: values.length !== actualHeaders.length ? '欄位數與表頭不符' : null,
     })),
     errors: [],

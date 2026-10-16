@@ -1,6 +1,6 @@
 import test, { after, before } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -56,6 +56,54 @@ async function request(path, method = 'GET', body, token = 'admin-token') {
 const importRow = (customer, cardNumber, route = '粵港') => [customer, route, '粵Z1111港', 'AB111', cardNumber, '2028-01-01', '2028-02-01', '', '']
 const preview = content => request('/import/plates?dryRun=1', 'POST', { csv: content })
 const confirm = (content, previewKey) => request('/import/plates', 'POST', { csv: content, previewKey, confirm: true })
+
+test('CSV 示例含口岸欄可預覽並匯入', async () => {
+  const content = readFileSync(new URL('./fixtures/plates-with-port.csv', import.meta.url), 'utf8').replace('{{CUSTOMER}}', `客戶${fixture.customer}`)
+  const result = await preview(content)
+  assert.equal(result.status, 200)
+  assert.equal(result.body.summary.error, 0)
+  assert.ok(result.body.headers.includes('口岸'))
+  assert.ok(result.body.headers.includes('指標類別'))
+  assert.equal((await confirm(content, result.body.previewKey)).status, 200)
+  const plate = fixture.db.prepare('SELECT port,indicator_category FROM plate_assets WHERE card_number=?').get('CARD-PORT-SAMPLE')
+  assert.equal(plate.port, '深圳灣')
+  assert.equal(plate.indicator_category, '商務')
+})
+
+test('CSV 舊格式沒有口岸欄仍可匯入', async () => {
+  const content = csv(importRow(`客戶${fixture.customer}`, 'CARD-NO-PORT'))
+  const result = await preview(content)
+  assert.equal(result.status, 200)
+  assert.equal((await confirm(content, result.body.previewKey)).status, 200)
+  assert.equal(fixture.db.prepare('SELECT port FROM plate_assets WHERE card_number=?').get('CARD-NO-PORT').port, null)
+})
+
+test('CSV 空白口岸不清除原有口岸', async () => {
+  const content = `${requiredHeaders.join(',')},口岸\n${importRow(`客戶${fixture.customer}`, 'CARD-PORT-SAMPLE').join(',')},   `
+  const result = await preview(content)
+  assert.equal(result.body.summary.error, 0)
+  assert.equal((await confirm(content, result.body.previewKey)).status, 200)
+  assert.equal(fixture.db.prepare('SELECT port FROM plate_assets WHERE card_number=?').get('CARD-PORT-SAMPLE').port, '深圳灣')
+})
+
+test('CSV 未知口岸名稱逐列拒絕', async () => {
+  const content = `${requiredHeaders.join(',')},口岸\n${importRow(`客戶${fixture.customer}`, 'CARD-UNKNOWN-PORT').join(',')},未知口岸`
+  const result = await preview(content)
+  assert.equal(result.body.summary.error, 1)
+  assert.match(result.body.rows[0].errors.join(''), /未知口岸名稱/)
+  assert.equal(fixture.db.prepare('SELECT id FROM plate_assets WHERE card_number=?').get('CARD-UNKNOWN-PORT'), undefined)
+})
+
+test('牌照列表保留批文卡通行口岸供星圖補位', async () => {
+  const plateId = randomUUID()
+  const timestamp = new Date().toISOString()
+  fixture.db.prepare('INSERT INTO plate_assets(id,customer_id,route,card_number,created_at,updated_at,card_data) VALUES (?,?,?,?,?,?,?)').run(plateId, fixture.customer, '粵港', 'CARD-CROSSING-FALLBACK', timestamp, timestamp, JSON.stringify({ crossing: '港珠澳大橋' }))
+  const result = await request('/plate-assets')
+  assert.equal(result.status, 200)
+  const plate = result.body.find(item => item.id === plateId)
+  assert.equal(plate.port, null)
+  assert.equal(plate.card_data.crossing, '港珠澳大橋')
+})
 
 test('CSV 引號欄位支援逗號與雙引號', () => {
   const result = parseCsv(csv(['客戶甲', '粵港', '粵Z001', 'AB1', 'CARD1', '2027-01-01', '', '"甲,""乙"""', '內地甲']))
@@ -346,4 +394,14 @@ test('非內地公司納稅人類型遷移清空且只執行一次', () => {
     assert.equal(second.prepare('SELECT COUNT(*) count FROM schema_migrations WHERE name=?').get('company-jurisdiction-fields-v1').count, 1)
     second.close()
   } finally { rmSync(directory, { recursive: true, force: true }) }
+})
+test('表內修改口岸只接受系統口岸名稱', async () => {
+  assert.equal((await request(`/plate-assets/${fixture.plate}`, 'PATCH', { port: '火星口岸' })).status, 400)
+  assert.equal((await request(`/plate-assets/${fixture.plate}`, 'PATCH', { port: 123 })).status, 400)
+  assert.equal((await request(`/plate-assets/${fixture.plate}`, 'PATCH', { port: '深圳灣' })).status, 200)
+  assert.equal(fixture.db.prepare('SELECT port FROM plate_assets WHERE id=?').get(fixture.plate).port, '深圳灣')
+})
+test('表內修改口岸可清空', async () => {
+  assert.equal((await request(`/plate-assets/${fixture.plate}`, 'PATCH', { port: '' })).status, 200)
+  assert.equal(fixture.db.prepare('SELECT port FROM plate_assets WHERE id=?').get(fixture.plate).port, null)
 })
