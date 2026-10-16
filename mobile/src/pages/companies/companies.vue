@@ -19,7 +19,7 @@
         <view v-for="p in group.plates" :key="p.id" class="plate-line" @click="openPlate(p.id)"><text>{{ p.label }}</text><text class="link">查看 ›</text></view>
       </view>
       <view v-if="group.deadlines.length" class="block"><text class="side-label">公司事項</text>
-        <view v-for="(d,index) in group.deadlines" :key="index" class="row deadline"><view class="grow"><text class="company-name">{{ d.name }}</text><text class="company-sub">{{ d.ownerLabel }}</text></view><DueDate :date="d.dueOn" :days="d.daysLeft" :level="d.level" /></view>
+        <view v-for="(d,index) in group.deadlines" :key="index" class="row deadline"><view class="grow"><text class="company-name">{{ d.name }}</text><text v-if="d.handledBy==='you'" class="who you">請你處理</text><text class="company-sub">{{ d.ownerLabel }}</text></view><DueDate :date="d.dueOn" :days="d.daysLeft" :level="d.level" /></view>
       </view>
     </view>
     <view v-for="c in data.ungrouped" :key="c.id" class="card"><text class="company-name">{{ c.name }}</text><text class="company-sub">{{ c.jurisdiction }}{{ c.status!=='存續' ? ' · '+c.status : '' }}</text></view>

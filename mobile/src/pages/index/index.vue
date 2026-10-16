@@ -26,7 +26,7 @@
     <view class="section-head"><text class="section-title">即將到期</text><text class="link" @click="goDeadlines">全部 ›</text></view>
     <view v-if="data.deadlines.length">
       <view v-for="(item,index) in data.deadlines.slice(0,3)" :key="index" class="list-card row" @click="openDeadline(item)">
-        <view class="grow"><text class="list-title">{{ item.name }}</text><text class="list-sub">{{ item.ownerLabel }}{{ item.detail ? ' · '+item.detail : '' }}</text></view>
+        <view class="grow"><text class="list-title">{{ item.name }}</text><text v-if="item.handledBy==='you'" class="who you">請你處理</text><text class="list-sub">{{ item.ownerLabel }}{{ item.detail ? ' · '+item.detail : '' }}</text></view>
         <DueDate :date="item.dueOn" :days="item.daysLeft" :level="item.level" />
       </view>
     </view>

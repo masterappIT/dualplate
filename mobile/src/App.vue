@@ -45,6 +45,8 @@ view,text,input,textarea,button{box-sizing:border-box}
 .field{width:100%;background:#fff;border:1rpx solid var(--rule);border-radius:var(--r-control);min-height:84rpx;padding:20rpx 23rpx;font-size:27rpx;color:var(--ink)}
 .field:focus{border-color:var(--jade);box-shadow:0 0 0 4rpx rgba(242,194,48,.45)}
 .empty{padding:48rpx 23rpx;text-align:center;color:var(--ink-3);font-size:24rpx;line-height:1.6}
+/* 客戶自理的事項：客戶自己要辦，用牌照黃小標提醒 */
+.who{display:inline-block;margin-top:6rpx;padding:2rpx 12rpx;border-radius:6rpx;font-size:20rpx;font-weight:800}.who.you{background:#FFF4D0;color:#8A6A00;border:1rpx solid var(--plate-yellow)}
 /* 防偽底紋：兩組錯位的同心細線形成證件扭索紋；只用在主卡、頁首與登入畫布 */
 .guilloche{position:relative;overflow:hidden}
 .guilloche::before{content:'';position:absolute;inset:-40%;pointer-events:none;opacity:.07;
