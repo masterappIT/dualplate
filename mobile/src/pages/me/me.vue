@@ -13,6 +13,7 @@
     <text class="section-title">其他</text>
     <view class="list-card row" @click="goNotices"><text class="list-title">通知</text><view class="row"><text v-if="unread" class="pill amber num">{{ unread }} 則未讀</text><text class="link">›</text></view></view>
     <view class="list-card row" @click="goDeadlines"><text class="list-title">到期提醒</text><text class="link">›</text></view>
+    <view class="list-card row" @click="goReports"><text class="list-title">月報</text><text class="link">›</text></view>
     <view class="list-card row" @click="goBilling"><text class="list-title">帳單</text><view class="row"><text v-if="unpaid" class="pill amber">有未付款項</text><text class="link">›</text></view></view>
     <view class="list-card row" @click="logout"><text class="list-title">退出登入</text><text class="link">›</text></view>
   </view>
@@ -29,6 +30,7 @@ async function load(){user.value=getUser();if(!user.value)return uni.navigateTo(
 function openRequest(id){uni.navigateTo({url:'/pages/request-detail/request-detail?id='+id})}
 function newRequest(){startRequest('')}
 function goNotices(){uni.navigateTo({url:'/pages/notifications/notifications'})}
+function goReports(){uni.navigateTo({url:'/pages/reports/reports'})}
 function goBilling(){uni.navigateTo({url:'/pages/billing/billing'})}
 function goDeadlines(){uni.navigateTo({url:'/pages/deadlines/deadlines'})}
 function logout(){uni.showModal({title:'退出登入',content:'確定要退出嗎？',success:result=>{if(result.confirm){clearSession();uni.navigateTo({url:'/pages/login/login'})}}})}

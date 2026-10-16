@@ -12,6 +12,7 @@
         </view>
         <view class="side"><text class="side-label">內地公司</text>
           <view v-for="c in group.mainland" :key="c.id" class="company"><text class="company-name">{{ c.name }}</text><text v-if="c.registrationNo" class="company-sub">{{ c.registrationNo }}</text><text v-if="c.status!=='存續'" class="pill" :class="c.status==='已註銷'?'gray':'amber'">{{ c.status }}</text></view>
+          <view v-for="c in group.mainland" :key="'f'+c.id"><view v-if="filings[c.id]?.length" class="filing-strip"><text class="filing-title">{{ c.name }} · 每月報帳</text><view class="filing-cells"><view v-for="f in filings[c.id].slice(0,3)" :key="f.period" class="filing-cell"><text class="filing-month num">{{ Number(f.period.slice(5)) }}月</text><text class="pill" :class="filingTone(f)">{{ filingWord(f) }}</text></view></view></view></view>
           <text v-if="!group.mainland.length" class="company-sub">資料待補充</text>
         </view>
       </view>
@@ -30,14 +31,18 @@
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { api, getUser, levelTone, daysText, openPlate } from '../../lib/api'
-const data=ref({groups:[],ungrouped:[]}),loaded=ref(false)
+const data=ref({groups:[],ungrouped:[]}),loaded=ref(false),filings=ref({})
+// 客戶看的報帳狀態：只分辦好、辦理中、未開始
+const filingWord=f=>f.status==='已完成'?(f.zeroFiling?'零申報':'已完成'):f.status==='已申報'?'已申報':f.status==='公司已註銷'?'不需申報':['資料已收','會計處理中'].includes(f.status)?'辦理中':'待交資料'
+const filingTone=f=>['已完成','已申報'].includes(f.status)?'':f.status==='未開始'?'amber':'blue'
 // Name the offshore side after where the company is registered.
 function offshoreLabel(group){const places=[...new Set(group.offshore.map(c=>c.jurisdiction))];return places.length===1?places[0]+'公司':'香港／澳門公司'}
-async function load(){if(!getUser())return uni.navigateTo({url:'/pages/login/login'});try{data.value=await api('/my/companies')}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
+async function load(){if(!getUser())return uni.navigateTo({url:'/pages/login/login'});try{data.value=await api('/my/companies');api('/my/filings').then(list=>{filings.value=Object.fromEntries(list.map(item=>[item.companyId,item.periods]))}).catch(()=>{})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
 onShow(load)
 import DueDate from '../../components/DueDate.vue'
 </script>
 <style scoped>
+.filing-strip{margin-top:14rpx;padding:14rpx 16rpx;border-radius:var(--r-control);background:var(--paper)}.filing-title{display:block;font-size:20rpx;color:var(--ink-2);font-weight:750}.filing-cells{display:flex;gap:10rpx;margin-top:10rpx;flex-wrap:wrap}.filing-cell{display:flex;align-items:center;gap:6rpx}.filing-month{font-size:21rpx;color:var(--ink);font-weight:750}
 .companies{padding-top:28rpx}.group{margin-top:26rpx}.group-name{display:block;font-size:28rpx;font-weight:800;margin-bottom:16rpx}
 .pair{display:grid;grid-template-columns:1fr 1fr;gap:16rpx}.side{background:var(--paper);border-radius:16rpx;padding:16rpx}.side-label{display:block;color:var(--ink-2);font-size:20rpx;font-weight:800;margin-bottom:8rpx}
 .company{margin-bottom:8rpx}.company-name{display:block;font-size:24rpx;font-weight:750;color:var(--ink);overflow-wrap:anywhere}.company-sub{display:block;color:var(--ink-3);font-size:21rpx;margin:3rpx 0 6rpx}

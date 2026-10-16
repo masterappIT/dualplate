@@ -67,6 +67,12 @@
       }
     },
     {
+      "path": "pages/reports/reports",
+      "style": {
+        "navigationBarTitleText": "月報"
+      }
+    },
+    {
       "path": "pages/login/login",
       "style": {
         "navigationStyle": "custom",
