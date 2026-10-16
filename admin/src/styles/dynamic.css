@@ -41,7 +41,11 @@
 .rg-tools button { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; }
 .panorama-crumb, .panorama-hint { padding: 8px 12px; border: 1px solid var(--rule); border-radius: var(--r-control); background: var(--card); color: var(--ink-2); font-size: 12px; }
 .panorama-summary { display: flex; gap: 12px; padding: 10px 12px; background: var(--card); border: 1px solid var(--rule); border-radius: var(--r-card); }
-.panorama-summary span { display: flex; flex-direction: column; min-width: 48px; }
+.panorama-summary > span, .panorama-summary > button { display: flex; flex-direction: column; min-width: 48px; }
+.panorama-summary > button.is-action { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.panorama-summary > button.is-action small { color: var(--jade); }
+.panorama-summary > button.is-action:hover small, .panorama-summary > button.is-action:focus-visible small { text-decoration: underline; text-underline-offset: 3px; }
+.panorama-group { position: absolute; z-index: 1; display: flex; align-items: center; gap: 8px; transform: translateY(-50%); color: var(--ink-2); font-size: 12px; pointer-events: none; }
 .panorama-summary small { color: var(--ink-2); font-size: 12px; }
 .panorama-summary strong { font-variant-numeric: tabular-nums; }
 .panorama-summary .is-danger { color: var(--status-due); }
@@ -104,7 +108,7 @@
 .swim-empty { display: inline-block; position: relative; margin: 12px 0 0 18%; color: var(--ink-2); font-size: 12px; cursor: pointer; }
 .detail-view-head { margin-top: 12px; padding: 12px 16px; border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--card); }
 @media (max-width: 650px) { .panorama .rg-node.is-core .rg-body { transform: translate(-50%, 48px); } .panorama .rg-node.is-hub .rg-text { top: calc(100% + 2px); } .heat-grid { grid-template-columns: 38px repeat(7, minmax(0, 1fr)); gap: 2px; } .heat-day-cell { min-height: 32px; padding: 0; font-size: 10px; } .heat-day-cell small { margin-left: 1px; } .heat-head { flex-wrap: wrap; gap: 4px; } }
-@media (max-width: 650px) { .panorama.is-drilled .rg-corner.is-tl { top: 60px; max-width: calc(100% - 32px); } .panorama.is-drilled .panorama-crumb { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
+@media (max-width: 650px) { .panorama.is-drilled .rg-corner.is-tl { top: 60px; max-width: calc(100% - 32px); } .panorama.is-drilled .rg-node.is-core .rg-sub { max-width: 100px; white-space: pre-line; text-align: center; } .rg-node.is-item .rg-body { max-width: 200px; } .panorama.is-drilled .panorama-crumb { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
 @media (max-width: 820px) { .today-visuals { grid-template-columns: 1fr; } .trend-months { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); } .swim-row { grid-template-columns: 96px minmax(0, 1fr); } .due-swimlane { overflow-x: auto; } .swim-track { min-width: 540px; } }
 .csv-pipeline .rg { height: 390px; min-height: 390px; }
 .pipeline-fields { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
