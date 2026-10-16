@@ -10,6 +10,7 @@ import CommandPalette from './CommandPalette.vue'
 import RecordModal from '../RecordModal.vue'
 import ConfirmHost from '../ui/ConfirmHost.vue'
 import ToastHost from '../ui/ToastHost.vue'
+import WelcomeGuide from './WelcomeGuide.vue'
 
 const { selected, selectedCustomer, selectedVehicle, selectedPlate, error, showSuccess, showError } = useAdminStore()
 const route = useRoute()
@@ -22,4 +23,4 @@ function onShortcut(event: KeyboardEvent) { if ((event.metaKey || event.ctrlKey)
 onMounted(() => { window.addEventListener('keydown', onShortcut); if (frame.value) playShellEntrance(frame.value) })
 onBeforeUnmount(() => window.removeEventListener('keydown', onShortcut))
 </script>
-<template><div ref="frame" class="app-shell"><Sidebar :open="menuOpen" @navigate="menuOpen = false" /><div v-if="menuOpen" class="sidebar-scrim" @click="menuOpen = false" /><main class="content"><Topbar @menu="menuOpen = true" @command="commandOpen = true" /><div class="workspace"><div v-if="error" class="error workspace-message" role="alert">{{ error }}<button type="button" aria-label="關閉錯誤提示" @click="error = ''">×</button></div><router-view v-slot="{ Component }"><Transition mode="out-in" :css="false" @enter="pageEnter" @leave="pageLeave"><div v-if="!requiresDetail || hasDetail" :key="route.fullPath" class="page-transition"><component :is="Component" @saved="showSuccess" @error="showError" /></div></Transition></router-view></div></main><RecordModal /><CommandPalette :open="commandOpen" @close="commandOpen = false" /><ConfirmHost /><ToastHost /></div></template>
+<template><div ref="frame" class="app-shell"><Sidebar :open="menuOpen" @navigate="menuOpen = false" /><div v-if="menuOpen" class="sidebar-scrim" @click="menuOpen = false" /><main class="content"><Topbar @menu="menuOpen = true" @command="commandOpen = true" /><div class="workspace"><div v-if="error" class="error workspace-message" role="alert">{{ error }}<button type="button" aria-label="關閉錯誤提示" @click="error = ''">×</button></div><router-view v-slot="{ Component }"><Transition mode="out-in" :css="false" @enter="pageEnter" @leave="pageLeave"><div v-if="!requiresDetail || hasDetail" :key="route.fullPath" class="page-transition"><component :is="Component" @saved="showSuccess" @error="showError" /></div></Transition></router-view></div></main><RecordModal /><CommandPalette :open="commandOpen" @close="commandOpen = false" /><ConfirmHost /><ToastHost /><WelcomeGuide /></div></template>

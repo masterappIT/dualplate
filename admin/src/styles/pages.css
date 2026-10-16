@@ -243,3 +243,28 @@ body { background: var(--canvas); color: var(--ink); font-family: var(--font-bod
 .account-panel { max-width: 640px; }
 @media (prefers-reduced-motion: reduce) { .audit-dot { transition: none; } }
 @media (max-width: 720px) { .audit-axis, .audit-lane { grid-template-columns: 64px minmax(0, 1fr); gap: 8px; } }
+
+/* 第一次登入導覽 */
+.guide-body { margin: 0; color: var(--ink); font-size: 14px; line-height: 1.75; }
+.guide-dots { display: flex; gap: 6px; margin-top: 16px; }
+.guide-dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--border); transition: width .2s ease; }
+.guide-dots span.active { width: 20px; border-radius: 999px; background: var(--jade); }
+@media (prefers-reduced-motion: reduce) { .guide-dots span { transition: none; } }
+.fee-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.fee-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 16px 0; }
+.fee-filters label { display: grid; gap: 4px; color: var(--ink-2); font-size: 12px; }
+.fee-filters select { width: min(220px, 100%); }
+.fee-filters .fee-check, .fee-check { display: inline-flex; align-items: center; gap: 8px; }
+.fee-filters select, .fee-part input, .fee-part select, .fee-close input, .fee-close select, .modal-body .field > input, .modal-body .field > select, .drawer-body .field > input, .drawer-body .field > select { min-height: var(--control-h); border: 1px solid var(--border); border-radius: var(--r-control); padding: 7px 10px; background: var(--surface); color: var(--ink); max-width: 100%; }
+.fee-part input, .fee-part select, .fee-close input:not([type='checkbox']), .fee-close select, .modal-body .field > input:not([type='checkbox']), .modal-body .field > select, .drawer-body .field > input, .drawer-body .field > select { width: 100%; }
+.fee-filters select:focus-visible, .fee-part input:focus-visible, .fee-part select:focus-visible, .fee-close input:focus-visible, .fee-close select:focus-visible, .modal-body .field > input:focus-visible, .modal-body .field > select:focus-visible, .drawer-body .field > input:focus-visible, .drawer-body .field > select:focus-visible { outline: 2px solid var(--plate-yellow); outline-offset: 1px; }
+.fee-totals { display: flex; flex-wrap: wrap; gap: 16px; margin: 16px 0; padding: 16px 0; border-top: 1px dashed var(--rule); border-bottom: 1px dashed var(--rule); }
+.fee-totals > div { display: grid; gap: 4px; min-width: 180px; }
+.fee-totals span { color: var(--ink-2); font-size: 12px; }
+.fee-totals strong { font-size: 16px; color: var(--jade); }
+.fee-part { display: grid; gap: 8px; padding: 16px 0; border-top: 1px dashed var(--rule); }
+.fee-part h3, .fee-close h3 { font-size: 16px; margin: 0; }
+.fee-close { display: grid; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--rule); }
+.fee-summary { padding: 12px 0; border-top: 1px dashed var(--rule); font-variant-numeric: tabular-nums; }
+.fee-stamp { position: fixed; z-index: 190; right: 24px; bottom: 24px; display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-card); }
+@media (max-width: 600px) { .fee-totals > div { min-width: 0; width: 100%; } .fee-actions { justify-content: flex-start; } .fee-stamp { right: 12px; bottom: 12px; } }

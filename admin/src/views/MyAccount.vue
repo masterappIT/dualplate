@@ -9,6 +9,7 @@ import KeyValue from '../components/ui/KeyValue.vue'
 
 const emit = defineEmits(['saved', 'error'])
 const me = user()
+const replayGuide = () => window.dispatchEvent(new Event('welcome-guide'))
 const form = ref({ currentPassword: '', newPassword: '', confirm: '' }), saving = ref(false), error = ref('')
 async function save() {
   error.value = ''
@@ -22,6 +23,7 @@ async function save() {
   <section class="panel account-panel">
     <div class="panel-head"><div><h2>我的帳號</h2><p>登入 30 天後需要重新登入；超過 7 天沒有使用也會自動登出。</p></div></div>
     <KeyValue :items="[{ label: '姓名', value: me?.name }, { label: '帳號', value: me?.username }, { label: '身份', value: me?.role === 'admin' ? '管理者' : '員工' }]" />
+    <Button variant="text" size="sm" @click="replayGuide">重看使用導覽</Button>
   </section>
   <section class="panel account-panel">
     <div class="panel-head"><div><h2>修改密碼</h2><p>至少 10 個字元，不可與帳號相同。修改後其他裝置上的登入會失效。</p></div></div>
