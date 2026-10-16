@@ -228,3 +228,18 @@ body { background: var(--canvas); color: var(--ink); font-family: var(--font-bod
 .renter-link-share pre { margin: 8px 0 12px; white-space: pre-wrap; word-break: break-all; font-family: inherit; font-size: 13px; }
 .template-tokens { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .template-token { border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--jade); padding: 4px 10px; font-size: 12px; cursor: pointer; }
+
+/* 操作記錄泳道：每人一行，07:00–22:00 */
+.audit-lanes { margin-top: 8px; padding: 12px 0 4px; }
+.audit-axis, .audit-lane { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: center; gap: 12px; min-height: 32px; }
+.audit-lane { border-top: 1px solid var(--border); }
+.audit-lane strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.audit-track { position: relative; height: 28px; }
+.audit-hour { position: absolute; top: 6px; transform: translateX(-50%); color: var(--ink-3); font-size: 11px; font-variant-numeric: tabular-nums; }
+.audit-dot { position: absolute; top: 8px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; border: 2px solid var(--surface); background: var(--status-ok); cursor: pointer; padding: 0; transition: transform .15s ease; }
+.audit-dot.tone-info { background: var(--jade); } .audit-dot.tone-danger { background: var(--status-overdue); }
+.audit-dot:hover, .audit-dot.active { transform: scale(1.5); outline: 2px solid var(--plate-yellow); }
+.audit-focus { margin: 12px 0 0; font-size: 13px; }
+.account-panel { max-width: 640px; }
+@media (prefers-reduced-motion: reduce) { .audit-dot { transition: none; } }
+@media (max-width: 720px) { .audit-axis, .audit-lane { grid-template-columns: 64px minmax(0, 1fr); gap: 8px; } }
