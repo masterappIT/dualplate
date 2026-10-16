@@ -13,3 +13,6 @@ api/test/fixtures/cards/
 .review/
 
 api/logs/
+
+# 本機預覽設定（含本機暫存路徑）
+.claude/
