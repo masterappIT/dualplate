@@ -4,7 +4,7 @@ import { notify } from './client-portal.js'
 import { scopeMap } from './entrustment.js'
 import { plateFacts, vehicleFacts } from './plate-facts.js'
 import { computeDeadlines, ruleMatches } from './rules.js'
-import { plateLabel } from './client-edits.js'
+import { plateLabel, selfManagedCustomer } from './client-edits.js'
 
 // 客戶自行辦理後更新資料（docs/tasks/self-handled-changes-design.md，管理者 2026-10-17 決定）：
 // 客戶自己辦了換車、續期、換司機，或決定不再續期，在客戶端一次過更新；資料立即生效，
@@ -363,8 +363,10 @@ export async function selfHandledClientRoutes(req, res, url, user, { json, fail,
     const services = sameService[body.kind]
     details.openRequests = all(`SELECT id, title, status FROM requests WHERE plate_asset_id=? AND status NOT IN ('已完成','已取消') ${services ? `AND service_code IN (${services.map(() => '?').join(',')})` : ''} ORDER BY created_at`, plate.id, ...(services || []))
     details.plateLabel = plateLabel(one('SELECT * FROM plate_assets WHERE id=?', plate.id))
-    db.prepare('INSERT INTO self_handled(id,tenant_id,customer_id,plate_asset_id,kind,handled_on,details_json,status,created_by,created_by_name,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
-      .run(recordId, tenantId, plate.customer_id, plate.id, body.kind, handledOn, JSON.stringify(details), '待核對', user.id, user.name, now())
+    // 自管客戶自辦的事不經員工核對：直接記為已核對，不進「客戶自行辦理待核對」
+    const selfManaged = selfManagedCustomer(plate.customer_id)
+    db.prepare('INSERT INTO self_handled(id,tenant_id,customer_id,plate_asset_id,kind,handled_on,details_json,status,created_by,created_by_name,created_at,reviewed_by_name,reviewed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run(recordId, tenantId, plate.customer_id, plate.id, body.kind, handledOn, JSON.stringify(details), selfManaged ? '已核對' : '待核對', user.id, user.name, now(), selfManaged ? '自管客戶，不經核對' : null, selfManaged ? now() : null)
     for (const file of photos.files) db.prepare('INSERT INTO self_handled_files(id,record_id,mime,data,created_at) VALUES (?,?,?,?,?)').run(id(), recordId, file.mime, file.bytes, now())
     db.exec('COMMIT')
   } catch (error) { db.exec('ROLLBACK'); throw error }

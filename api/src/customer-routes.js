@@ -41,7 +41,7 @@ export async function customerRoutes(req, res, url, user, h) {
   const crossingPost = req.method === 'POST' && /^\/api\/my\/plates\/[^/]+\/crossings$/.test(path)
   const reminderPut = req.method === 'PUT' && /^\/api\/my\/plates\/[^/]+\/crossing-reminder$/.test(path)
   if (req.method !== 'GET' && !crossingPost && !reminderPut) { fail(res, 405, '不支援此操作'); return true }
-  const customer = one('SELECT id,name,tenant_id,advisor_name,advisor_phone,advisor_wechat FROM customers WHERE id=? AND tenant_id=?', user.customer_id, user.tenant_id)
+  const customer = one('SELECT id,name,tenant_id,advisor_name,advisor_phone,advisor_wechat,service_mode,is_self FROM customers WHERE id=? AND tenant_id=?', user.customer_id, user.tenant_id)
   if (!customer) { fail(res, 404, '客戶不存在'); return true }
 
   const plates = query("SELECT * FROM plate_assets WHERE customer_id=? AND card_number IS NOT NULL AND TRIM(card_number)<>'' ORDER BY created_at DESC", customer.id)
@@ -114,6 +114,7 @@ export async function customerRoutes(req, res, url, user, h) {
       unreadNotifications: unread,
       advisor: { name: customer.advisor_name || '', phone: customer.advisor_phone || '', wechat: customer.advisor_wechat || '' },
       customerName: customer.name,
+      serviceMode: customer.service_mode === '自管' && !customer.is_self ? '自管' : '托管',
       counts: { pending: summaries.filter(item => item.health === 'pending').length, ok: summaries.filter(item => item.health === 'ok').length, due: summaries.filter(item => item.health === 'due').length, overdue: summaries.filter(item => item.health === 'overdue').length },
       plates: summaries,
       deadlines: visible(all).filter(item => item.level !== 'ok').sort((a, b) => levelRank[a.level] - levelRank[b.level] || String(a.dueOn).localeCompare(String(b.dueOn))),

@@ -1,6 +1,6 @@
 <template>
   <view class="page profile">
-    <text class="subtle intro">你的登入帳號和委託人資料。委託人資料修改後立即生效，顧問會再核對。</text>
+    <text class="subtle intro">{{ selfManaged ? '你的登入帳號和委託人資料，修改後立即生效。' : '你的登入帳號和委託人資料。委託人資料修改後立即生效，顧問會再核對。' }}</text>
 
     <!-- 登入帳號：這個登入的人 -->
     <text class="section-title">登入帳號</text>
@@ -14,7 +14,7 @@
         <text class="k">登入手機</text><text class="v num">{{ profile.me.phone || '未設定' }}</text>
         <text class="k">微信</text><text class="v">{{ profile.me.wechatBound ? '已綁定' : '未綁定' }}</text>
       </view>
-      <text class="line-sub note">要更改登入電郵或手機，請聯絡你的顧問核實身份後代為更改。</text>
+      <text class="line-sub note">{{ selfManaged ? '要更改登入電郵或手機，請聯絡我們核實身份後代為更改。' : '要更改登入電郵或手機，請聯絡你的顧問核實身份後代為更改。' }}</text>
     </view>
 
     <!-- 修改密碼 -->
@@ -41,7 +41,7 @@
       <text class="field-label">聯絡電話</text>
       <input class="field num" v-model="customerDraft.phone" placeholder="例如 +852 9123 4567" />
       <button class="btn-sm solid save" :disabled="savingCustomer || !customerChanged" @click="saveCustomer">{{ savingCustomer ? '正在儲存…' : '儲存委託人資料' }}</button>
-      <text class="line-sub note">委託人名稱會用在合約和帳單，修改後由顧問核對。</text>
+      <text v-if="!selfManaged" class="line-sub note">委託人名稱會用在合約和帳單，修改後由顧問核對。</text>
     </view>
 
     <!-- 同一委託人的其他登入：只列名字，新增或停用請聯絡顧問 -->
@@ -58,14 +58,14 @@ import { onShow } from '@dcloudio/uni-app'
 import { api, getUser } from '../../lib/api'
 const profile = ref({ me: { name: '', email: '', phone: '', wechatBound: false }, customer: { name: '', kind: '個人', phone: '' }, otherLogins: [] })
 const nameDraft = ref(''), customerDraft = ref({ name: '', kind: '個人', phone: '' }), pw = ref({ current: '', next: '', again: '' })
-const savingName = ref(false), savingPw = ref(false), savingCustomer = ref(false), pwError = ref(''), customerPending = ref(false)
+const selfManaged = ref(false), savingName = ref(false), savingPw = ref(false), savingCustomer = ref(false), pwError = ref(''), customerPending = ref(false)
 const nameChanged = computed(() => nameDraft.value.trim() && nameDraft.value.trim() !== profile.value.me.name)
 const customerChanged = computed(() => ['name', 'kind', 'phone'].some(key => (customerDraft.value[key] || '').trim() !== (profile.value.customer[key] || '')))
 async function load() {
   if (!getUser()) return uni.navigateTo({ url: '/pages/login/login' })
   try {
     const [data, pending] = await Promise.all([api('/my/profile'), api('/my/pending').catch(() => [])])
-    profile.value = data; nameDraft.value = data.me.name; customerDraft.value = { ...data.customer }
+    profile.value = data; nameDraft.value = data.me.name; customerDraft.value = { ...data.customer }; selfManaged.value = data.serviceMode === '自管'
     customerPending.value = pending.some(item => item.entityType === 'customer')
   } catch (e) { uni.showToast({ title: e.message, icon: 'none' }) }
 }
@@ -99,7 +99,7 @@ async function saveCustomer() {
     profile.value.customer = r; customerDraft.value = { ...r }
     const pending = await api('/my/pending').catch(() => [])
     customerPending.value = pending.some(item => item.entityType === 'customer')
-    uni.showToast({ title: '已更新，顧問會再核對', icon: 'none' })
+    uni.showToast({ title: selfManaged.value ? '已更新' : '已更新，顧問會再核對', icon: 'none' })
   } catch (e) { uni.showToast({ title: e.message, icon: 'none' }) } finally { savingCustomer.value = false }
 }
 onShow(load)

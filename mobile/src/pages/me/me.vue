@@ -4,18 +4,19 @@
     <view class="card menu">
       <view class="menu-row" @click="goDeadlines"><text class="menu-name">到期提醒</text><text class="chev">›</text></view>
       <view class="menu-row" @click="goNotices"><text class="menu-name">通知</text><text v-if="unread" class="pill amber num">{{ unread }} 則未讀</text><text class="chev">›</text></view>
-      <view class="menu-row" @click="goBilling"><text class="menu-name">帳單</text><text v-if="unpaid" class="pill amber">有未付款項</text><text class="chev">›</text></view>
-      <view class="menu-row" @click="goReports"><text class="menu-name">月報</text><text class="chev">›</text></view>
+      <view v-if="!selfManaged || hasBills" class="menu-row" @click="goBilling"><text class="menu-name">帳單</text><text v-if="unpaid" class="pill amber">有未付款項</text><text class="chev">›</text></view>
+      <view v-if="!selfManaged" class="menu-row" @click="goReports"><text class="menu-name">月報</text><text class="chev">›</text></view>
     </view>
-    <view class="section-head"><text class="section-title">辦理記錄</text><text class="link" @click="newRequest">申請辦理 ›</text></view>
+    <!-- 自管客戶：沒有辦理記錄時整塊不顯示；也不顯示顧問卡（第 4 步改為「委託我們辦理」卡） -->
+    <view v-if="!selfManaged || requests.length" class="section-head"><text class="section-title">辦理記錄</text><text v-if="!selfManaged" class="link" @click="newRequest">申請辦理 ›</text></view>
     <view v-if="requests.length" class="card list">
       <view v-for="item in requests" :key="item.id" class="line" @click="openRequest(item.id)">
         <view class="grow"><view class="row"><text class="line-title grow">{{ item.title }}</text><text class="pill" :class="requestTone(item.status)">{{ item.status }}</text></view>
           <view class="req-meta"><PlateChip v-if="plateOf(item)" :plate="plateOf(item)" region="內地" size="sm" /><text class="line-sub">{{ clientStage(item.stage) }}</text></view></view>
       </view>
     </view>
-    <view v-if="loaded && !requests.length" class="card empty">還沒有辦理記錄</view>
-    <AdvisorCard v-if="loaded" :advisor="advisor" placeholder />
+    <view v-if="loaded && !requests.length && !selfManaged" class="card empty">還沒有辦理記錄</view>
+    <AdvisorCard v-if="loaded && !selfManaged" :advisor="advisor" placeholder />
     <view class="card menu">
       <view class="menu-row" @click="guide=true"><text class="menu-name">使用導覽</text><text class="chev">›</text></view>
       <view class="menu-row" @click="goTerms"><text class="menu-name">服務條款及私隱聲明</text><text class="chev">›</text></view>
@@ -30,14 +31,14 @@ import { useConfirm } from '../../lib/choice'
 const confirmBox=useConfirm()
 import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { api, getUser, clearSession, startRequest, requestTone, clientStage } from '../../lib/api'
+import { api, getUser, clearSession, startRequest, requestTone, clientStage, rememberMode } from '../../lib/api'
 import PlateChip from '../../components/PlateChip.vue'
 import AdvisorCard from '../../components/AdvisorCard.vue'
 import WelcomeGuide from '../../components/WelcomeGuide.vue'
-const user=ref(getUser()),requests=ref([]),plates=ref([]),loaded=ref(false),advisor=ref(null),unread=ref(0),unpaid=ref(false),guide=ref(false)
+const user=ref(getUser()),requests=ref([]),plates=ref([]),loaded=ref(false),advisor=ref(null),unread=ref(0),unpaid=ref(false),guide=ref(false),selfManaged=ref(false),hasBills=ref(false)
 // 只用手機號碼開通的帳戶，電郵是系統佔位，不顯示
 const account=computed(()=>{const email=user.value?.email||'';return email.endsWith('@phone.invalid')?'以手機號碼登入':email})
-async function load(){user.value=getUser();if(!user.value)return uni.navigateTo({url:'/pages/login/login'});try{const [list,overview,plateList]=await Promise.all([api('/requests'),api('/my/overview'),api('/plate-assets')]);requests.value=list;plates.value=plateList;advisor.value=overview.advisor;unread.value=overview.unreadNotifications||0;api('/my/fees').then(r=>{unpaid.value=Object.keys(r.outstanding||{}).length>0}).catch(()=>{})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
+async function load(){user.value=getUser();if(!user.value)return uni.navigateTo({url:'/pages/login/login'});try{const [list,overview,plateList]=await Promise.all([api('/requests'),api('/my/overview'),api('/plate-assets')]);requests.value=list;plates.value=plateList;advisor.value=overview.advisor;selfManaged.value=overview.serviceMode==='自管';rememberMode(overview.serviceMode);unread.value=overview.unreadNotifications||0;api('/my/fees').then(r=>{unpaid.value=Object.keys(r.outstanding||{}).length>0;hasBills.value=(r.items||[]).length>0}).catch(()=>{})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
 // 辦理記錄一律用內地車牌標識，與首頁一致
 function plateOf(item){return plates.value.find(p=>p.id===item.plate_asset_id)?.mainland_plate||''}
 function goProfile(){uni.navigateTo({url:'/pages/profile/profile'})}

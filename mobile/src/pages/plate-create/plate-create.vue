@@ -1,6 +1,6 @@
 <template>
   <view class="page create-page">
-    <text class="intro">拍下批文卡正反面，系統會自動辨識，你的顧問會再核對，不用逐欄填寫。</text>
+    <text class="intro">{{ selfManaged ? '拍下批文卡正反面，系統會自動辨識，不用逐欄填寫；請核對一次辨識結果。' : '拍下批文卡正反面，系統會自動辨識，你的顧問會再核對，不用逐欄填寫。' }}</text>
     <view class="segmented route-switch"><text v-for="item in ['粵港','粵澳']" :key="item" class="seg" :class="{on:route===item}" @click="route=item">{{ item }}兩地牌</text></view>
     <view class="card">
       <text class="step-title">第一步：拍下批文卡</text><text class="subtle">正面和背面各一張，光線充足、四角入鏡，辨識最準。</text>
@@ -11,20 +11,22 @@
     </view>
     <view v-if="images.front||images.back||showFields" class="card preview"><text class="step-title">第二步：確認辨識結果</text><ApprovalCard :data="draft"/>
       <view><text class="field-label">批文卡編號（必填）<text v-if="fieldStatusText(fieldStatus.cardNumber)" class="field-status" :class="fieldStatusClass(fieldStatus.cardNumber)">{{ fieldStatusText(fieldStatus.cardNumber) }}</text></text><input class="field num" v-model="draft.cardNumber" placeholder="按批文卡正面「編號」填寫"/></view>
-      <text class="subtle field-hint">其他內容顧問會對照原件核對；發現辨識錯誤也可以自行修改。</text>
+      <text class="subtle field-hint">{{ selfManaged ? '請對照批文卡核對；發現辨識錯誤可以直接修改。' : '其他內容顧問會對照原件核對；發現辨識錯誤也可以自行修改。' }}</text>
       <view class="holder"><text class="field-label">持牌公司</text><text class="holder-text">{{ holderText }}</text>
         <picker v-if="link.groups.length" :range="groupOptions" range-key="label" @change="groupId=groupOptions[Number($event.detail.value)].id"><text class="more">{{ groupId ? '改選或改回自動判斷 ›' : '不對？改選名下其他公司組 ›' }}</text></picker></view>
       <text class="more" @click="showFields=!showFields">{{ showFields ? '收起全部欄位' : '查看或修改全部欄位 ›' }}</text>
       <view v-if="showFields"><view v-for="field in fields.filter(f=>f.key!=='cardNumber')" :key="field.key"><text class="field-label">{{ field.label }}<text v-if="fieldStatusText(fieldStatus[field.key])" class="field-status" :class="fieldStatusClass(fieldStatus[field.key])">{{ fieldStatusText(fieldStatus[field.key]) }}</text></text><input class="field" v-model="draft[field.key]" placeholder="按批文卡填寫"/></view></view>
     </view>
-    <button class="primary save-file" :disabled="busy" @click="create">{{ busy?'處理中…':'提交給顧問核對' }}</button>
+    <button class="primary save-file" :disabled="busy" @click="create">{{ busy?'處理中…':selfManaged?'建立牌照':'提交給顧問核對' }}</button>
     <text class="link request-link" @click="goRequests">還沒有批文卡、要申請新牌？前往申請辦理 ›</text>
   </view>
 </template>
 <script setup>
 import { ref,computed,watch } from 'vue'
-import { api,getUser,cardPhoto } from '../../lib/api'
+import { api,getUser,cardPhoto,isSelfManaged } from '../../lib/api'
 import ApprovalCard from '../../components/ApprovalCard.vue'
+// 自管客戶自己建檔，不經顧問核對
+const selfManaged=isSelfManaged()
 const route=ref('粵港'),draft=ref({}),images=ref({}),previews=ref({}),busy=ref(false),showFields=ref(false),fieldStatus=ref({})
 // 持牌公司：按批文卡的商號、內承單位找名下公司；找不到就只用名稱新建，之後在「我的公司」補資料
 const link=ref({groupId:null,groupName:'',companies:[],groups:[]}),groupId=ref('')
@@ -34,7 +36,7 @@ const holderText=computed(()=>{
   const fresh=link.value.companies.filter(c=>!c.existing).map(c=>c.name)
   if(link.value.groupId)return '將連到你已有的公司：'+link.value.groupName+(fresh.length?'；'+fresh.join('、')+' 會加到這組':'')
   if(fresh.length)return '會新建公司：'+fresh.join('、')+'。建檔後在「我的公司」補上登記號碼等資料即可。'
-  return '未辨識到商號，你的顧問核對時會連到你的公司。'
+  return selfManaged?'未辨識到商號；建立後可在「我的公司」補上。':'未辨識到商號，你的顧問核對時會連到你的公司。'
 })
 let linkTimer=0
 watch(()=>[route.value,draft.value.company,draft.value.contractor],()=>{clearTimeout(linkTimer);linkTimer=setTimeout(async()=>{try{link.value=await api('/my/plate-companies?route='+encodeURIComponent(route.value)+'&company='+encodeURIComponent(draft.value.company||'')+'&contractor='+encodeURIComponent(draft.value.contractor||''))}catch{}},400)},{immediate:true})

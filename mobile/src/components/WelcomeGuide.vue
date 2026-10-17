@@ -12,10 +12,15 @@
 </template>
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getUser } from '../lib/api'
+import { getUser, isSelfManaged } from '../lib/api'
 const props = defineProps({ force: Boolean })
 const emit = defineEmits(['closed'])
-const steps = [
+// 自管客戶（自己管理）看另一套導覽：沒有顧問、全部事項自己辦
+const steps = isSelfManaged() ? [
+  { title: '首頁一眼看清楚', body: '上方是你名下牌照的狀態：正常、快到期、已逾期。「待辦」列出快到期、要你辦的事，辦好按「已辦好」就會消失。' },
+  { title: '拍卡建檔，自動提醒', body: '拍下批文卡就能建立牌照，到期日自動讀出；之後每項到期前都會提醒你。要看全部到期日，按「查看全部到期日」。' },
+  { title: '牌照有變動，自己更新', body: '換車、續期、換司機等，在牌照頁按「有變動？」更新，資料即時生效。' }
+] : [
   { title: '首頁一眼看清楚', body: '上方是你名下牌照的狀態：正常、快到期、已逾期。「待辦」只列要你動手的事，做完自動消失；沒有就代表不用操心。' },
   { title: '我們負責的不用你管', body: '我們負責的事項會按時跟進，不會出現在待辦；要看全部到期日，按「查看全部到期日」。每個牌照有變動，在牌照頁按「有變動？」。' },
   { title: '要交文件，直接拍照', body: '顧問需要文件時會出現在待辦，按進去拍照或選 PDF 上傳。要聯絡顧問，在「我的」可以直接致電或複製微信號。' }

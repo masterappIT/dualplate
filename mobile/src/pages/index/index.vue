@@ -2,7 +2,7 @@
   <view class="page home">
     <view class="hero deep guilloche">
       <view class="hero-top">
-        <view class="grow"><text class="kicker">委託人</text><text class="hero-name">{{ data.customerName || user?.name || '歡迎' }}</text><text class="hero-sub">名下 <text class="num">{{ data.plates.length }}</text> 個兩地牌</text></view>
+        <view class="grow"><text class="kicker">{{ selfManaged ? '自己管理' : '委託人' }}</text><text class="hero-name">{{ data.customerName || user?.name || '歡迎' }}</text><text class="hero-sub">名下 <text class="num">{{ data.plates.length }}</text> 個兩地牌</text></view>
         <view class="bell" @click="goNotices" aria-label="通知"><image class="bell-icon" src="/static/bell.svg" /><text v-if="data.unreadNotifications" class="bell-dot num">{{ data.unreadNotifications > 99 ? '99+' : data.unreadNotifications }}</text></view>
       </view>
       <view class="ticket-rule" />
@@ -14,6 +14,13 @@
     </view>
     <text v-if="data.counts.pending" class="pending-note">另有 {{ data.counts.pending }} 個牌照資料整理中</text>
 
+    <!-- 自管客戶還沒有牌照：引導拍批文卡建立第一個（沿用新增牌照頁） -->
+    <view v-if="selfManaged && loaded && !data.plates.length" class="list-card first-plate">
+      <text class="list-title">建立你的第一個牌照</text>
+      <text class="list-sub">拍下批文卡正反面，自動辨識牌照和到期日，之後到期前會提醒你。</text>
+      <button class="primary first-plate-btn" @click="addPlate">拍批文卡</button>
+    </view>
+
     <!-- 待辦：要你提供的、你自理而快到期的、未讀通知，合成一個清單；做完自動消失 -->
     <view class="section-head"><text class="section-title">待辦<text v-if="todoList.length" class="num"> · {{ todoList.length }}</text></text></view>
     <view v-if="todoList.length">
@@ -22,6 +29,7 @@
         <DueDate v-if="item.deadline" :date="item.deadline.dueOn" :days="item.deadline.daysLeft" :level="item.deadline.level" /><text v-else class="chev">›</text>
       </view>
     </view>
+    <view v-else-if="selfManaged" class="list-card"><text class="list-title">目前沒有快到期的事項</text><text class="list-sub">到期前會在這裏提醒你；辦好後按「已辦好」。</text></view>
     <view v-else class="list-card"><text class="list-title">目前不用你做甚麼</text><text class="list-sub">我們負責的事項會按時跟進；需要你提供資料或確認時，會出現在這裏。</text></view>
 
     <text class="link all-deadlines" @click="goDeadlines">查看全部到期日 ›</text>
@@ -33,7 +41,7 @@
         <view class="req-meta"><PlateChip v-if="item.plate" :plate="item.plate" region="內地" size="sm" /><text class="list-sub">{{ clientStage(item.stage) }}</text></view>
       </view>
     </view>
-    <button class="btn-line new-request" @click="newRequest">請顧問幫我辦</button>
+    <button v-if="!selfManaged" class="btn-line new-request" @click="newRequest">請顧問幫我辦</button>
 
     <WelcomeGuide />
     <wd-message-box />
@@ -44,14 +52,15 @@ import { useConfirm } from '../../lib/choice'
 const confirmBox=useConfirm()
 import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { api, getUser, openPlate, startRequest, requestTone, clientStage, checkTerms } from '../../lib/api'
+import { api, getUser, openPlate, startRequest, requestTone, clientStage, checkTerms, rememberMode } from '../../lib/api'
 import DueDate from '../../components/DueDate.vue'
 import PlateChip from '../../components/PlateChip.vue'
 import WelcomeGuide from '../../components/WelcomeGuide.vue'
 const user=ref(getUser())
 const data=ref({unreadNotifications:0,advisor:null,customerName:'',counts:{pending:0,ok:0,due:0,overdue:0},plates:[],deadlines:[],todos:[],activeRequests:[]})
-const notices=ref([])
-async function load(){user.value=getUser();if(!user.value)return uni.navigateTo({url:'/pages/login/login'});checkTerms(confirmBox.ask);try{const [overview,list]=await Promise.all([api('/my/overview'),api('/my/notifications').catch(()=>({items:[]}))]);data.value=overview;notices.value=list.items||[]}catch(e){uni.showToast({title:e.message,icon:'none'})}}
+const notices=ref([]),loaded=ref(false)
+const selfManaged=computed(()=>data.value.serviceMode==='自管')
+async function load(){user.value=getUser();if(!user.value)return uni.navigateTo({url:'/pages/login/login'});checkTerms(confirmBox.ask);try{const [overview,list]=await Promise.all([api('/my/overview'),api('/my/notifications').catch(()=>({items:[]}))]);data.value=overview;rememberMode(overview.serviceMode);notices.value=list.items||[]}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
 // 待辦只放要客戶動手的：要你提供的資料、你自理（或要你過關）而快到期／已逾期的事項、要你處理的未讀通知
 // 通知只有兩類要客戶動手：文件需重交、自辦更新被顧問退回；辦理進度、到期、改回等只是告知，留在鈴鐺
 const actionNotices=new Set(['attachment','self_handled_returned'])
@@ -70,6 +79,7 @@ function goMe(){uni.switchTab({url:'/pages/me/me'})}
 function goDeadlines(){uni.navigateTo({url:'/pages/deadlines/deadlines'})}
 function openRequest(id){uni.navigateTo({url:'/pages/request-detail/request-detail?id='+id})}
 function newRequest(){startRequest('')}
+function addPlate(){uni.navigateTo({url:'/pages/plate-create/plate-create'})}
 // Company items open the company list; plate and vehicle items open their plate.
 function openDeadline(item){if(item.ownerType==='company')goCompanies();else if(item.plateId)openPlate(item.plateId);else goDeadlines()}
 onShow(load)
@@ -86,7 +96,8 @@ onShow(load)
 .status-tile.ok{color:var(--on-deep-ok)}.status-tile.due{color:var(--on-deep-due)}.status-tile.overdue{color:var(--on-deep-overdue)}
 .status-tile.zero{color:var(--on-deep-2)}
 .pending-note{display:block;margin-top:8px;color:var(--ink-3);font-size:var(--fs-meta);text-align:center}
-.new-request{width:100%;margin-top:16px}.all-deadlines{display:block;text-align:center;padding:8px 0}
+.new-request{width:100%;margin-top:16px}
+.first-plate{margin-top:12px}.first-plate-btn{width:100%;margin-top:12px}.all-deadlines{display:block;text-align:center;padding:8px 0}
 .req-meta{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:8px}.req-meta .list-sub{margin-top:0}
 .bell{position:relative;flex:none;width:40px;height:40px;border-radius:50%;background:var(--card);display:flex;align-items:center;justify-content:center}.bell-icon{width:20px;height:20px}
 .bell-dot{position:absolute;top:-4px;right:-6px;min-width:20px;height:20px;padding:0 4px;border-radius:99px;background:var(--plate-yellow);color:var(--jade-deep);font-size:var(--fs-cap);font-weight:800;line-height:18px;text-align:center;border:1px solid var(--jade-deep)}

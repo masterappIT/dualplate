@@ -46,8 +46,11 @@ function labelOf(type, row) {
   return `司機 ${row.name}`
 }
 
+// 自管客戶（docs/requirements.md 5.6.2）改資料不進「客戶更新待核對」，以免淹沒托管客戶的核對；資料照樣即時生效
+export const selfManagedCustomer = customerId => db.prepare("SELECT 1 FROM customers WHERE id=? AND service_mode='自管' AND COALESCE(is_self,0)=0").get(customerId) !== undefined
 // 記錄一批欄位修改。同一欄位已有待核對的修改時合併成一筆（保留最初的改前值）；改回原值則撤銷該筆。
 export function logChanges({ tenantId, customerId, user, entityType, entityId, entityLabel, changes }) {
+  if (selfManagedCustomer(customerId)) return
   for (const change of changes) {
     const before = text(change.before), after = text(change.after)
     if (before === after) continue
@@ -60,11 +63,13 @@ export function logChanges({ tenantId, customerId, user, entityType, entityId, e
 }
 // 客戶新建批文卡：記一筆「新建檔」，讓管理者在同一個清單看到
 export function logCreated({ tenantId, user, plate }) {
+  if (selfManagedCustomer(plate.customer_id)) return
   db.prepare('INSERT INTO customer_changes(id,tenant_id,customer_id,entity_type,entity_id,entity_label,field,field_label,before_value,after_value,before_text,after_text,is_date,changed_by,changed_by_name,changed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
     .run(id(), tenantId, plate.customer_id, 'card', plate.id, plateLabel(plate), 'created', '新建批文卡', '', plate.card_number, '', `批文卡 ${plate.card_number}`, 0, user.id, user.name, now())
 }
 // 客戶建檔批文卡時按名稱新建的公司：同樣列在待核對清單
 export function logCompanyCreated({ tenantId, user, customerId, company }) {
+  if (selfManagedCustomer(customerId)) return
   const label = `${company.jurisdiction}公司 ${company.name}`
   db.prepare('INSERT INTO customer_changes(id,tenant_id,customer_id,entity_type,entity_id,entity_label,field,field_label,before_value,after_value,before_text,after_text,is_date,changed_by,changed_by_name,changed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
     .run(id(), tenantId, customerId, 'company', company.id, company.name, 'created', '由批文卡新建公司', '', company.name, '', label, 0, user.id, user.name, now())
@@ -204,7 +209,7 @@ export async function clientEditRoutes(req, res, url, user, { json, fail, parseB
     const others = db.prepare('SELECT name FROM users WHERE customer_id=? AND tenant_id=? AND id<>? AND active=1 ORDER BY name').all(customerId, tenant, user.id)
     // 系統建立帳號時，沒有電郵的會用內部佔位地址，不顯示給客戶
     const email = me.email && !/@(phone|wechat)\.invalid$/i.test(me.email) ? me.email : ''
-    return json(res, 200, { me: { name: me.name, email, phone: me.phone || '', wechatBound: !!me.wechat_openid }, customer: { name: customer.name, kind: customer.kind, phone: customer.phone || '' }, otherLogins: others.map(row => row.name) }), true
+    return json(res, 200, { me: { name: me.name, email, phone: me.phone || '', wechatBound: !!me.wechat_openid }, customer: { name: customer.name, kind: customer.kind, phone: customer.phone || '' }, otherLogins: others.map(row => row.name), serviceMode: selfManagedCustomer(customerId) ? '自管' : '托管' }), true
   }
   if (path === '/api/my/drivers') {
     if (method !== 'GET') return fail(res, 405, '不支援此操作'), true

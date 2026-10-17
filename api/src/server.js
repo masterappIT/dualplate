@@ -157,7 +157,9 @@ export const server = http.createServer(async (req, res) => {
       clearFailures('customer', login)
       const token = createSession(account.id)
       db.prepare('UPDATE users SET last_login_at=? WHERE id=?').run(now(), account.id)
-      return json(res, 200, { token, user: { id: account.id, name: account.name, email: account.email, role: account.role, customerId: account.customer_id } })
+      // 登入時就帶回自管或托管，客戶端第一次打開（導覽、首頁）已知道用哪套用語
+      const mode = one("SELECT service_mode FROM customers WHERE id=? AND COALESCE(is_self,0)=0", account.customer_id)?.service_mode === '自管' ? '自管' : '托管'
+      return json(res, 200, { token, user: { id: account.id, name: account.name, email: account.email, role: account.role, customerId: account.customer_id, serviceMode: mode } })
     }
     if (await publicPortalRoutes(req, res, url, { json, fail, parseBody })) return
     if (await publicTermsRoutes(req, res, url, { json, fail })) return
