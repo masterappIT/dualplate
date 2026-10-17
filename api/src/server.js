@@ -21,7 +21,8 @@ import { pricingRoutes } from './pricing.js'
 import { bookkeepingRoutes } from './bookkeeping.js'
 import { reportRoutes } from './reports.js'
 import { renterPublicRoutes, renterAdminRoutes } from './renter-portal.js'
-import { clientEditRoutes, changeReviewRoutes, logCreated, logCardChanges, logPlateChanges } from './client-edits.js'
+import { clientEditRoutes, changeReviewRoutes, logCreated, logCompanyCreated, logCardChanges, logPlateChanges } from './client-edits.js'
+import { plateCompanyRoutes, linkPlateCompanies } from './plate-companies.js'
 import { seedDemo } from './demo-seed.js'
 import { passwordProblem, authenticate, createSession, lockedMinutes, recordFailure, clearFailures, loginPhone, PHONE_RULE, clientIp, audit, auditRoutes, logError, health } from './security.js'
 
@@ -169,6 +170,7 @@ export const server = http.createServer(async (req, res) => {
     if (await portalRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await changeReviewRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await clientEditRoutes(req, res, url, user, { json, fail, parseBody })) return
+    if (await plateCompanyRoutes(req, res, url, user, { json, fail })) return
     if (await customerRoutes(req, res, url, user, { json, fail, query, one, plateFor, parseBody })) return
     if (path === '/api/import/plates' && req.method === 'POST') {
       if (user.role !== 'admin') return fail(res, 403, '無權限')
@@ -368,6 +370,8 @@ export const server = http.createServer(async (req, res) => {
         const source = one('SELECT * FROM requests WHERE id=?', b.sourceRequestId)
         if (!source || source.service_code !== 'new_application' || source.customer_id !== b.customerId || source.route !== b.route || source.plate_asset_id) return fail(res, 400, '申請案件與客戶或路線不相符，或已完成建檔')
       }
+      // groupId：客戶在建檔頁自己選的公司組；不填就按批文卡的商號、內承單位自動連到公司
+      if (user.role === 'customer' && b.groupId !== undefined && b.groupId !== '' && (typeof b.groupId !== 'string' || !one('SELECT id FROM company_groups WHERE id=? AND customer_id=? AND tenant_id=?', b.groupId, b.customerId, user.tenant_id))) return fail(res, 400, '公司組不存在')
       const proposedCard = cleanCard(b.cardData)
       const cardNumber = clean(proposedCard.cardNumber || b.cardNumber,80)
       if (!cardNumber) return fail(res, 400, '請先填寫批文卡編號；尚未取得批文卡請使用申請代辦')
@@ -388,7 +392,12 @@ export const server = http.createServer(async (req, res) => {
       try {
         db.prepare('INSERT INTO plate_assets(id,customer_id,route,mainland_plate,local_plate,vehicle_id,installation_status,usage_status,card_number,card_expires_on,notes,created_at,updated_at,card_data,card_status,card_updated_by,card_updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(assetId,b.customerId,b.route,mainlandPlate,localPlate,b.vehicleId||null,'待核對','待核對',cardNumber,cardExpiresOn,clean(b.notes,1000),now(),now(),JSON.stringify({...proposedCard,cardNumber}),'待核對',user.name,now())
         for(const [side,mime,bytes] of cardImages) db.prepare('INSERT INTO approval_card_images VALUES (?,?,?,?)').run(assetId,side,mime,bytes)
-        if (user.role === 'customer') logCreated({ tenantId: user.tenant_id, user, plate: one('SELECT * FROM plate_assets WHERE id=?', assetId) })
+        if (user.role === 'customer') {
+          // 只限客戶自行建檔；員工從申請案件建檔照舊，在牌照頁選公司組
+          const linked = linkPlateCompanies({ tenantId: user.tenant_id, plate: one('SELECT * FROM plate_assets WHERE id=?', assetId), card: proposedCard, explicitGroupId: b.groupId || null })
+          logCreated({ tenantId: user.tenant_id, user, plate: one('SELECT * FROM plate_assets WHERE id=?', assetId) })
+          for (const company of linked.created) logCompanyCreated({ tenantId: user.tenant_id, user, customerId: b.customerId, company })
+        }
         if (b.sourceRequestId) {
           db.prepare('UPDATE requests SET plate_asset_id=?,updated_at=? WHERE id=? AND plate_asset_id IS NULL').run(assetId,now(),b.sourceRequestId)
           pushActivity(b.sourceRequestId,user.id,'plate_created',`已取得批文卡 ${cardNumber}，建立兩地牌檔案`)

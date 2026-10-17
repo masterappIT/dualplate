@@ -5,6 +5,7 @@ import { scopeMap } from './entrustment.js'
 import { driverOwners, mainPlate } from './drivers.js'
 import { deadlineNotices } from './client-portal.js'
 import { services, planFor } from './catalog.js'
+import { companyGaps } from './plate-companies.js'
 
 // Customer-facing summaries for the client app. Customers only see their own records, never
 // internal "missing data" items, rule codes or tenant details.
@@ -158,7 +159,7 @@ export async function customerRoutes(req, res, url, user, h) {
     const own = all.filter(item => plateOf(item) === plate.id || (item.ownerType === 'company' && companies.some(company => company.id === item.ownerId && company.group_id && company.group_id === plate.group_id)))
     const requests = query('SELECT id,title,status,stage,updated_at FROM requests WHERE customer_id=? AND plate_asset_id=? ORDER BY updated_at DESC', customer.id, plate.id)
     const crossing = crossingSummary(customer.tenant_id, plate.id)
-    return json(res, 200, { ...summary, crossing: { enabled: crossing.enabled, lastCrossedOn: crossing.lastCrossedOn, nextDueOn: crossing.nextDueOn, days: crossing.days }, deadlines: visible(own).sort((a, b) => String(a.dueOn).localeCompare(String(b.dueOn))), requests: requests.map(item => ({ id: item.id, title: item.title, status: requestStatus(item.status), stage: item.stage, updatedAt: item.updated_at })), drivers: query("SELECT d.id, d.name, pd.role FROM plate_drivers pd JOIN drivers d ON d.id=pd.driver_id WHERE pd.plate_asset_id=? ORDER BY CASE pd.role WHEN '主' THEN 0 ELSE 1 END, pd.sort", plate.id) }), true
+    return json(res, 200, { ...summary, crossing: { enabled: crossing.enabled, lastCrossedOn: crossing.lastCrossedOn, nextDueOn: crossing.nextDueOn, days: crossing.days }, deadlines: visible(own).sort((a, b) => String(a.dueOn).localeCompare(String(b.dueOn))), requests: requests.map(item => ({ id: item.id, title: item.title, status: requestStatus(item.status), stage: item.stage, updatedAt: item.updated_at })), companyGaps: companyGaps(customer.tenant_id, plate.group_id), drivers: query("SELECT d.id, d.name, pd.role FROM plate_drivers pd JOIN drivers d ON d.id=pd.driver_id WHERE pd.plate_asset_id=? ORDER BY CASE pd.role WHEN '主' THEN 0 ELSE 1 END, pd.sort", plate.id) }), true
   }
   return fail(res, 404, '找不到此頁'), true
 }

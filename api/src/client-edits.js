@@ -58,6 +58,12 @@ export function logCreated({ tenantId, user, plate }) {
   db.prepare('INSERT INTO customer_changes(id,tenant_id,customer_id,entity_type,entity_id,entity_label,field,field_label,before_value,after_value,before_text,after_text,is_date,changed_by,changed_by_name,changed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
     .run(id(), tenantId, plate.customer_id, 'card', plate.id, plateLabel(plate), 'created', '新建批文卡', '', plate.card_number, '', `批文卡 ${plate.card_number}`, 0, user.id, user.name, now())
 }
+// 客戶建檔批文卡時按名稱新建的公司：同樣列在待核對清單
+export function logCompanyCreated({ tenantId, user, customerId, company }) {
+  const label = `${company.jurisdiction}公司 ${company.name}`
+  db.prepare('INSERT INTO customer_changes(id,tenant_id,customer_id,entity_type,entity_id,entity_label,field,field_label,before_value,after_value,before_text,after_text,is_date,changed_by,changed_by_name,changed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(id(), tenantId, customerId, 'company', company.id, company.name, 'created', '由批文卡新建公司', '', company.name, '', label, 0, user.id, user.name, now())
+}
 // 批文卡的改動（建檔後修改或上傳新卡）
 export function logCardChanges({ tenantId, user, plate, before, after }) {
   const oldCard = cardData(JSON.stringify(before)), newCard = cardData(JSON.stringify(after))
@@ -149,7 +155,7 @@ export async function changeReviewRoutes(req, res, url, user, { json, fail, pars
     try { accept(change); db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
     return json(res, 200, changeView({ ...pendingRow(change.id), customer_name: '' })), true
   }
-  if (change.field === 'created') return fail(res, 400, '新建的批文卡不能改回，請到牌照頁處理'), true
+  if (change.field === 'created') return fail(res, 400, change.entity_type === 'card' ? '新建的批文卡不能改回，請到牌照頁處理' : '新建的公司不能改回，請到客戶的公司頁處理'), true
   const current = readField(change)
   if (current.missing) return fail(res, 404, `${entityName[change.entity_type]}已不存在`), true
   if (text(current.value) !== text(change.after_value)) return fail(res, 409, '這個欄位之後又改過，不能直接改回；請到資料頁修改'), true
