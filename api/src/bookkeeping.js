@@ -1,6 +1,6 @@
 import { db, id, now } from './db.js'
 import { businessToday } from './rules.js'
-import { scopeMap } from './entrustment.js'
+import { scopeMap, syncFilingFirm } from './entrustment.js'
 import { sniff } from './client-portal.js'
 
 // 內地公司每月報帳報稅追蹤（docs/tasks/bookkeeping-brief.md）。做帳外包給會計公司，系統只追蹤進度、回執與截止日。
@@ -131,7 +131,7 @@ export async function bookkeepingRoutes(req, res, url, user, { json, fail, parse
     if (body.filingCycle === 'quarterly' && companies.some(company => company.taxpayer_type === '一般納稅人')) return fail(res, 400, '一般納稅人須按月申報'), true
     const update = db.prepare('UPDATE companies SET accounting_firm_id=?, filing_cycle=?, updated_at=? WHERE id=? AND tenant_id=?')
     db.exec('BEGIN')
-    try { for (const company of companies) update.run(body.accountingFirmId, body.filingCycle, now(), company.id, tenant); db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
+    try { for (const company of companies) { update.run(body.accountingFirmId, body.filingCycle, now(), company.id, tenant); syncFilingFirm(tenant, company.id, user.id) } db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
     return json(res, 200, { updated: body.companyIds }), true
   }
   if (setupMatch) {
@@ -143,7 +143,12 @@ export async function bookkeepingRoutes(req, res, url, user, { json, fail, parse
     if (!isObject(body) || (body.filingCycle !== undefined && !['monthly', 'quarterly'].includes(body.filingCycle))) return fail(res, 400, '申報週期須為每月或每季'), true
     if (body.filingCycle === 'quarterly' && (company.taxpayer_type || '') === '一般納稅人') return fail(res, 400, '一般納稅人須按月申報'), true
     if (body.accountingFirmId !== undefined && body.accountingFirmId !== null && !db.prepare('SELECT id FROM accounting_firms WHERE id=? AND tenant_id=?').get(body.accountingFirmId, tenant)) return fail(res, 404, '會計公司不存在'), true
-    db.prepare('UPDATE companies SET accounting_firm_id=?, filing_cycle=?, updated_at=? WHERE id=?').run(body.accountingFirmId === undefined ? company.accounting_firm_id : body.accountingFirmId, body.filingCycle || company.filing_cycle || 'monthly', now(), company.id)
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      db.prepare('UPDATE companies SET accounting_firm_id=?, filing_cycle=?, updated_at=? WHERE id=?').run(body.accountingFirmId === undefined ? company.accounting_firm_id : body.accountingFirmId, body.filingCycle || company.filing_cycle || 'monthly', now(), company.id)
+      syncFilingFirm(tenant, company.id, user.id)
+      db.exec('COMMIT')
+    } catch (error) { db.exec('ROLLBACK'); throw error }
     const updated = db.prepare('SELECT accounting_firm_id, filing_cycle FROM companies WHERE id=?').get(company.id)
     return json(res, 200, { companyId: company.id, accountingFirmId: updated.accounting_firm_id, filingCycle: updated.filing_cycle }), true
   }

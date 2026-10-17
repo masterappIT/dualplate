@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { db } from './db.js'
-import { businessToday, itemGroups, defaultGroup } from './rules.js'
+import { businessToday, itemGroups, defaultGroup, ruleMatches } from './rules.js'
+import { plateFacts } from './plate-facts.js'
 
 // What a client entrusts to us (docs/tasks/scope-items-design.md). Three layers: the tenant's item catalogue (every rule
 // plus two built-in items), each customer's own item list, and who handles each listed item per company or plate.
@@ -20,13 +21,17 @@ export function catalogue(tenantId) {
   const rules = db.prepare('SELECT code, name, scope, match_json, active, service, item_group FROM rules WHERE tenant_id=? ORDER BY sort, name').all(tenantId).map(rule => {
     const jurisdiction = JSON.parse(rule.match_json).jurisdiction
     const companyCategories = jurisdiction ? [].concat(jurisdiction).map(value => categoryOf[value]).filter(Boolean) : ['hk', 'mo', 'cn']
-    return { code: rule.code, name: rule.name, scope: rule.scope, categories: rule.scope === 'company' ? companyCategories : ['plate'], group: rule.scope === 'company' ? null : rule.item_group || defaultGroup(rule.scope), legacy: rule.service, active: Boolean(rule.active), builtin: false }
+    return { code: rule.code, name: rule.name, scope: rule.scope, match: JSON.parse(rule.match_json), categories: rule.scope === 'company' ? companyCategories : ['plate'], group: rule.scope === 'company' ? null : rule.item_group || defaultGroup(rule.scope), legacy: rule.service, active: Boolean(rule.active), builtin: false }
   })
   return [...builtins.map(item => ({ ...item, active: true, builtin: true })), ...rules]
 }
 
 const ownerCategory = (ownerType, owner) => ownerType === 'company' ? categoryOf[owner?.jurisdiction] : 'plate'
 export const itemApplies = (item, ownerType, owner) => (ownerType === 'company') === (item.scope === 'company') && item.categories.includes(ownerCategory(ownerType, owner))
+// Same, and the rule's own conditions hold for this company or plate (e.g. a 粵港 plate has no Macau permit, a plate
+// without crossing reminders has no 90-day item). Vehicle and driver rules are checked on their own owners later.
+const factsOf = (ownerType, owner) => ownerType === 'plate' ? plateFacts(owner) : { jurisdiction: owner.jurisdiction, companyStatus: owner.status || '存續' }
+export const itemMatches = (item, ownerType, owner, facts = null) => itemApplies(item, ownerType, owner) && (item.scope !== ownerType || !item.match || ruleMatches(item, facts || factsOf(ownerType, owner)))
 const itemView = item => ({ code: item.code, name: item.name, group: item.group, groupLabel: itemGroups[item.group] || '', builtin: item.builtin })
 
 // A customer who never edited the list has every active item; the first edit freezes the list into customer_items.
@@ -63,6 +68,8 @@ export function scopeMap(tenantId) {
   const rows = new Map(db.prepare('SELECT * FROM service_scopes WHERE tenant_id=? AND ended_on IS NULL').all(tenantId).map(row => [`${row.owner_type}:${row.owner_id}:${row.service}`, row]))
   const customers = new Map(db.prepare('SELECT id, is_self, items_customized, scope_template FROM customers WHERE tenant_id=?').all(tenantId).map(row => [row.id, row]))
   const jurisdictions = new Map(db.prepare('SELECT id, jurisdiction FROM companies WHERE tenant_id=?').all(tenantId).map(row => [row.id, row.jurisdiction]))
+  // Outsourced monthly filings name the accounting firm set on the company (one source with the filings page).
+  const firms = new Map(db.prepare('SELECT co.id, f.name FROM companies co JOIN accounting_firms f ON f.id=co.accounting_firm_id WHERE co.tenant_id=?').all(tenantId).map(row => [row.id, row.name]))
   const lists = new Map()
   const listOf = customer => { if (!lists.has(customer.id)) lists.set(customer.id, customerCodes(tenantId, customer, items)); return lists.get(customer.id) }
   return {
@@ -71,7 +78,7 @@ export function scopeMap(tenantId) {
       const customer = customers.get(customerId)
       if (customer && !listOf(customer).has(code)) return null
       const row = rows.get(`${ownerType}:${ownerId}:${code}`)
-      if (row) return { handler: row.handler, providerName: row.provider_name || '' }
+      if (row) return { handler: row.handler, providerName: code === 'monthly_filing' && row.handler === 'outsourced' && firms.get(ownerId) || row.provider_name || '' }
       return { handler: templateHandler(customer, ownerType === 'company' ? categoryOf[jurisdictions.get(ownerId)] : 'plate'), providerName: '' }
     }
   }
@@ -80,7 +87,7 @@ export function scopeMap(tenantId) {
 // Items of one owner that are active, on its customer's list and apply to it.
 export function ownerItems(tenantId, ownerType, owner) {
   const items = catalogue(tenantId), codes = customerCodes(tenantId, customerOf(tenantId, owner.customer_id), items)
-  return items.filter(item => item.active && codes.has(item.code) && itemApplies(item, ownerType, owner))
+  return items.filter(item => item.active && codes.has(item.code) && itemMatches(item, ownerType, owner))
 }
 
 export function scopesFor(tenantId, ownerType, ownerId) {
@@ -155,9 +162,10 @@ export function templateChanges(tenantId, customerId, templateKey) {
   const changes = []
   for (const [ownerType, owner, label] of [...companies.map(item => ['company', item, item.name]), ...plates.map(item => ['plate', item, plateLabel(item)])]) {
     const to = templateHandler(customer, ownerCategory(ownerType, owner), templateKey)
-    for (const item of items.filter(entry => entry.active && codes.has(entry.code) && itemApplies(entry, ownerType, owner))) {
+    for (const item of items.filter(entry => entry.active && codes.has(entry.code) && itemMatches(entry, ownerType, owner))) {
       const from = book.handling(ownerType, owner.id, item.code, customer.id).handler
-      if (from !== to) changes.push({ ownerType, ownerId: owner.id, ownerLabel: label, item: item.code, itemLabel: item.name, from, to, explicit: Boolean(book.get(`${ownerType}:${owner.id}:${item.code}`)) })
+      // Outsourced is still ours to follow up, so a template that hands an item to us keeps the outsourcing.
+      if (from !== to && !(from === 'outsourced' && to === 'us')) changes.push({ ownerType, ownerId: owner.id, ownerLabel: label, item: item.code, itemLabel: item.name, from, to, explicit: Boolean(book.get(`${ownerType}:${owner.id}:${item.code}`)) })
     }
   }
   return { template: templateKey, label: template.label, changes }
@@ -179,11 +187,15 @@ export function customerScope(tenantId, customerId) {
     const forCategory = items.filter(item => item.categories.includes(category) && (category === 'plate') === (item.scope !== 'company'))
     const listed = forCategory.filter(item => codes.has(item.code))
     const owners = category === 'plate'
-      ? plates.map(plate => ({ type: 'plate', id: plate.id, label: plateLabel(plate), route: plate.route || '' }))
-      : companies.filter(company => categoryOf[company.jurisdiction] === category).map(company => ({ type: 'company', id: company.id, label: company.name, nameEn: company.name_en || '', status: company.status || '存續', plates: plates.filter(plate => plate.group_id && plate.group_id === company.group_id).map(plateLabel) }))
+      ? plates.map(plate => ({ row: plate, type: 'plate', id: plate.id, label: plateLabel(plate), route: plate.route || '' }))
+      : companies.filter(company => categoryOf[company.jurisdiction] === category).map(company => ({ row: company, type: 'company', id: company.id, label: company.name, nameEn: company.name_en || '', status: company.status || '存續', plates: plates.filter(plate => plate.group_id && plate.group_id === company.group_id).map(plate => plate.mainland_plate || plate.local_plate || plate.card_number || '車牌待補') }))
+    // Cells only for items whose conditions hold for that owner; the page shows the rest as 不適用.
     return {
       category, label: categories[category], items: listed.map(itemView), available: forCategory.filter(item => !codes.has(item.code)).map(itemView),
-      owners: owners.map(owner => ({ ...owner, cells: Object.fromEntries(listed.map(item => { const handling = book.handling(owner.type, owner.id, item.code, customer.id); return [item.code, { ...handling, defaulted: !book.get(`${owner.type}:${owner.id}:${item.code}`) }] })) }))
+      owners: owners.map(({ row, ...owner }) => {
+        const facts = factsOf(owner.type, row)
+        return { ...owner, cells: Object.fromEntries(listed.filter(item => itemMatches(item, owner.type, row, facts)).map(item => { const handling = book.handling(owner.type, owner.id, item.code, customer.id); return [item.code, { ...handling, defaulted: !book.get(`${owner.type}:${owner.id}:${item.code}`) }] })) }
+      })
     }
   })
   return { customer: { id: customer.id, name: customer.name, isSelf: Boolean(customer.is_self), template: customer.scope_template || null, customized: Boolean(customer.items_customized) }, templates: Object.fromEntries(Object.entries(templates).map(([key, value]) => [key, value.label])), groups: itemGroups, sections }
@@ -202,7 +214,7 @@ export function changeItems(tenantId, customer, { add = [], remove = [] }, userI
   const { companies, plates } = ownersOf(tenantId, customer.id), book = scopeMap(tenantId)
   const owners = [...companies.filter(item => item.status !== '已註銷').map(item => ['company', item]), ...plates.map(item => ['plate', item])]
   const impact = code => {
-    const applicable = owners.filter(([type, owner]) => itemApplies(known.get(code), type, owner))
+    const applicable = owners.filter(([type, owner]) => itemMatches(known.get(code), type, owner))
     return { code, name: known.get(code).name, owners: applicable.length, ours: applicable.filter(([type, owner]) => book.handling(type, owner.id, code, customer.id)?.handler !== 'client').length, plateIds: applicable.filter(([type]) => type === 'plate').map(([, owner]) => owner.id) }
   }
   const removed = remove.filter(code => codes.has(code)).map(impact), added = add.filter(code => !codes.has(code)).map(impact)
@@ -216,6 +228,15 @@ export function changeItems(tenantId, customer, { add = [], remove = [] }, userI
   for (const item of added) db.prepare('INSERT OR IGNORE INTO customer_items(customer_id,tenant_id,item_code,added_by,added_at) VALUES (?,?,?,?,?)').run(customer.id, tenantId, item.code, userId, now)
   for (const item of removed) db.prepare('DELETE FROM customer_items WHERE customer_id=? AND item_code=?').run(customer.id, item.code)
   return result
+}
+
+// The filings page assigned (or changed) a company's accounting firm: monthly filings we were doing ourselves become
+// outsourced to that firm. Client-handled or unlisted filings are left alone. Inside the caller's transaction.
+export function syncFilingFirm(tenantId, companyId, userId) {
+  const company = db.prepare('SELECT co.customer_id, f.name FROM companies co JOIN accounting_firms f ON f.id=co.accounting_firm_id WHERE co.id=? AND co.tenant_id=?').get(companyId, tenantId)
+  if (!company) return
+  const handling = scopeMap(tenantId).handling('company', companyId, 'monthly_filing', company.customer_id)
+  if (handling?.handler === 'us') writeScope({ tenantId, ownerType: 'company', ownerId: companyId, item: 'monthly_filing', handler: 'outsourced', providerName: company.name, notes: '報帳頁指派會計公司', userId })
 }
 
 // Impact of a batch of handler changes before it is submitted: how many reminders go to the client only, how many come

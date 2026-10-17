@@ -92,6 +92,33 @@
 .scope-matrix-cell:focus-visible { outline: 2px solid var(--plate-yellow); outline-offset: -2px; }
 .scope-matrix-cell:disabled { cursor: wait; }
 .scope-matrix-empty { color: var(--ink-3); }
+/* 委託範圍分段矩陣（ServiceScopeMatrix.vue）：欄數按段而定，窄螢幕改為每個對象一張卡 */
+.scope-section { display: grid; gap: 8px; margin-bottom: 24px; }
+.scope-section > .panel-head { margin: 0; }
+.scope-board .scope-matrix { min-width: calc(200px + var(--cols, 3) * 120px); }
+.scope-board .scope-matrix-row { grid-template-columns: minmax(180px, 1.3fr) repeat(var(--cols, 3), minmax(112px, 1fr)); }
+.scope-board .scope-matrix-slot { justify-content: center; background: var(--surface); }
+.scope-board .scope-matrix-head .select-trigger { width: 100%; }
+.scope-board .scope-matrix-head > .scope-column-head { flex-direction: column; align-items: stretch; justify-content: space-between; gap: 6px; }
+.scope-board .scope-column-head > span { overflow-wrap: anywhere; }
+.scope-board .scope-matrix-slot.is-pending { background: var(--status-due-bg); }
+.scope-board .scope-matrix-cell .tag { white-space: normal; text-align: center; overflow-wrap: anywhere; }
+.scope-board .scope-matrix-owner { flex-direction: column; align-items: flex-start; gap: 2px; }
+.scope-board .scope-matrix-owner small { color: var(--ink-muted); overflow-wrap: anywhere; }
+.scope-board .scope-matrix-detail { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px; padding: 12px; border-bottom: 1px solid var(--border); background: var(--paper); }
+.scope-board .scope-matrix-detail-group { display: grid; gap: 4px; min-width: 200px; }
+.scope-board .scope-matrix-detail-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.scope-board .scope-matrix-detail-item .scope-matrix-cell { width: auto; padding: 4px 0; }
+@media (max-width: 600px) {
+  .scope-board .scope-matrix { min-width: 0; }
+  .scope-board .scope-matrix-row { grid-template-columns: 1fr 1fr; }
+  .scope-board .scope-matrix-row > div { border-right: 0; }
+  .scope-board .scope-matrix-row > .scope-matrix-owner, .scope-board .scope-matrix-head > div:first-child { grid-column: 1 / -1; }
+  .scope-board .scope-matrix-slot { flex-direction: column; align-items: flex-start; }
+  .scope-board .scope-matrix-slot::before { content: attr(data-label); color: var(--ink-muted); font-size: 12px; }
+  .scope-board .scope-matrix-slot > .scope-matrix-cell { text-align: left; padding: 4px 0; }
+  .scope-board .scope-matrix-detail-group { min-width: 100%; }
+}
 .company-card > .button { justify-self: start; }
 .filter-bar > label { flex: 0 0 auto; min-width: 0; max-width: none; white-space: nowrap; }
 .filter-bar > label:has(input[type='checkbox']) { display: inline-flex; align-items: center; gap: 8px; }

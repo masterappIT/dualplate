@@ -79,7 +79,7 @@ test('每月報帳報稅只在內地公司段，排第一', async () => {
 })
 test('公司行列出同一公司組的牌照', async () => {
   const row = section(await scope(state.a), 'hk').owners[0]
-  assert.deepEqual(row.plates, ['粵Z·A001港 · AA1'])
+  assert.deepEqual(row.plates, ['粵Z·A001港'])
 })
 test('車牌段的出租事項是租金跟進', async () => {
   const item = section(await scope(state.a), 'plate').items.find(entry => entry.code === 'rent_overdue')
@@ -215,4 +215,47 @@ test('自有客戶套用只管牌照範本仍為我們做', async () => {
   const preview = await request(`/customers/${self}/apply-template`, 'POST', { template: 'plates_only' })
   assert.equal(preview.status, 200)
   assert.ok(!preview.body.changes.some(item => item.ownerId === hk))
+})
+test('每月報帳外包填寫不在會計公司名單的名稱回 400', async () => {
+  assert.equal((await request('/service-scopes', 'PUT', { ownerType: 'company', ownerId: state.cn, item: 'monthly_filing', handler: 'outsourced', providerName: '不存在的會計' })).status, 400)
+})
+test('每月報帳外包會計公司編號錯誤類型或別的租戶回 400', async () => {
+  const foreignFirm = randomUUID()
+  add('INSERT INTO accounting_firms(id,tenant_id,name,created_at,updated_at) VALUES (?,?,?,?,?)', foreignFirm, state.otherTenant, '別的租戶會計', now(), now())
+  for (const providerId of [3, '', [], foreignFirm]) assert.equal((await request('/service-scopes', 'PUT', { ownerType: 'company', ownerId: state.cn, item: 'monthly_filing', handler: 'outsourced', providerName: '別的租戶會計', providerId })).status, 400, JSON.stringify(providerId))
+})
+test('每月報帳外包選會計公司後，報帳頁的會計公司同步', async () => {
+  const firm = await request('/accounting-firms', 'POST', { name: '委託範圍會計' })
+  assert.equal(firm.status, 201)
+  assert.equal((await request('/service-scopes', 'PUT', { ownerType: 'company', ownerId: state.cn, item: 'monthly_filing', handler: 'outsourced', providerName: '委託範圍會計', providerId: firm.body.id })).status, 200)
+  assert.equal(state.db.prepare('SELECT accounting_firm_id FROM companies WHERE id=?').get(state.cn).accounting_firm_id, firm.body.id)
+})
+test('報帳頁指派會計公司後，委託範圍改為外包該公司', async () => {
+  const firm = await request('/accounting-firms', 'POST', { name: '報帳頁會計' })
+  const cn = company(state.b, '內地')
+  assert.equal((await request(`/companies/${cn}/filing-setup`, 'PUT', { accountingFirmId: firm.body.id })).status, 200)
+  const cell = section(await scope(state.b), 'cn').owners.find(item => item.id === cn).cells.monthly_filing
+  assert.deepEqual([cell.handler, cell.providerName], ['outsourced', '報帳頁會計'])
+})
+test('報帳頁指派會計公司不改動客戶自理的每月報帳', async () => {
+  const firm = await request('/accounting-firms', 'POST', { name: '自理客戶會計' })
+  const cn = company(state.b, '內地')
+  assert.equal((await request('/service-scopes', 'PUT', { ownerType: 'company', ownerId: cn, item: 'monthly_filing', handler: 'client' })).status, 200)
+  assert.equal((await request('/companies/filing-setup', 'PUT', { companyIds: [cn], filingCycle: 'monthly', accountingFirmId: firm.body.id })).status, 200)
+  assert.equal(section(await scope(state.b), 'cn').owners.find(item => item.id === cn).cells.monthly_filing.handler, 'client')
+})
+test('套用全權托管範本不改動已外包的事項', async () => {
+  const f = customer('己客戶'), hk = company(f, '香港')
+  assert.equal((await request('/service-scopes', 'PUT', { ownerType: 'company', ownerId: hk, item: 'hk_nar1', handler: 'outsourced', providerName: '秘書公司' })).status, 200)
+  const preview = await request(`/customers/${f}/apply-template`, 'POST', { template: 'full' })
+  assert.ok(!preview.body.changes.some(item => item.ownerId === hk && item.item === 'hk_nar1'))
+})
+test('粵港牌照沒有澳門通行證及未開過關提醒的 90 天事項', async () => {
+  const cells = section(await scope(state.a), 'plate').owners[0].cells
+  assert.ok(cells.hk_crp)
+  assert.equal(cells.mo_permit, undefined)
+  assert.equal(cells.crossing_90, undefined)
+})
+test('對不適用的牌照設定澳門通行證回 400', async () => {
+  assert.equal((await request('/service-scopes', 'PUT', { ownerType: 'plate', ownerId: state.plate, item: 'mo_permit', handler: 'client' })).status, 400)
 })

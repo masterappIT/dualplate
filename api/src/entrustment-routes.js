@@ -25,9 +25,19 @@ export async function entrustmentRoutes(req, res, url, user, h) {
     if (problem) return { status: 400, error: problem }
     const expanded = expandChange(tenant, change.ownerType, owner, change)
     if (expanded.error) return { status: 400, error: expanded.error }
-    return { changes: expanded.changes.map(item => ({ ...item, ownerId: owner.id, customerId: owner.customer_id })) }
+    // Outsourced monthly filings go to a firm from the accounting-firm list, shared with the filings page.
+    let firm = null
+    if (change.providerId !== undefined && (typeof change.providerId !== 'string' || !change.providerId.trim())) return { status: 400, error: '會計公司無效' }
+    if (change.handler === 'outsourced' && expanded.changes.some(item => item.item === 'monthly_filing')) {
+      firm = change.providerId ? db.prepare('SELECT id, name FROM accounting_firms WHERE id=? AND tenant_id=?').get(change.providerId, tenant) : db.prepare('SELECT id, name FROM accounting_firms WHERE name=? AND tenant_id=?').get(String(change.providerName || '').trim(), tenant)
+      if (!firm) return { status: 400, error: '每月報帳外包須從會計公司名單選擇' }
+    }
+    return { changes: expanded.changes.map(item => ({ ...item, ownerId: owner.id, customerId: owner.customer_id, ...(firm && item.item === 'monthly_filing' ? { providerName: firm.name, firmId: firm.id } : {}) })) }
   }
-  const write = change => writeScope({ tenantId: tenant, ownerType: change.ownerType, ownerId: change.ownerId, item: change.item, handler: change.handler, providerName: change.providerName, notes: change.notes, userId: user.id })
+  const write = change => {
+    writeScope({ tenantId: tenant, ownerType: change.ownerType, ownerId: change.ownerId, item: change.item, handler: change.handler, providerName: change.providerName, notes: change.notes, userId: user.id })
+    if (change.firmId) db.prepare('UPDATE companies SET accounting_firm_id=?, updated_at=? WHERE id=? AND tenant_id=?').run(change.firmId, new Date().toISOString(), change.ownerId, tenant)
+  }
 
   if (path === '/api/service-scopes' && method === 'GET') {
     const result = scopesFor(tenant, url.searchParams.get('ownerType'), url.searchParams.get('ownerId'))
