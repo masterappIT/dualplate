@@ -133,7 +133,7 @@ function displayCardData(p){return editingCardId.value===p.id?cardDraft.value:pl
 function editCard(p){cardDraft.value={...(plateDetail.value[p.id]?.cardData||{})};editingCardId.value=p.id}
 function fieldStatusText(status){return status?.status==='uncertain'?'請核對':status?.status==='failed'?'未能辨識，請手動填寫':''}
 function fieldStatusClass(status){return status?.status==='failed'?'failed':'uncertain'}
-async function saveCard(p){try{const updated=await api('/plate-assets/'+p.id,'PUT',{cardData:cardDraft.value});plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editingCardId.value='';uni.showToast({title:'批文卡內容已更新',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}}
+async function saveCard(p){try{const updated=await api('/plate-assets/'+p.id,'PUT',{cardData:cardDraft.value});plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editingCardId.value='';summary.value=await api('/my/plates/'+p.id);uni.showToast({title:'批文卡內容已更新',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}}
 async function selectedImageData(result){
   // #ifdef H5
   const picked=result.tempFiles?.[0]?.file||result.tempFiles?.[0]
@@ -148,7 +148,7 @@ async function selectedImageData(result){
   return `data:${mime};base64,${base64}`
   // #endif
 }
-function uploadCard(p){uni.showActionSheet({itemList:['正面','背面'],success:choice=>{const side=choice.tapIndex===0?'front':'back';uni.chooseImage({count:1,sizeType:['original'],sourceType:['album','camera'],success:async result=>{try{const image=await selectedImageData(result);const response=await api('/plate-assets/'+p.id+'/card/'+side,'POST',{image});fieldStatus.value=response.fieldStatus||{};const updated=await api('/plate-assets/'+p.id);plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editCard(p);uni.showToast({title:'已辨識，請核對欄位',icon:'none'})}catch(e){uni.showToast({title:e.message||'上傳失敗',icon:'none'})}}})}})}
+function uploadCard(p){uni.showActionSheet({itemList:['正面','背面'],success:choice=>{const side=choice.tapIndex===0?'front':'back';uni.chooseImage({count:1,sizeType:['original'],sourceType:['album','camera'],success:async result=>{try{const image=await selectedImageData(result);const response=await api('/plate-assets/'+p.id+'/card/'+side,'POST',{image});fieldStatus.value=response.fieldStatus||{};const updated=await api('/plate-assets/'+p.id);plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editCard(p);summary.value=await api('/my/plates/'+p.id);uni.showToast({title:'已辨識，請核對欄位',icon:'none'})}catch(e){uni.showToast({title:e.message||'上傳失敗',icon:'none'})}}})}})}
 function boundVehicle(p){const v=vehicles.value.find(x=>x.id===p.vehicle_id);return v?[v.brand,v.model,v.plate].filter(Boolean).join(' · '):'未綁定'}
 function mainlandParts(value){const clean=String(value||'').toUpperCase().replace(/[\s·•.-]/g,'');const match=clean.match(/^([粵粤])([A-Z])(.+?)([港澳])$/);return match?{province:'粵',code:match[2],serial:match[3],suffix:match[4]}:{province:'',code:'',serial:clean,suffix:''}}
 function formatHongKong(value){const clean=String(value||'').toUpperCase().replace(/\s+/g,'');return clean.replace(/^([A-Z]{1,2})([0-9]{1,4})$/,'$1 $2')}

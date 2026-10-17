@@ -352,7 +352,8 @@ export const server = http.createServer(async (req, res) => {
       return json(res, 200, query(`SELECT * FROM plate_assets WHERE customer_id=? AND ${condition} ORDER BY created_at DESC`, user.customer_id))
     }
     if (path === '/api/plate-assets' && req.method === 'POST') {
-      if (user.role !== 'admin') return fail(res, 403, '無權限')
+      // 客戶可為自己建檔（待核對）；員工不建檔
+      if (!['admin', 'customer'].includes(user.role)) return fail(res, 403, '無權限')
       const b = await parseBody(req)
       if (!required(b, ['customerId', 'route'])) return fail(res, 400, '請選擇客戶和路線')
       if (user.role !== 'admin' && b.customerId !== user.customer_id) return fail(res, 403, '只能建立自己的兩地牌')
@@ -430,7 +431,8 @@ export const server = http.createServer(async (req, res) => {
       return json(res, 200, plateDetail(user, old.id))
     }
     if (plateMatch && req.method === 'PUT') {
-      if (user.role !== 'admin') return fail(res, 403, '無權限')
+      // 客戶可修改自己的批文卡，改後回到待核對；員工不修改
+      if (!['admin', 'customer'].includes(user.role)) return fail(res, 403, '無權限')
       const old = plateFor(user, plateMatch[1]); if (!old) return fail(res, 404, '兩地牌不存在')
       const b = await parseBody(req)
       const proposed = cleanCard(b.cardData)
