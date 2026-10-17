@@ -31,13 +31,14 @@
       <text class="line-sub note">更改後，其他手機或電腦上的登入會自動登出。請不要使用你在其他網站或服務用的密碼。</text>
     </view>
 
-    <!-- 委託人資料：個人或公司本身，改動由管理者核對 -->
-    <view class="section-head"><text class="section-title">委託人資料</text><text v-if="customerPending" class="pill amber">已修改，待核對</text></view>
+    <!-- 委託人：合約和帳單上的名義（個人或公司），改動由管理者核對。選公司不加公司資料欄位（管理者 2026-10-18） -->
+    <view class="section-head"><text class="section-title">委託人（合約及帳單上的名義）</text><text v-if="customerPending" class="pill amber">已修改，待核對</text></view>
     <view class="card">
-      <text class="field-label first">委託人名稱</text>
-      <input class="field" v-model="customerDraft.name" placeholder="個人姓名或公司名稱" />
-      <text class="field-label">類型</text>
+      <text class="field-label first">類型</text>
       <view class="segmented kind"><text class="seg" :class="{ on: customerDraft.kind==='個人' }" @click="customerDraft.kind='個人'">個人</text><text class="seg" :class="{ on: customerDraft.kind==='公司' }" @click="customerDraft.kind='公司'">公司</text></view>
+      <text class="subtle field-hint">以個人還是公司名義委託我們</text>
+      <text class="field-label">{{ customerDraft.kind === '公司' ? '公司名稱' : '姓名' }}</text>
+      <input class="field" v-model="customerDraft.name" :placeholder="customerDraft.kind === '公司' ? '例如 李氏貿易（香港）有限公司' : '例如 李大文'" />
       <text class="field-label">聯絡電話</text>
       <input class="field num" v-model="customerDraft.phone" placeholder="例如 +852 9123 4567" />
       <button class="btn-sm solid save" :disabled="savingCustomer || !customerChanged" @click="saveCustomer">{{ savingCustomer ? '正在儲存…' : '儲存委託人資料' }}</button>
@@ -118,6 +119,7 @@ onShow(load)
 .save{width:100%;margin-top:16px}
 .note{display:block;margin-top:12px}
 .kind{margin-top:0}
+.field-hint{margin-top:4px}
 .error{display:block;margin-top:8px;color:var(--overdue);font-size:var(--fs-body)}
 .list{padding:4px 16px}
 .close-btn{width:100%;margin-top:12px}

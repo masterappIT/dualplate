@@ -299,3 +299,39 @@ test('整批核對包含已處理的修改時回 409', async () => {
   const done = (await request('/customer-changes?status=已核對', 'GET')).body[0], open = (await pending())[0]
   assert.equal((await request('/customer-changes/accept-batch', 'POST', { ids: [open.id, done.id] })).status, 409)
 })
+
+// 核對無誤也通知客戶（管理者 2026-10-18）
+const acceptedNotices = entityLink => state.db.prepare("SELECT * FROM notifications WHERE customer_id=? AND kind='change_accepted' AND link LIKE ?").all(state.first, `%${entityLink}%`)
+test('整件核對批文卡後只發一則通知，列出核對的欄位', async () => {
+  const notices = acceptedNotices(state.plate)
+  assert.equal(notices.length, 1)
+  assert.match(notices[0].title, /顧問已核對你更新的/)
+  assert.match(notices[0].body, /已核對無誤/)
+  assert.equal(notices[0].link, `/pages/plate-detail/plate-detail?id=${state.plate}`)
+})
+test('單項核對後通知客戶，按通知打開對應頁面', async () => {
+  // 前面的測試今天已核對過這部車；清走那則，才看得到這次的通知
+  state.db.prepare("DELETE FROM notifications WHERE kind='change_accepted' AND link='/pages/vehicles/vehicles'").run()
+  assert.equal((await request(`/my/vehicles/${state.vehicle}`, 'PATCH', { brand: 'Honda' }, 'client')).status, 200)
+  const change = await findChange(state.vehicle, 'brand')
+  assert.equal((await request(`/customer-changes/${change.id}/accept`, 'POST', {})).status, 200)
+  const notice = state.db.prepare("SELECT * FROM notifications WHERE customer_id=? AND kind='change_accepted' AND title LIKE ?").get(state.first, `%${change.entityLabel}%`)
+  assert.ok(notice)
+  assert.match(notice.body, new RegExp(change.fieldLabel))
+  assert.equal(notice.link, '/pages/vehicles/vehicles')
+})
+test('同一對象同一天再核對，不重複發通知', async () => {
+  assert.equal((await request(`/my/vehicles/${state.vehicle}`, 'PATCH', { model: 'StepWGN' }, 'client')).status, 200)
+  const change = await findChange(state.vehicle, 'model')
+  assert.equal((await request(`/customer-changes/${change.id}/accept`, 'POST', {})).status, 200)
+  assert.equal(state.db.prepare("SELECT COUNT(*) n FROM notifications WHERE customer_id=? AND kind='change_accepted' AND title LIKE ?").get(state.first, `%${change.entityLabel}%`).n, 1)
+})
+test('核對無誤的通知只發給該客戶', async () => {
+  assert.equal(state.db.prepare("SELECT COUNT(*) n FROM notifications WHERE kind='change_accepted' AND customer_id<>?").get(state.first).n, 0)
+})
+test('核對失敗時不發通知', async () => {
+  const before = state.db.prepare("SELECT COUNT(*) n FROM notifications WHERE kind='change_accepted'").get().n
+  assert.equal((await request(`/customer-changes/${randomUUID()}/accept`, 'POST', {})).status, 404)
+  assert.equal((await request('/customer-changes/accept-batch', 'POST', { ids: [] })).status, 400)
+  assert.equal(state.db.prepare("SELECT COUNT(*) n FROM notifications WHERE kind='change_accepted'").get().n, before)
+})

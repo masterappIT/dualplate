@@ -417,6 +417,8 @@ export async function selfHandledReviewRoutes(req, res, url, user, { json, fail,
       if (cardChanges) db.prepare("UPDATE plate_assets SET card_status='已核對', card_updated_by=?, card_updated_at=? WHERE id=?").run(user.name, now(), row.plate_asset_id)
       db.exec('COMMIT')
     } catch (error) { db.exec('ROLLBACK'); throw error }
+    // 確認了也通知客戶（管理者 2026-10-18）；同一次一併核對的批文卡修改包在這一則，不另發
+    notify({ tenantId, customerId: row.customer_id, kind: 'self_handled_accepted', title: `顧問已確認你自行辦理的「${kinds[row.kind]}」`, body: (label => `${label ? label + '：' : ''}資料已核對無誤。`)(JSON.parse(row.details_json).plateLabel), link: `/pages/plate-detail/plate-detail?id=${row.plate_asset_id}`, dedupeKey: `self_handled_accepted:${row.id}` })
     return json(res, 200, recordView(record(row.id))), true
   }
   const note = clean(body.note, 300)

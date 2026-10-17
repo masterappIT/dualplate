@@ -34,6 +34,21 @@ const specs = {
 const noUpdatedAt = new Set(['vehicles', 'customers'])
 const registrationLabel = jurisdiction => jurisdiction === '內地' ? '統一社會信用代碼' : jurisdiction === '澳門' ? '商業登記編號' : '商業登記號碼'
 const entityName = { card: '批文卡', plate: '牌照', company: '公司', vehicle: '車輛', driver: '司機', customer: '委託人資料' }
+// 通知裏按一下打開的頁面
+const changeLink = change => ['card', 'plate'].includes(change.entity_type) ? `/pages/plate-detail/plate-detail?id=${change.entity_id}` : change.entity_type === 'company' ? '/pages/companies/companies' : change.entity_type === 'customer' ? '/pages/profile/profile' : change.entity_type === 'vehicle' ? '/pages/vehicles/vehicles' : ''
+// 核對無誤也通知客戶（管理者 2026-10-18）：同一對象合成一則，每個對象每天最多一則，免得逐欄核對時連發
+function notifyAccepted(tenantId, rows) {
+  const groups = new Map()
+  for (const row of rows) {
+    const key = `${row.customer_id}:${row.entity_type}:${row.entity_id}`
+    groups.set(key, [...(groups.get(key) || []), row])
+  }
+  const day = now().slice(0, 10)
+  for (const group of groups.values()) {
+    const first = group[0], fields = [...new Set(group.map(row => row.field_label))]
+    notify({ tenantId, customerId: first.customer_id, kind: 'change_accepted', title: `顧問已核對你更新的「${first.entity_label}」`, body: `${fields.slice(0, 5).join('、')}${fields.length > 5 ? ` 等 ${fields.length} 項` : ''}已核對無誤。`, link: changeLink(first), dedupeKey: `change_accepted:${first.entity_type}:${first.entity_id}:${day}` })
+  }
+}
 
 export const plateLabel = plate => plate.mainland_plate || plate.local_plate || `批文卡 ${plate.card_number || ''}`.trim()
 const vehicleText = vehicleId => vehicleId ? db.prepare('SELECT plate FROM vehicles WHERE id=?').get(vehicleId)?.plate || '' : '未綁定'
@@ -158,6 +173,7 @@ export async function changeReviewRoutes(req, res, url, user, { json, fail, pars
     if (rows.some(row => row.status !== '待核對')) return fail(res, 409, '部分修改已處理，請重新整理'), true
     db.exec('BEGIN IMMEDIATE')
     try { rows.forEach(accept); db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
+    notifyAccepted(tenant, rows)
     return json(res, 200, { accepted: rows.length }), true
   }
   const change = pendingRow(itemMatch[1])
@@ -166,6 +182,7 @@ export async function changeReviewRoutes(req, res, url, user, { json, fail, pars
   if (itemMatch[2] === 'accept') {
     db.exec('BEGIN IMMEDIATE')
     try { accept(change); db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
+    notifyAccepted(tenant, [change])
     return json(res, 200, changeView({ ...pendingRow(change.id), customer_name: '' })), true
   }
   if (change.field === 'created') return fail(res, 400, change.entity_type === 'card' ? '新建的批文卡不能改回，請到牌照頁處理' : '新建的公司不能改回，請到客戶的公司頁處理'), true
@@ -181,7 +198,7 @@ export async function changeReviewRoutes(req, res, url, user, { json, fail, pars
     markCardChecked(change, user)
     db.exec('COMMIT')
   } catch (error) { db.exec('ROLLBACK'); throw error }
-  notify({ tenantId: tenant, customerId: change.customer_id, kind: 'change_reverted', title: `顧問已把「${change.field_label}」改回原來的資料`, body: `${change.entity_label}：${change.after_text || '（空白）'} → ${change.before_text || '（空白）'}。如有疑問請聯絡你的顧問。`, link: ['card', 'plate'].includes(change.entity_type) ? `/pages/plate-detail/plate-detail?id=${change.entity_id}` : change.entity_type === 'company' ? '/pages/companies/companies' : change.entity_type === 'customer' ? '/pages/profile/profile' : '', dedupeKey: `change_reverted:${change.id}` })
+  notify({ tenantId: tenant, customerId: change.customer_id, kind: 'change_reverted', title: `顧問已把「${change.field_label}」改回原來的資料`, body: `${change.entity_label}：${change.after_text || '（空白）'} → ${change.before_text || '（空白）'}。如有疑問請聯絡你的顧問。`, link: changeLink(change), dedupeKey: `change_reverted:${change.id}` })
   return json(res, 200, changeView({ ...pendingRow(change.id), customer_name: '' })), true
 }
 
