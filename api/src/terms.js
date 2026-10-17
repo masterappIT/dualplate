@@ -123,7 +123,9 @@ export async function termsRoutes(req, res, url, user, { json, fail, parseBody, 
       if (req.method !== 'GET') return fail(res, 405, '不支援此操作'), true
       if (!latest) return json(res, 200, { mode: modeOf(tenantId), published: false }), true
       const acceptedAt = accepted(user.id, latest.version)
-      return json(res, 200, { mode: modeOf(tenantId), published: true, ...versionView(latest, tenantId), accepted: !!acceptedAt, acceptedAt }), true
+      // everAccepted：曾同意過任何一版；沒有的是新客戶，提示寫「請先閱讀」而不是「已更新」
+      const everAccepted = !!one('SELECT 1 FROM terms_acceptances WHERE user_id=? LIMIT 1', user.id)
+      return json(res, 200, { mode: modeOf(tenantId), published: true, ...versionView(latest, tenantId), accepted: !!acceptedAt, acceptedAt, everAccepted }), true
     }
     if (req.method !== 'POST') return fail(res, 405, '不支援此操作'), true
     const body = await parseBody(req)

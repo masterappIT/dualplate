@@ -83,6 +83,7 @@ test('客戶看到最新版本，未同意', async () => {
   const r = await request('/my/terms', 'GET', undefined, 'client')
   assert.equal(r.body.version, 1); assert.equal(r.body.accepted, false); assert.equal(r.body.mode, 'prompt')
 })
+test('從未同意過任何版本的客戶，everAccepted 為 false', async () => { assert.equal((await request('/my/terms', 'GET', undefined, 'client')).body.everAccepted, false) })
 test('提示模式下未同意也可照常使用', async () => { assert.equal((await request('/vehicles', 'GET', undefined, 'client')).status, 200) })
 test('強制模式下未同意不能使用其他功能', async () => {
   await setMode('force')
@@ -119,6 +120,10 @@ test('發佈新版本後，已同意舊版本的客戶要再同意', async () =>
   const r = await request('/vehicles', 'GET', undefined, 'client2')
   assert.equal(r.status, 403); assert.equal(r.body.version, 2)
   assert.equal((await request('/terms')).body.accounts.find(item => item.id === state['client2-id']).acceptedVersion, 1)
+})
+test('新版本發佈後，同意過舊版的客戶 everAccepted 為 true、accepted 為 false', async () => {
+  const r = await request('/my/terms', 'GET', undefined, 'client2')
+  assert.equal(r.body.accepted, false); assert.equal(r.body.everAccepted, true)
 })
 test('改回提示後不再擋客戶', async () => {
   await setMode('prompt')

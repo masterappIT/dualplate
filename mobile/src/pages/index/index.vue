@@ -43,7 +43,8 @@
     </view>
     <button v-if="!selfManaged" class="btn-line new-request" @click="newRequest">請顧問幫我辦</button>
 
-    <WelcomeGuide />
+    <!-- 條款提示處理完才顯示導覽，免得兩個彈出層疊在一起 -->
+    <WelcomeGuide v-if="guideReady" />
     <wd-message-box />
   </view>
 </template>
@@ -56,11 +57,11 @@ import { api, getUser, openPlate, startRequest, requestTone, clientStage, checkT
 import DueDate from '../../components/DueDate.vue'
 import PlateChip from '../../components/PlateChip.vue'
 import WelcomeGuide from '../../components/WelcomeGuide.vue'
-const user=ref(getUser())
+const user=ref(getUser()),guideReady=ref(false)
 const data=ref({unreadNotifications:0,advisor:null,customerName:'',counts:{pending:0,ok:0,due:0,overdue:0},plates:[],deadlines:[],todos:[],activeRequests:[]})
 const notices=ref([]),loaded=ref(false)
 const selfManaged=computed(()=>data.value.serviceMode==='自管')
-async function load(){user.value=getUser();if(!user.value)return uni.navigateTo({url:'/pages/login/login'});checkTerms(confirmBox.ask);try{const [overview,list]=await Promise.all([api('/my/overview'),api('/my/notifications').catch(()=>({items:[]}))]);data.value=overview;rememberMode(overview.serviceMode);notices.value=list.items||[]}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
+async function load(){user.value=getUser();if(!user.value)return uni.navigateTo({url:'/pages/login/login'});checkTerms(confirmBox.ask).then(result=>{if(result!=='opened')guideReady.value=true});try{const [overview,list]=await Promise.all([api('/my/overview'),api('/my/notifications').catch(()=>({items:[]}))]);data.value=overview;rememberMode(overview.serviceMode);notices.value=list.items||[]}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
 // 待辦只放要客戶動手的：要你提供的資料、你自理（或要你過關）而快到期／已逾期的事項、要你處理的未讀通知
 // 通知只有兩類要客戶動手：文件需重交、自辦更新被顧問退回；辦理進度、到期、改回等只是告知，留在鈴鐺
 const actionNotices=new Set(['attachment','self_handled_returned'])

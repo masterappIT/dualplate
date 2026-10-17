@@ -2,11 +2,11 @@
   <view class="page terms-page">
     <!-- 服務條款及私隱聲明：未登入可看（登入頁連結）；登入後未同意最新版本時可在這裏同意。強制模式下同意前不能使用其他功能 -->
     <view v-if="needAccept && forced" class="list-card warn-card"><text class="list-title">請先閱讀並同意</text><text class="list-sub">服務條款及私隱聲明已更新，同意後才可繼續使用。</text></view>
-    <view v-else-if="needAccept" class="list-card warn-card"><text class="list-title">服務條款已更新</text><text class="list-sub">請閱讀並同意最新版本。</text></view>
+    <view v-else-if="needAccept" class="list-card warn-card"><text class="list-title">{{ doc.everAccepted ? '服務條款已更新' : '請先閱讀服務條款' }}</text><text class="list-sub">{{ doc.everAccepted ? '請閱讀並同意最新版本。' : '開始使用前，請閱讀並同意以下條款及私隱聲明。' }}</text></view>
     <view v-if="loaded && !doc" class="card empty">服務條款尚未發佈。</view>
     <template v-if="doc">
       <view class="segmented doc-switch"><text class="seg" :class="{on:tab==='terms'}" @click="tab='terms'">服務條款</text><text class="seg" :class="{on:tab==='privacy'}" @click="tab='privacy'">私隱聲明</text></view>
-      <text class="subtle version">第 {{ doc.version }} 版 · {{ String(doc.publishedAt||'').slice(0,10) }} 發佈<text v-if="doc.accepted"> · 你已於 {{ String(doc.acceptedAt||'').slice(0,10) }} 同意</text></text>
+      <text class="subtle version">第 {{ doc.version }} 版 · {{ friendlyDate(doc.publishedAt) }} 發佈<text v-if="doc.accepted"> · 你已於 {{ friendlyDate(doc.acceptedAt) }} 同意</text></text>
       <view class="card body"><text class="body-text">{{ tab==='terms' ? doc.terms : doc.privacy }}</text></view>
       <view v-if="needAccept" class="card accept">
         <view class="check" @click="agreed=!agreed"><view class="box" :class="{on:agreed}"><text v-if="agreed">✓</text></view><text class="check-text">我已閱讀並同意服務條款及私隱聲明</text></view>
@@ -20,7 +20,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { api, getUser, clearSession, publicApi } from '../../lib/api'
+import { api, getUser, clearSession, publicApi, friendlyDate } from '../../lib/api'
 const doc=ref(null),loaded=ref(false),tab=ref('terms'),agreed=ref(false),saving=ref(false)
 const needAccept=computed(()=>!!doc.value&&doc.value.mine&&!doc.value.accepted)
 const forced=computed(()=>doc.value?.mode==='force')

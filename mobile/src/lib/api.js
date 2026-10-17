@@ -1,7 +1,7 @@
 const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4100'
 export function getToken() { return uni.getStorageSync('token') }
-export function saveSession(result) { uni.setStorageSync('token', result.token); uni.setStorageSync('user', result.user); try { uni.removeStorageSync('serviceMode') } catch {} }
-export function clearSession() { uni.removeStorageSync('token'); uni.removeStorageSync('user'); uni.removeStorageSync('serviceMode') }
+export function saveSession(result) { uni.setStorageSync('token', result.token); uni.setStorageSync('user', result.user); try { uni.removeStorageSync('serviceMode') } catch {}; resetTermsCheck() }
+export function clearSession() { uni.removeStorageSync('token'); uni.removeStorageSync('user'); uni.removeStorageSync('serviceMode'); resetTermsCheck() }
 // 自管客戶（docs/requirements.md 5.6.2）：首頁、我的資料載入時記下，其他頁面據此改寫用語、隱藏用不到的區塊
 export function rememberMode(mode) { try { uni.setStorageSync('serviceMode', mode || '托管') } catch {} }
 export function isSelfManaged() { try { return (uni.getStorageSync('serviceMode') || uni.getStorageSync('user')?.serviceMode) === '自管' } catch { return false } }
@@ -32,7 +32,7 @@ export function publicApi(path) {
     fail: () => reject(new Error('連不上伺服器，請檢查網絡後再試')) }))
 }
 // 服務條款：強制時 reLaunch（不能返回）；提示時每次開啟 App 只彈一次，可稍後再看
-let termsOpening = false, termsPrompted = false
+let termsOpening = false, termsCheck = null, termsDone = false
 function openTerms(force) {
   const pages = getCurrentPages(), here = pages[pages.length - 1]?.route || ''
   if (termsOpening || here === 'pages/terms/terms') return
@@ -41,15 +41,21 @@ function openTerms(force) {
   force ? uni.reLaunch({ url: '/pages/terms/terms' }) : uni.navigateTo({ url: '/pages/terms/terms' })
 }
 // ask：頁面的 Wot 確認框（lib/choice.js useConfirm().ask），不用系統原生對話框
-export async function checkTerms(ask) {
-  if (!getUser() || termsPrompted) return
-  try {
-    const terms = await api('/my/terms')
-    if (!terms.published || terms.accepted) return
-    termsPrompted = true
-    if (terms.mode === 'force') return openTerms(true)
-    if (ask && await ask({ title: '服務條款已更新', msg: '請查看並同意最新的服務條款及私隱聲明。', ok: '查看', cancel: '稍後' }) === 'confirm') openTerms(false)
-  } catch { /* 網絡問題時下次再提示 */ }
+// 回傳 'opened' 表示已轉到條款頁；首頁據此延後使用導覽，免得兩個彈出層疊在一起。
+// 同一時間多次呼叫（首頁 onShow 可能連續觸發）共用同一次檢查；每次打開 App 只提示一次
+export function checkTerms(ask) {
+  if (!getUser() || termsDone) return Promise.resolve()
+  if (!termsCheck) termsCheck = runTermsCheck(ask).then(result => { termsDone = true; return result }, () => { termsCheck = null })
+  return termsCheck
+}
+// 換帳戶登入時重新檢查
+function resetTermsCheck() { termsCheck = null; termsDone = false }
+async function runTermsCheck(ask) {
+  const terms = await api('/my/terms')
+  if (!terms.published || terms.accepted) return
+  if (terms.mode === 'force') { openTerms(true); return 'opened' }
+  const prompt = terms.everAccepted ? { title: '服務條款已更新', msg: '請查看並同意最新的服務條款及私隱聲明。' } : { title: '請先閱讀服務條款', msg: '開始使用前，請查看並同意服務條款及私隱聲明。' }
+  if (ask && await ask({ ...prompt, ok: '查看', cancel: '稍後' }) === 'confirm') { openTerms(false); return 'opened' }
 }
 // Shared wording and colours for deadline states on the client screens.
 export const levelLabel = { overdue: '已逾期', due: '快到期', upcoming: '即將到期', ok: '正常' }
@@ -77,7 +83,14 @@ export function money(currency, cents) {
 export function plateName(p) { return [p.mainlandPlate || p.mainland_plate, p.localPlate || p.local_plate].filter(Boolean).join(' · ') || '車牌待補充' }
 export function openPlate(id) { uni.navigateTo({ url: '/pages/plate-detail/plate-detail?id=' + encodeURIComponent(id) }) }
 export function startRequest(serviceCode, plateId) { uni.navigateTo({ url: '/pages/requests/requests?service=' + encodeURIComponent(serviceCode || '') + (plateId ? '&plate=' + encodeURIComponent(plateId) : '') }) }
-export function friendlyDate(value) { return value ? String(value).slice(0, 10) : '待核對' }
+// 日期：純日期照用；時間戳（伺服器存 UTC）換成香港日期，否則香港早上 8 點前會顯示成前一天。香港沒有夏令時間，固定加 8 小時
+export function friendlyDate(value) {
+  if (!value) return '待核對'
+  const text = String(value)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text
+  const time = Date.parse(text)
+  return Number.isNaN(time) ? text.slice(0, 10) : new Date(time + 8 * 3600000).toISOString().slice(0, 10)
+}
 export function daysLeft(value) { return value ? Math.ceil((new Date(value + 'T23:59:59').getTime() - Date.now()) / 86400000) : null }
 export function privateImage(path) {
   return new Promise((resolve, reject) => {
