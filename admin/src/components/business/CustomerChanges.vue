@@ -10,6 +10,7 @@ import Button from '../ui/Button.vue'
 import Tag from '../ui/Tag.vue'
 import Drawer from '../ui/Drawer.vue'
 import Segmented from '../ui/Segmented.vue'
+import Modal from '../ui/Modal.vue'
 import ServiceScope from '../ui/ServiceScope.vue'
 import { api } from '../../api'
 import { confirm } from '../../composables/confirm'
@@ -64,6 +65,15 @@ function open(group) {
   const customer = customers.value.find(item => item.id === group.customerId)
   if (customer) openCustomer(customer)
 }
+// 對照原件：批文卡的修改多數來自客戶上傳新卡，打開卡的正反面照片核對
+const original = ref(null)
+async function openOriginal(group) {
+  original.value = { title: group.entityLabel, loading: true, images: [] }
+  try {
+    const plate = await api(`/plate-assets/${group.entityId}`)
+    original.value = { title: group.entityLabel, loading: false, images: [['front', '批文卡正面'], ['back', '批文卡背面']].filter(([side]) => plate.cardImages?.[side]).map(([side, label]) => ({ label, src: plate.cardImages[side] })) }
+  } catch (error) { original.value = null; showError(error) }
+}
 async function acceptGroup(group) {
   busyKey.value = group.key
   try {
@@ -115,12 +125,17 @@ async function acceptAll() {
         </template>
         <template #cell-changedAt="{ row }"><span class="num">{{ time(row.changedAt) }}</span><small class="cell-sub">{{ row.changedByName }}</small></template>
         <template #cell-action="{ row }">
-          <div v-if="mode === 'pending' && canReview" class="row-actions"><button v-if="row.scope" class="text-button" @click="scopeRow = row.scope">設定委託範圍</button><button class="text-button" :disabled="busyKey === row.key" @click="acceptGroup(row)">{{ row.items.length > 1 ? '整件核對無誤' : '核對無誤' }}</button></div>
-          <span v-else-if="mode === 'pending'" class="cell-sub">由管理者核對</span>
+          <div v-if="mode === 'pending' && canReview" class="row-actions"><button v-if="row.entityType === 'card'" class="text-button" @click="openOriginal(row)">對照原件</button><button v-if="row.scope" class="text-button" @click="scopeRow = row.scope">設定委託範圍</button><button class="text-button" :disabled="busyKey === row.key" @click="acceptGroup(row)">{{ row.items.length > 1 ? '整件核對無誤' : '核對無誤' }}</button></div>
+          <div v-else-if="mode === 'pending'" class="row-actions"><button v-if="row.entityType === 'card'" class="text-button" @click="openOriginal(row)">對照原件</button><span class="cell-sub">由管理者核對</span></div>
           <span v-else class="cell-sub">已處理</span>
         </template>
       </DataTable>
     </template>
+    <Modal :open="!!original" :title="original ? `${original.title} · 批文卡原件` : ''" sub="客戶上傳的批文卡照片；請逐欄對照修改內容。" :width="720" close-on-overlay @close="original = null">
+      <p v-if="original?.loading">正在載入原件…</p>
+      <p v-else-if="original && !original.images.length">這張批文卡還沒有上傳照片；客戶是手動修改的，請按其他文件核對。</p>
+      <div v-else-if="original" class="photo-grid"><figure v-for="image in original.images" :key="image.label"><img :src="image.src" :alt="image.label" /><figcaption class="cell-sub">{{ image.label }}</figcaption></figure></div>
+    </Modal>
     <Drawer :open="!!scopeRow" :title="scopeRow?.entityLabel || ''" sub="客戶建檔時新建的公司，委託項目暫設為客戶自理。改為我們做或外包後才產生工作；每月報帳只生成今天之後才截止的期數。" @close="scopeRow = null">
       <ServiceScope v-if="scopeRow" owner-type="company" :owner-id="scopeRow.entityId" @saved="showSuccess" @error="showError" />
     </Drawer>
@@ -145,4 +160,7 @@ async function acceptAll() {
 .change-values.is-long s, .change-values.is-long b { display: block; }
 .change-values.is-long .arrow { display: block; margin: 2px 0; }
 .entity-link { text-align: left; }
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.photo-grid figure { margin: 0; }
+.photo-grid img { display: block; width: 100%; border: 1px solid var(--rule); background: var(--paper); }
 </style>

@@ -51,7 +51,8 @@
         <button class="button" @click="saveCard">儲存並核對</button>
       </div>
     </div>
-    <details class="scan-details">
+    <!-- 有上傳原件時預設展開，方便對照核對 -->
+    <details class="scan-details" :open="!!(selectedPlate.cardImages?.front || selectedPlate.cardImages?.back)">
       <summary>原件掃描與重新上傳（供核對）</summary>
       <div class="card-upload-grid">
         <div v-for="side in ['front', 'back']" :key="side">

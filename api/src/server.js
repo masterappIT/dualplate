@@ -83,7 +83,8 @@ function plateDetail(user, plateId) {
   const item = plateFor(user, plateId)
   if (!item) return null
   const images = query('SELECT side,mime,data FROM approval_card_images WHERE plate_asset_id=?', item.id)
-  const imageValue = x => ['admin', 'staff'].includes(user.role) ? `data:${x.mime};base64,${x.data.toString('base64')}` : true
+  // node:sqlite 讀出的圖片是 Uint8Array，要先轉成 Buffer 才能編成 base64（否則變成「255,216,…」，後台原件顯示不出）
+  const imageValue = x => ['admin', 'staff'].includes(user.role) ? `data:${x.mime};base64,${Buffer.from(x.data).toString('base64')}` : true
   const companyStatuses = ['admin', 'staff'].includes(user.role) && item.group_id ? query('SELECT c.id,c.jurisdiction,c.name,c.name_en,c.status,c.status_changed_on FROM companies c JOIN company_groups g ON g.id=c.group_id AND g.tenant_id=c.tenant_id WHERE c.tenant_id=? AND c.group_id=? AND g.customer_id=? ORDER BY c.jurisdiction,c.name', user.tenant_id, item.group_id, item.customer_id) : []
   const warnings = companyStatuses.filter(company => company.jurisdiction === '內地' && ['已註銷', '註銷中'].includes(company.status)).map(company => company.status === '已註銷' ? '內承單位已註銷' : '內承單位註銷中')
   // 客戶表示不再續期：員工在牌照頁看到，到期提醒已停止

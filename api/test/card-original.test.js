@@ -57,6 +57,13 @@ test('員工可取回客戶上傳的正本核對', async () => {
   assert.equal(r.status, 200)
   assert.deepEqual(Buffer.from(r.raw), front)
 })
+test('員工打開牌照時拿到可顯示的原件圖片', async () => {
+  const r = await request(`/plate-assets/${state.plate}`, 'GET', undefined, 'staff')
+  assert.equal(r.status, 200)
+  const [header, data] = r.body.cardImages.front.split(',')
+  assert.equal(header, 'data:image/png;base64')
+  assert.deepEqual(Buffer.from(data, 'base64'), front)
+})
 test('客戶重新上傳一面後取回的是新照片', async () => {
   const jpeg = Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==', 'base64')
   const upload = await request(`/plate-assets/${state.plate}/card/front`, 'POST', { image: `data:image/jpeg;base64,${jpeg.toString('base64')}` }, 'client')
