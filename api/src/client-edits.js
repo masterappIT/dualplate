@@ -3,7 +3,7 @@ import { cardData, cardFields } from './card.js'
 import { notify } from './client-portal.js'
 import { maskHkId } from './drivers.js'
 import { mainlandName, toSimplified, traditionalChars } from './hans.js'
-import { plateFacts } from './plate-facts.js'
+import { plateFacts, vehicleFacts } from './plate-facts.js'
 import { ruleMatches } from './rules.js'
 
 // 客戶自行修改，後台核對（管理者 2026-10-17）：客戶改的資料立即生效，每個欄位留下改前改後，
@@ -15,7 +15,7 @@ CREATE INDEX IF NOT EXISTS idx_customer_changes_entity ON customer_changes(entit
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 const clean = (value, max = 120) => String(value ?? '').trim().slice(0, max)
 const text = value => value == null ? '' : String(value)
-const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value
+const validDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value + 'T00:00:00Z')) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value
 
 export const cardLabels = { cardNumber: '批文卡編號', company: '商號', contractor: '內承單位', crossing: '通行口岸', serial: '卡面流水號', mainlandPlate: '內地車牌號', localPlate: '港澳車牌號', driver1: '駕駛人 1', driver2: '駕駛人 2', driver3: '駕駛人 3', currentApproval: '現批文號', previousApproval: '原批文號', color: '顏色', seats: '座位／噸位', purpose: '請予辦理', validFrom: '有效期開始', validTo: '有效期結束', notes: '備註' }
 // 批文卡欄位同時寫在牌照的這些欄（與 PUT /plate-assets/:id 一致）
@@ -313,7 +313,7 @@ export async function clientEditRoutes(req, res, url, user, { json, fail, parseB
 
 function ownerFacts(type, row) {
   if (type === 'plate') return plateFacts(row)
-  if (type === 'vehicle') return { route: row.route, origin: row.origin, firstRegisteredOn: row.first_registered_on }
+  if (type === 'vehicle') return vehicleFacts(row)
   if (type === 'company') return { jurisdiction: row.jurisdiction, status: row.status || '存續', companyStatus: row.status || '存續', incorporatedOn: row.incorporated_on }
   return {}
 }

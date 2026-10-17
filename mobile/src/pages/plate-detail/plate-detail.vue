@@ -12,8 +12,11 @@
       <!-- 建檔時按批文卡名稱建立的公司，資料要客戶補上 -->
       <view v-if="summary.companyGaps?.length" class="list-card warn-card" @click="fillCompany(summary.companyGaps[0].id)"><text class="list-title">請補上公司資料</text><text v-for="c in summary.companyGaps" :key="c.id" class="list-sub">{{ c.name }}：缺{{ c.missing.join('、') }}</text><text class="link fill-link">前往補充 ›</text></view>
 
+      <!-- 客戶自行辦理：不再續期、已提交待核對、被顧問退回 -->
+      <view v-if="p.stopped_on" class="list-card warn-card"><text class="list-title">已標記不再續期</text><text class="list-sub">{{ p.stopped_on }} · {{ p.stop_reason }}。這個牌照不再提醒到期；如要恢復，請聯絡你的顧問。</text></view>
+      <view v-for="r in selfNotes" :key="r.id" class="list-card" :class="r.status==='已退回'?'warn-card':''"><text class="list-title">{{ r.status==='已退回' ? '顧問未能確認你的「'+r.kindName+'」更新' : '你提交的「'+r.kindName+'」顧問核對中' }}</text><text class="list-sub">{{ r.status==='已退回' ? r.reviewNote : '資料已更新；顧問核對後如有問題會聯絡你。' }}</text></view>
       <!-- 最常用的辦理入口放在最上面 -->
-      <view v-if="summary.id" class="actions"><button v-for="a in quickActions" :key="a.code" class="btn-line action" @click="startRequest(a.code, summary.id)">{{ a.name }}</button></view>
+      <view v-if="summary.id" class="actions"><button v-for="a in quickActions" :key="a.code" class="btn-line action" @click="quickAction(a.code)">{{ a.name }}</button></view>
 
       <view v-if="summary.id">
         <view class="section-head"><text class="section-title">到期項目</text><text v-if="deadlineList.length" class="subtle num">{{ deadlineList.length }} 項</text></view>
@@ -92,6 +95,7 @@
       </view>
     </view>
 
+    <text v-if="!creating && summary.id && !plates[0]?.stopped_on" class="link stop-link" @click="openSelf('stop_renewal')">不再續期這個牌照 ›</text>
     <view v-if="!creating && boundVehicles.length"><text class="section-title">綁定車輛與驗車</text>
       <view v-for="v in boundVehicles" :key="v.id" class="card">
         <view class="row"><PlateChip :plate="v.plate" :region="v.origin==='內地'?'內地':v.origin==='澳門'?'澳門':'香港'" /><text class="pill gray">{{ v.type }}</text></view>
@@ -147,15 +151,15 @@ function openRequest(id){uni.navigateTo({url:'/pages/request-detail/request-deta
 const editingCardId=ref(''),cardDraft=ref({}),creating=ref(false),plateForm=ref({}),savingFile=ref(false)
 let plateId=''
 const cardFields=[['cardNumber','編號'],['company','商號'],['contractor','內承單位'],['crossing','通行口岸'],['serial','卡面流水號'],['mainlandPlate','內地車牌號'],['localPlate','港澳車牌號'],['driver1','駕駛人 1'],['driver2','駕駛人 2'],['driver3','駕駛人 3'],['currentApproval','現批文號'],['previousApproval','原批文號'],['color','顏色'],['seats','座位／噸位'],['purpose','請予辦理'],['validFrom','有效期開始'],['validTo','有效期結束'],['notes','備註']].map(([key,label])=>({key,label}))
-function vehicleOptions(p){return [{id:'',label:'未綁定'},...vehicles.value.filter(v=>v.customer_id===p.customer_id&&v.route===p.route).map(v=>({id:v.id,label:[v.plate,v.brand,v.model].filter(Boolean).join(' · ')}))]}
+function vehicleOptions(p){return [{id:'',label:'未綁定'},...vehicles.value.filter(v=>v.customer_id===p.customer_id&&v.route===p.route&&(!v.retired_on||v.id===p.vehicle_id)).map(v=>({id:v.id,label:[v.plate,v.brand,v.model].filter(Boolean).join(' · ')}))]}
 function fillPlateForm(p){plateForm.value={mainlandPlate:p.mainland_plate||'',localPlate:p.local_plate||'',installationStatus:p.installation_status||'待核對',usageStatus:p.usage_status||'待核對',vehicleId:p.vehicle_id||'',cardNumber:p.card_number||'',cardExpiresOn:p.card_expires_on||'',notes:p.notes||''}}
-async function savePlate(p){if(savingFile.value)return;savingFile.value=true;try{const updated=await api('/plate-assets/'+p.id,'PATCH',plateForm.value);plates.value=[updated];plateDetail.value={...plateDetail.value,[p.id]:updated};fillPlateForm(updated);summary.value=await api('/my/plates/'+p.id);loadPending();uni.showToast({title:'已更新，顧問會再核對',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{savingFile.value=false}}
+async function savePlate(p){if(savingFile.value)return;const nextVehicle=vehicles.value.find(v=>v.id===plateForm.value.vehicleId);const newPlate=plateForm.value.vehicleId&&plateForm.value.vehicleId!==(p.vehicle_id||'')?nextVehicle?.plate:plateForm.value.localPlate.trim()!==(p.local_plate||'')?plateForm.value.localPlate.trim():'';if(newPlate&&p.local_plate){const did=await askChange('港澳車牌由 '+p.local_plate+' 改為 '+newPlate,'換車');if(did===null)return;if(did)return openSelf('vehicle_change',newPlate)}savingFile.value=true;try{const updated=await api('/plate-assets/'+p.id,'PATCH',plateForm.value);plates.value=[updated];plateDetail.value={...plateDetail.value,[p.id]:updated};fillPlateForm(updated);summary.value=await api('/my/plates/'+p.id);loadPending();uni.showToast({title:'已更新，顧問會再核對',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{savingFile.value=false}}
 function displayCardData(p){return editingCardId.value===p.id?cardDraft.value:plateDetail.value[p.id]?.cardData||{}}
 function editCard(p){cardDraft.value={...(plateDetail.value[p.id]?.cardData||{})};editingCardId.value=p.id}
 function fieldStatusText(status){return status?.status==='uncertain'?'請核對':status?.status==='failed'?'未能辨識，請手動填寫':''}
 function fieldStatusClass(status){return status?.status==='failed'?'failed':'uncertain'}
-async function saveCard(p){try{const updated=await api('/plate-assets/'+p.id,'PUT',{cardData:cardDraft.value});plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editingCardId.value='';summary.value=await api('/my/plates/'+p.id);loadPending();uni.showToast({title:'已更新，顧問會再核對',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}}
-function uploadCard(p){uni.showActionSheet({itemList:['正面','背面'],success:choice=>{const side=choice.tapIndex===0?'front':'back';uni.chooseImage({count:1,sizeType:['original'],sourceType:['album','camera'],success:async result=>{uni.showLoading({title:'正在上傳辨識',mask:true});try{const image=(await cardPhoto(result)).data;const response=await api('/plate-assets/'+p.id+'/card/'+side,'POST',{image});forgetCardOriginal(p.id);fieldStatus.value=response.fieldStatus||{};const updated=await api('/plate-assets/'+p.id);plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editCard(p);summary.value=await api('/my/plates/'+p.id);loadPending();uni.hideLoading();uni.showToast({title:'已辨識，請核對欄位',icon:'none'})}catch(e){uni.hideLoading();uni.showToast({title:e.message||'上傳失敗',icon:'none'})}}})}})}
+async function saveCard(p){const before=plateDetail.value[p.id]?.cardData||{},why=await askWhy(before,cardDraft.value);if(why===null)return;try{const updated=await api('/plate-assets/'+p.id,'PUT',{cardData:cardDraft.value});plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editingCardId.value='';summary.value=await api('/my/plates/'+p.id);loadPending();if(why)return openSelf(why.kind,why.newPlate);uni.showToast({title:'已更新，顧問會再核對',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}}
+function uploadCard(p){uni.showActionSheet({itemList:['正面','背面'],success:choice=>{const side=choice.tapIndex===0?'front':'back';uni.chooseImage({count:1,sizeType:['original'],sourceType:['album','camera'],success:async result=>{uni.showLoading({title:'正在上傳辨識',mask:true});try{const image=(await cardPhoto(result)).data;const before={...(plateDetail.value[p.id]?.cardData||{})};const response=await api('/plate-assets/'+p.id+'/card/'+side,'POST',{image});forgetCardOriginal(p.id);fieldStatus.value=response.fieldStatus||{};const updated=await api('/plate-assets/'+p.id);plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editCard(p);summary.value=await api('/my/plates/'+p.id);loadPending();uni.hideLoading();const why=await askWhy(before,response.cardData||{},true);if(why){editingCardId.value='';return openSelf(why.kind,why.newPlate)}uni.showToast({title:'已辨識，請核對欄位',icon:'none'})}catch(e){uni.hideLoading();uni.showToast({title:e.message||'上傳失敗',icon:'none'})}}})}})}
 // 上傳過的批文卡照片（正本）：有哪一面就看哪一面，預設打開目前翻到的那面
 const originalSides=p=>['front','back'].filter(side=>plateDetail.value[p.id]?.cardImages?.[side])
 function viewOriginal(p){const sides=originalSides(p);viewCardOriginal(p.id,sides,cardBack.value?'back':'front')}
@@ -167,7 +171,27 @@ async function saveDate(item,date){if(!date||date===item.dueOn)return;try{await 
 function editDriver(d){if(editingDriverId.value===d.id){editingDriverId.value='';return}const full=drivers.value.find(x=>x.id===d.id)||{};driverForm.value={name:full.name||d.name,phone:full.phone||'',hkIdNo:full.hkIdNo||'',homeReturnPermitNo:full.homeReturnPermitNo||''};editingDriverId.value=d.id}
 async function saveDriver(){if(savingDriver.value)return;savingDriver.value=true;try{await api('/my/drivers/'+editingDriverId.value,'PATCH',driverForm.value);editingDriverId.value='';const [mine,list]=await Promise.all([api('/my/plates/'+plateId),api('/my/drivers')]);summary.value=mine;drivers.value=list;loadPending();uni.showToast({title:'已更新，顧問會再核對',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{savingDriver.value=false}}
 function editVehicle(v){if(editingVehicleId.value===v.id){editingVehicleId.value='';return}vehicleForm.value={plate:v.plate||'',brand:v.brand||'',model:v.model||'',vin:v.vin||'',manufacturedYear:v.manufactured_year?String(v.manufactured_year):'',firstRegisteredOn:v.first_registered_on||''};editingVehicleId.value=v.id}
-async function saveVehicle(v){if(savingVehicle.value)return;savingVehicle.value=true;try{const updated=await api('/my/vehicles/'+v.id,'PATCH',{...vehicleForm.value,manufacturedYear:String(vehicleForm.value.manufacturedYear||'')});vehicles.value=vehicles.value.map(item=>item.id===v.id?updated:item);editingVehicleId.value='';loadPending();uni.showToast({title:'已更新，顧問會再核對',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{savingVehicle.value=false}}
+async function saveVehicle(v){if(savingVehicle.value)return;const newPlate=vehicleForm.value.plate.trim();if(newPlate&&v.plate&&newPlate.toUpperCase()!==v.plate.toUpperCase()){const did=await askChange('車牌由 '+v.plate+' 改為 '+newPlate,'換車');if(did===null)return;if(did){editingVehicleId.value='';return openSelf('vehicle_change',newPlate)}}savingVehicle.value=true;try{const updated=await api('/my/vehicles/'+v.id,'PATCH',{...vehicleForm.value,manufacturedYear:String(vehicleForm.value.manufacturedYear||'')});vehicles.value=vehicles.value.map(item=>item.id===v.id?updated:item);editingVehicleId.value='';loadPending();uni.showToast({title:'已更新，顧問會再核對',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{savingVehicle.value=false}}
+// 客戶自行辦理（docs/tasks/self-handled-changes-design.md）：改車牌、駕駛人、有效期時先問是辦了變更還是填錯；
+// 辦了變更就轉到「自行辦理更新」，舊車、舊司機保留作記錄並停止提醒，顧問整件核對。
+const selfRecords=ref([])
+// 退回的說明顯示 30 天；不再續期待核對時，上面的「已標記不再續期」已說明，不重複
+const selfNotes=computed(()=>{const seen=new Set();return selfRecords.value.filter(r=>{if(seen.has(r.kind))return false;seen.add(r.kind);return (r.status==='已退回'&&Date.now()-Date.parse(r.reviewedAt)<30*86400000)||(r.status==='待核對'&&!(r.kind==='stop_renewal'&&plates.value[0]?.stopped_on))})})
+async function loadSelf(){try{selfRecords.value=await api('/my/plates/'+plateId+'/self-handled')}catch{selfRecords.value=[]}}
+function openSelf(kind,newPlate=''){uni.navigateTo({url:'/pages/self-change/self-change?plate='+encodeURIComponent(plateId)+'&kind='+kind+(newPlate?'&newPlate='+encodeURIComponent(newPlate):'')})}
+const selfKinds={renewal:'renewal',vehicle_change:'vehicle_change',driver_change:'driver_change'}
+function quickAction(code){if(!selfKinds[code])return startRequest(code,summary.value.id);uni.showActionSheet({itemList:['請我們代辦','已自己辦好，更新資料'],success:choice=>choice.tapIndex===0?startRequest(code,summary.value.id):openSelf(selfKinds[code])})}
+// 回傳 true＝辦了變更、false＝之前填錯、null＝取消
+function askChange(what,change){return new Promise(resolve=>uni.showModal({title:what,content:'是自己辦了'+change+'，還是之前填錯？',confirmText:{換車:'辦了換車',換司機:'換了司機',續期:'辦了續期'}[change],cancelText:'之前填錯',success:r=>resolve(r.confirm?true:r.cancel?false:null),fail:()=>resolve(null)}))}
+const driverNames=card=>['driver1','driver2','driver3'].map(k=>String(card[k]||'').trim()).filter(Boolean).sort().join('、')
+// 比較批文卡改動：港澳車牌→換車、駕駛人→換司機、有效期延後→續期。uploaded：新卡已存檔，只問不擋
+async function askWhy(before,after,uploaded=false){
+  const local=String(after.localPlate||'').trim(),oldLocal=String(before.localPlate||'').trim()
+  if(local&&oldLocal&&local.toUpperCase()!==oldLocal.toUpperCase()){const did=await askChange('港澳車牌由 '+oldLocal+' 改為 '+local,'換車');return did===null?(uploaded?false:null):did?{kind:'vehicle_change',newPlate:local}:false}
+  if(driverNames(before)&&driverNames(after)&&driverNames(before)!==driverNames(after)){const did=await askChange('駕駛人改為 '+driverNames(after),'換司機');return did===null?(uploaded?false:null):did?{kind:'driver_change'}:false}
+  if(before.validTo&&after.validTo&&after.validTo>before.validTo){const did=await askChange('有效期延至 '+after.validTo,'續期');return did===null?(uploaded?false:null):did?{kind:'renewal'}:false}
+  return false
+}
 // 到「我的公司」打開那間公司的修改表單
 function fillCompany(id){uni.setStorageSync('editCompany',id);uni.switchTab({url:'/pages/companies/companies'})}
 function boundVehicle(p){const v=vehicles.value.find(x=>x.id===p.vehicle_id);return v?[v.brand,v.model,v.plate].filter(Boolean).join(' · '):'未綁定'}
@@ -175,7 +199,7 @@ function mainlandParts(value){const clean=String(value||'').toUpperCase().replac
 function formatHongKong(value){const clean=String(value||'').toUpperCase().replace(/\s+/g,'');return clean.replace(/^([A-Z]{1,2})([0-9]{1,4})$/,'$1 $2')}
 function formatMacau(value){const clean=String(value||'').toUpperCase().replace(/[\s-]/g,'');return clean.replace(/^([A-Z]{2})([0-9]{2})([0-9]{2})$/,'$1-$2-$3')}
 function openSource(sourceId){const source=sources.value.find(s=>s.id===sourceId);if(source)uni.setClipboardData({data:source.url,success:()=>uni.showToast({title:'官方連結已複製',icon:'none'})})}
-async function load(){if(!getUser())return uni.navigateTo({url:'/pages/login/login'});if(creating.value||!plateId)return;try{const [p,v,catalog,mine]=await Promise.all([api('/plate-assets/'+plateId),api('/vehicles'),api('/catalog'),api('/my/plates/'+plateId)]);summary.value=mine;loadPending();api('/my/drivers').then(list=>{drivers.value=list}).catch(()=>{drivers.value=[]});api('/my/rentals').then(list=>{arrangements.value=list.filter(item=>item.plateId===plateId)}).catch(()=>{arrangements.value=[]});plates.value=[p];plateDetail.value={...plateDetail.value,[p.id]:p};vehicles.value=v;sources.value=catalog.sources;fillPlateForm(p);detail.value=Object.fromEntries(await Promise.all(v.map(async item=>[item.id,await api('/vehicles/'+item.id)])))}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
+async function load(){if(!getUser())return uni.navigateTo({url:'/pages/login/login'});if(creating.value||!plateId)return;try{const [p,v,catalog,mine]=await Promise.all([api('/plate-assets/'+plateId),api('/vehicles'),api('/catalog'),api('/my/plates/'+plateId)]);summary.value=mine;loadPending();loadSelf();api('/my/drivers').then(list=>{drivers.value=list}).catch(()=>{drivers.value=[]});api('/my/rentals').then(list=>{arrangements.value=list.filter(item=>item.plateId===plateId)}).catch(()=>{arrangements.value=[]});plates.value=[p];plateDetail.value={...plateDetail.value,[p.id]:p};vehicles.value=v;sources.value=catalog.sources;fillPlateForm(p);detail.value=Object.fromEntries(await Promise.all(v.map(async item=>[item.id,await api('/vehicles/'+item.id)])))}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
 onLoad(options=>{plateId=options.id||'';creating.value=options.new==='1';if(!creating.value)load()})
 onShow(load)
 import DueDate from '../../components/DueDate.vue'
@@ -210,4 +234,5 @@ import StampMark from '../../components/StampMark.vue'
 .guidance-title{margin:0 0 4px;color:var(--ink-3);font-size:var(--fs-meta)}
 .guidance-line{display:flex;align-items:flex-start;gap:12px;padding:4px 0;font-size:var(--fs-body);line-height:1.5;color:var(--ink-2)}
 .go-create{margin-top:16px}
+.stop-link{display:block;text-align:center;padding:16px 0 4px;color:var(--ink-2)}
 </style>

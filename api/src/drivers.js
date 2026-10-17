@@ -6,6 +6,8 @@ db.exec(`CREATE TABLE IF NOT EXISTS drivers(id TEXT PRIMARY KEY, tenant_id TEXT 
 CREATE INDEX IF NOT EXISTS idx_drivers_customer ON drivers(customer_id);
 CREATE TABLE IF NOT EXISTS plate_drivers(plate_asset_id TEXT NOT NULL, driver_id TEXT NOT NULL, role TEXT NOT NULL, sort INTEGER NOT NULL DEFAULT 0, registered_on TEXT, PRIMARY KEY(plate_asset_id, driver_id));
 CREATE INDEX IF NOT EXISTS idx_plate_drivers_driver ON plate_drivers(driver_id);`)
+// 客戶自行換司機後，不再開這個牌照（也沒有其他牌照）的司機：保留記錄，停止證件提醒
+if (!db.prepare('PRAGMA table_info(drivers)').all().some(column => column.name === 'retired_on')) db.exec('ALTER TABLE drivers ADD COLUMN retired_on TEXT')
 
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 const clean = (value, max = 120) => String(value ?? '').trim().slice(0, max)
@@ -52,7 +54,7 @@ export function driverOwners(tenantId, customerId = null) {
   const drivers = db.prepare(`SELECT d.*, c.name customer_name FROM drivers d JOIN customers c ON c.id=d.customer_id WHERE d.tenant_id=? ${customerId ? 'AND d.customer_id=?' : ''} ORDER BY d.name`).all(...(customerId ? [tenantId, customerId] : [tenantId]))
   return drivers.map(driver => {
     const plate = mainPlate(driver.id)
-    return { ownerType: 'driver', ownerId: driver.id, label: `司機 ${driver.name}`, customerId: driver.customer_id, customerName: driver.customer_name, facts: {}, scopeOwner: plate ? { type: 'plate', id: plate } : null, plateId: plate }
+    return { ownerType: 'driver', ownerId: driver.id, label: `司機 ${driver.name}`, customerId: driver.customer_id, customerName: driver.customer_name, facts: { retired: driver.retired_on ? 1 : 0 }, scopeOwner: plate ? { type: 'plate', id: plate } : null, plateId: plate }
   })
 }
 export const mainPlate = driverId => db.prepare("SELECT plate_asset_id FROM plate_drivers WHERE driver_id=? ORDER BY CASE role WHEN '主' THEN 0 ELSE 1 END, sort LIMIT 1").get(driverId)?.plate_asset_id || null

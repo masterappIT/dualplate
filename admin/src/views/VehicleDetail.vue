@@ -7,7 +7,8 @@
       <p>
         {{ selectedVehicle.route }} · {{ selectedVehicle.origin }} ·
         {{ selectedVehicle.type }} ·
-        {{ customerName(selectedVehicle.customer_id) }}
+        {{ customerName(selectedVehicle.customer_id) }}<template v-if="selectedVehicle.retired_on">
+        · {{ selectedVehicle.retired_on }} 已換車，保留作記錄，不再提醒</template>
       </p>
     </div>
     <div class="heading-actions">

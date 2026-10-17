@@ -1,5 +1,5 @@
 import { db } from './db.js'
-import { plateFacts } from './plate-facts.js'
+import { plateFacts, vehicleFacts } from './plate-facts.js'
 import { driverOwners } from './drivers.js'
 
 export function deadlineOwners(tenantId) {
@@ -12,7 +12,7 @@ export function deadlineOwners(tenantId) {
   const owners = [
     ...plates.map(item => ({ ownerType: 'plate', ownerId: item.id, label: `${item.mainland_plate || '內地車牌待補'} · ${item.local_plate || '港澳車牌待補'}`, customerId: item.customer_id, customerName: names.get(item.customer_id), facts: plateFacts(item) })),
     ...companies.map(item => ({ ownerType: 'company', ownerId: item.id, label: item.name, customerId: item.customer_id, customerName: names.get(item.customer_id), facts: { jurisdiction: item.jurisdiction, status: item.status || '存續', companyStatus: item.status || '存續', incorporatedOn: item.incorporated_on } })),
-    ...vehicles.map(item => ({ ownerType: 'vehicle', ownerId: item.id, label: item.plate, customerId: item.customer_id, customerName: names.get(item.customer_id), facts: { route: item.route, origin: item.origin, firstRegisteredOn: item.first_registered_on }, scopeOwner: plates.find(plate => plate.vehicle_id === item.id) ? { type: 'plate', id: plates.find(plate => plate.vehicle_id === item.id).id } : null })),
+    ...vehicles.map(item => ({ ownerType: 'vehicle', ownerId: item.id, label: item.plate, customerId: item.customer_id, customerName: names.get(item.customer_id), facts: vehicleFacts(item), scopeOwner: plates.find(plate => plate.vehicle_id === item.id) ? { type: 'plate', id: plates.find(plate => plate.vehicle_id === item.id).id } : null })),
     ...driverOwners(tenantId),
   ]
   return { customers, plates, companies, vehicles, owners }

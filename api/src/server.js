@@ -22,6 +22,7 @@ import { bookkeepingRoutes } from './bookkeeping.js'
 import { reportRoutes } from './reports.js'
 import { renterPublicRoutes, renterAdminRoutes } from './renter-portal.js'
 import { clientEditRoutes, changeReviewRoutes, logCreated, logCompanyCreated, logCardChanges, logPlateChanges } from './client-edits.js'
+import { selfHandledClientRoutes, selfHandledReviewRoutes } from './self-handled.js'
 import { plateCompanyRoutes, linkPlateCompanies } from './plate-companies.js'
 import { seedDemo } from './demo-seed.js'
 import { passwordProblem, authenticate, createSession, lockedMinutes, recordFailure, clearFailures, loginPhone, PHONE_RULE, clientIp, audit, auditRoutes, logError, health } from './security.js'
@@ -84,6 +85,8 @@ function plateDetail(user, plateId) {
   const imageValue = x => ['admin', 'staff'].includes(user.role) ? `data:${x.mime};base64,${x.data.toString('base64')}` : true
   const companyStatuses = ['admin', 'staff'].includes(user.role) && item.group_id ? query('SELECT c.id,c.jurisdiction,c.name,c.name_en,c.status,c.status_changed_on FROM companies c JOIN company_groups g ON g.id=c.group_id AND g.tenant_id=c.tenant_id WHERE c.tenant_id=? AND c.group_id=? AND g.customer_id=? ORDER BY c.jurisdiction,c.name', user.tenant_id, item.group_id, item.customer_id) : []
   const warnings = companyStatuses.filter(company => company.jurisdiction === '內地' && ['已註銷', '註銷中'].includes(company.status)).map(company => company.status === '已註銷' ? '內承單位已註銷' : '內承單位註銷中')
+  // 客戶表示不再續期：員工在牌照頁看到，到期提醒已停止
+  if (['admin', 'staff'].includes(user.role) && item.stopped_on) warnings.push(`客戶表示不再續期（${item.stopped_on} · ${item.stop_reason || '未說明'}），到期提醒已停止`)
   return { ...item, cardData: cardData(item.card_data), rentals: query('SELECT * FROM plate_rentals WHERE plate_asset_id=? ORDER BY created_at DESC', item.id), rentalContracts: query('SELECT id,renter_name,renter_vehicle_plate,starts_on,ends_on,rent_amount,currency,collection_mode,status FROM rental_contracts WHERE plate_asset_id=? ORDER BY starts_on DESC', item.id), cardImages: Object.fromEntries(images.map(x => [x.side, imageValue(x)])), companyStatuses, warnings: [...new Set(warnings)] }
 }
 function plateSummary(item, tenantId) {
@@ -172,6 +175,8 @@ export const server = http.createServer(async (req, res) => {
     if (await portalRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await changeReviewRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await clientEditRoutes(req, res, url, user, { json, fail, parseBody })) return
+    if (await selfHandledReviewRoutes(req, res, url, user, { json, fail, parseBody })) return
+    if (await selfHandledClientRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await plateCompanyRoutes(req, res, url, user, { json, fail })) return
     if (await customerRoutes(req, res, url, user, { json, fail, query, one, plateFor, parseBody })) return
     if (path === '/api/import/plates' && req.method === 'POST') {

@@ -112,6 +112,8 @@ export function computeDeadlines({ rules, owners, tracked, completions, scopes =
   const result = []
   for (const owner of owners) {
     if (owner.ownerType === 'company' && owner.facts.status === '已註銷') continue
+    // 客戶自行辦理（docs/tasks/self-handled-changes-design.md）：換走的車、換走的司機、不再續期的牌照不再提醒
+    if (owner.facts.retired || owner.facts.stopped) continue
     for (const rule of rules) {
       if (!rule.active || rule.scope !== owner.ownerType || !ruleMatches(rule, owner.facts)) continue
       const scopeOwner = owner.scopeOwner || { type: owner.ownerType, id: owner.ownerId }

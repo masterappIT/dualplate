@@ -194,6 +194,7 @@ test('客戶不能在到期日修改批文卡有效期', async () => {
   const r = await request('/my/dates', 'PUT', { ownerType: 'plate', ownerId: state.plate, code: 'approval', expiresOn: '2030-01-01' }, 'client')
   assert.equal(r.status, 400); assert.equal(r.body.error, '此日期來自批文卡，請在批文卡修改')
 })
+test('客戶填不存在的月份回 400 而不是出錯', async () => { assert.equal((await request('/my/dates', 'PUT', { ownerType: 'driver', ownerId: state.driver, code: 'home_return_permit', expiresOn: '2030-13-01' }, 'client')).status, 400) })
 test('規則不適用的對象不能填到期日', async () => { assert.equal((await request('/my/dates', 'PUT', { ownerType: 'company', ownerId: state.cn, code: 'hk_br', expiresOn: '2030-01-01' }, 'client')).status, 400) })
 test('客戶不能清空到期日', async () => { assert.equal((await request('/my/dates', 'PUT', { ownerType: 'company', ownerId: state.hk, code: 'hk_br', expiresOn: '' }, 'client')).status, 400) })
 test('客戶不能填其他客戶的到期日', async () => { assert.equal((await request('/my/dates', 'PUT', { ownerType: 'company', ownerId: state.otherCompany, code: 'hk_br', expiresOn: '2030-01-01' }, 'client')).status, 404) })

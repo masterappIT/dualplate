@@ -43,6 +43,12 @@
       }
     },
     {
+      "path": "pages/self-change/self-change",
+      "style": {
+        "navigationBarTitleText": "自行辦理更新"
+      }
+    },
+    {
       "path": "pages/requests/requests",
       "style": {
         "navigationBarTitleText": "申請辦理"

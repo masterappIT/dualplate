@@ -1,5 +1,5 @@
 import { computeDeadlines } from './rules.js'
-import { plateFacts } from './plate-facts.js'
+import { plateFacts, vehicleFacts } from './plate-facts.js'
 import { addCrossing, crossingSummary, setReminder } from './crossings.js'
 import { scopeMap } from './entrustment.js'
 import { driverOwners, mainPlate } from './drivers.js'
@@ -54,7 +54,7 @@ export async function customerRoutes(req, res, url, user, h) {
     const owners = [
       ...plates.map(item => ({ ownerType: 'plate', ownerId: item.id, label: plateLabel(item), facts: plateFacts(item) })),
       ...companies.filter(item => companyStatus(item) !== '已註銷').map(item => ({ ownerType: 'company', ownerId: item.id, label: item.name, facts: { jurisdiction: item.jurisdiction, incorporatedOn: item.incorporated_on, status: companyStatus(item), companyStatus: companyStatus(item) } })),
-      ...vehicles.map(item => { const plate = plates.find(entry => entry.vehicle_id === item.id); return { ownerType: 'vehicle', ownerId: item.id, label: item.plate, facts: { route: item.route, origin: item.origin, firstRegisteredOn: item.first_registered_on }, scopeOwner: plate ? { type: 'plate', id: plate.id } : null } }),
+      ...vehicles.map(item => { const plate = plates.find(entry => entry.vehicle_id === item.id); return { ownerType: 'vehicle', ownerId: item.id, label: item.plate, facts: vehicleFacts(item), scopeOwner: plate ? { type: 'plate', id: plate.id } : null } }),
       ...driverOwners(customer.tenant_id, customer.id)
     ]
     const tracked = new Map(query('SELECT * FROM tracked_items WHERE tenant_id=?', customer.tenant_id).map(item => [`${item.owner_type}:${item.owner_id}:${item.code}`, item]))
