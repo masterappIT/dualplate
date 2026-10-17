@@ -172,6 +172,11 @@ CREATE TABLE IF NOT EXISTS request_attachments(id TEXT PRIMARY KEY, tenant_id TE
 CREATE TABLE IF NOT EXISTS notifications(id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, customer_id TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT, link TEXT, dedupe_key TEXT, read_at TEXT, created_at TEXT NOT NULL);
 CREATE UNIQUE INDEX IF NOT EXISTS notifications_dedupe ON notifications(customer_id, dedupe_key) WHERE dedupe_key IS NOT NULL`)
 addColumn('customers', 'is_self', 'INTEGER NOT NULL DEFAULT 0')
+// 自管／托管（docs/requirements.md 5.6.2，2026-10-18）：由管理者人手切換；現有客戶都是托管
+addColumn('customers', 'service_mode', "TEXT NOT NULL DEFAULT '托管'")
+addColumn('customers', 'mode_since', 'TEXT')
+addColumn('customers', 'mode_by', 'TEXT')
+addColumn('customers', 'contract_ends_on', 'TEXT')
 // Per-customer item list (docs/tasks/scope-items-design.md §2): 0 = every active item; 1 = the rows in customer_items.
 addColumn('customers', 'items_customized', 'INTEGER NOT NULL DEFAULT 0')
 addColumn('customers', 'scope_template', 'TEXT')

@@ -6,6 +6,7 @@
     <StatCard label="待錄入資料" tone="neutral" :value="todayCounts.missing" hint="補上日期或資料" :active="todayTab === 'missing'" @click="choose('missing')" />
     <StatCard label="進行中業務" tone="info" :value="todayCounts.active" hint="未完成工單" :active="todayTab === 'active'" @click="choose('active')" />
   </div>
+  <ContractEndings />
   <SelfHandledChanges />
   <CustomerChanges />
   <section ref="queuePanel" class="panel">
@@ -54,6 +55,7 @@ import Tag from '../components/ui/Tag.vue'
 import FilterBar from '../components/business/FilterBar.vue'
 import CustomerChanges from '../components/business/CustomerChanges.vue'
 import SelfHandledChanges from '../components/business/SelfHandledChanges.vue'
+import ContractEndings from '../components/business/ContractEndings.vue'
 import { useAdminStore } from '../store'
 import { api, rentMoney } from '../api'
 import { offerFee, offerFees } from '../composables/fee-suggestion'

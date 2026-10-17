@@ -49,15 +49,18 @@ export const templates = {
   plates_only: { label: '只管牌照', handler: category => category === 'plate' ? 'us' : 'client' },
   plates_and_mainland: { label: '牌照＋內地公司', handler: category => ['plate', 'cn'].includes(category) ? 'us' : 'client' }
 }
+// 自管客戶（docs/requirements.md 5.6.2）：不論範本或逐項設定，事項一律客戶自理，不產生我們的工作
+export const selfManaged = customer => customer?.service_mode === '自管' && !customer.is_self
 const templateHandler = (customer, category, key = customer?.scope_template) => {
+  if (selfManaged(customer)) return 'client'
   const handler = templates[key]?.handler(category) || 'us'
   return customer?.is_self && handler === 'client' ? 'us' : handler
 }
 
 export function loadOwner(tenantId, ownerType, ownerId) {
   if (typeof ownerId !== 'string' || !ownerId) return null
-  if (ownerType === 'company') return db.prepare('SELECT co.*, c.is_self FROM companies co JOIN customers c ON c.id=co.customer_id WHERE co.id=? AND co.tenant_id=?').get(ownerId, tenantId) || null
-  if (ownerType === 'plate') return db.prepare('SELECT p.*, c.is_self FROM plate_assets p JOIN customers c ON c.id=p.customer_id WHERE p.id=? AND c.tenant_id=?').get(ownerId, tenantId) || null
+  if (ownerType === 'company') return db.prepare('SELECT co.*, c.is_self, c.service_mode FROM companies co JOIN customers c ON c.id=co.customer_id WHERE co.id=? AND co.tenant_id=?').get(ownerId, tenantId) || null
+  if (ownerType === 'plate') return db.prepare('SELECT p.*, c.is_self, c.service_mode FROM plate_assets p JOIN customers c ON c.id=p.customer_id WHERE p.id=? AND c.tenant_id=?').get(ownerId, tenantId) || null
   return null
 }
 const customerOf = (tenantId, customerId) => db.prepare('SELECT * FROM customers WHERE id=? AND tenant_id=?').get(customerId, tenantId) || null
@@ -67,7 +70,7 @@ const customerOf = (tenantId, customerId) => db.prepare('SELECT * FROM customers
 export function scopeMap(tenantId) {
   const items = catalogue(tenantId)
   const rows = new Map(db.prepare('SELECT * FROM service_scopes WHERE tenant_id=? AND ended_on IS NULL').all(tenantId).map(row => [`${row.owner_type}:${row.owner_id}:${row.service}`, row]))
-  const customers = new Map(db.prepare('SELECT id, is_self, items_customized, scope_template FROM customers WHERE tenant_id=?').all(tenantId).map(row => [row.id, row]))
+  const customers = new Map(db.prepare('SELECT id, is_self, service_mode, items_customized, scope_template FROM customers WHERE tenant_id=?').all(tenantId).map(row => [row.id, row]))
   const jurisdictions = new Map(db.prepare('SELECT id, jurisdiction FROM companies WHERE tenant_id=?').all(tenantId).map(row => [row.id, row.jurisdiction]))
   // Outsourced monthly filings name the accounting firm set on the company (one source with the filings page).
   const firms = new Map(db.prepare('SELECT co.id, f.name FROM companies co JOIN accounting_firms f ON f.id=co.accounting_firm_id WHERE co.tenant_id=?').all(tenantId).map(row => [row.id, row.name]))
@@ -79,6 +82,7 @@ export function scopeMap(tenantId) {
       const customer = customers.get(customerId)
       if (clientOnlyItems.has(code)) return { handler: customer?.is_self ? 'us' : 'client', providerName: '' }
       if (customer && !listOf(customer).has(code)) return null
+      if (selfManaged(customer)) return { handler: 'client', providerName: '' }
       const row = rows.get(`${ownerType}:${ownerId}:${code}`)
       if (row) return { handler: row.handler, providerName: code === 'monthly_filing' && row.handler === 'outsourced' && firms.get(ownerId) || row.provider_name || '' }
       return { handler: templateHandler(customer, ownerType === 'company' ? categoryOf[jurisdictions.get(ownerId)] : 'plate'), providerName: '' }
@@ -130,6 +134,7 @@ export function checkScope(owner, { handler, providerName }) {
   if (providerName !== undefined && providerName !== null && typeof providerName !== 'string') return '外包單位名稱無效'
   if (handler === 'outsourced' && (typeof providerName !== 'string' || !providerName.trim())) return '外包須填寫外包單位名稱'
   if (handler === 'client' && owner.is_self) return '本公司自有的項目不可設為客戶自理'
+  if (handler !== 'client' && selfManaged(owner)) return '自管客戶的事項一律客戶自理；要由我們負責，請先把客戶切換為托管'
   return null
 }
 
@@ -200,7 +205,7 @@ export function customerScope(tenantId, customerId) {
       })
     }
   })
-  return { customer: { id: customer.id, name: customer.name, isSelf: Boolean(customer.is_self), template: customer.scope_template || null, customized: Boolean(customer.items_customized) }, templates: Object.fromEntries(Object.entries(templates).map(([key, value]) => [key, value.label])), groups: itemGroups, sections }
+  return { customer: { id: customer.id, name: customer.name, isSelf: Boolean(customer.is_self), serviceMode: customer.is_self ? null : customer.service_mode || '托管', template: customer.scope_template || null, customized: Boolean(customer.items_customized) }, templates: Object.fromEntries(Object.entries(templates).map(([key, value]) => [key, value.label])), groups: itemGroups, sections }
 }
 
 const openRequests = (customerId, plateIds) => plateIds.length ? db.prepare(`SELECT id, title, plate_asset_id FROM requests WHERE customer_id=? AND status NOT IN ('已完成','已取消') AND plate_asset_id IN (${plateIds.map(() => '?').join(',')}) ORDER BY created_at`).all(customerId, ...plateIds) : []

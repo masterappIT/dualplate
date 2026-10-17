@@ -27,6 +27,7 @@ import { vehicleDocumentRoutes } from './vehicle-documents.js'
 import { publicTermsRoutes, termsGate, termsRoutes } from './terms.js'
 import { plateCompanyRoutes, linkPlateCompanies } from './plate-companies.js'
 import { seedDemo } from './demo-seed.js'
+import { serviceModeRoutes } from './service-mode.js'
 import { passwordProblem, authenticate, createSession, lockedMinutes, recordFailure, clearFailures, loginPhone, PHONE_RULE, clientIp, audit, auditRoutes, logError, health } from './security.js'
 
 const port = Number(process.env.PORT || 4100)
@@ -171,6 +172,7 @@ export const server = http.createServer(async (req, res) => {
     if (path === '/api/catalog' && req.method === 'GET') return json(res, 200, { services, sources, routePlans: Object.fromEntries(services.map(s => [s.code, Object.fromEntries(s.routes.map(route => [route, planFor(s, route)]))])) })
     if (await phase1Routes(req, res, url, user, { json, fail, parseBody, canAccessCustomer, vehicleFor, plateFor, query, one, clean })) return
     if (await entrustmentRoutes(req, res, url, user, { json, fail, parseBody })) return
+    if (await serviceModeRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await workOrderRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await driverRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await vehicleDocumentRoutes(req, res, url, user, { json, fail, parseBody })) return

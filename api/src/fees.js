@@ -54,8 +54,9 @@ function checkFee(item, { allowKinds = manualKinds } = {}) {
 // 每年該月 1 日起自動產生年費（冪等：同客戶同年只一筆）
 export function ensureAnnualFees(tenantId) {
   const day = today(), year = day.slice(0, 4), month = Number(day.slice(5, 7))
-  for (const billing of db.prepare("SELECT b.*, c.is_self FROM customer_billing b JOIN customers c ON c.id=b.customer_id WHERE b.tenant_id=? AND b.active=1").all(tenantId)) {
-    if (billing.is_self || month < billing.bill_month) continue
+  for (const billing of db.prepare("SELECT b.*, c.is_self, c.service_mode FROM customer_billing b JOIN customers c ON c.id=b.customer_id WHERE b.tenant_id=? AND b.active=1").all(tenantId)) {
+    // 自管客戶沒有固定代辦費，年費設定即使仍生效也不產生（客戶頁會提示對不上）
+    if (billing.is_self || billing.service_mode === '自管' || month < billing.bill_month) continue
     const start = `${year}-${String(billing.bill_month).padStart(2, '0')}-01`
     insertFee(tenantId, { customerId: billing.customer_id, kind: 'annual', description: `${year} 年度年費`, currency: billing.currency, amount: billing.annual_amount, incurredOn: start, dueOn: start, periodKey: year })
   }

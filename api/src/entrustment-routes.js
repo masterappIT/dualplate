@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { db } from './db.js'
-import { applyTemplate, changeItems, checkScope, customerScope, expandChange, loadOwner, scopeImpact, scopesFor, templateChanges, templates, writeScope } from './entrustment.js'
+import { applyTemplate, changeItems, checkScope, customerScope, expandChange, loadOwner, scopeImpact, scopesFor, selfManaged, templateChanges, templates, writeScope } from './entrustment.js'
 
 // Entrustment per item, customer item lists, templates and plate transfers (docs/tasks/scope-items-design.md,
 // docs/tasks/entrustment-brief.md §6). Admin only.
@@ -91,6 +91,7 @@ export async function entrustmentRoutes(req, res, url, user, h) {
   if (templateMatch && method === 'POST') {
     const body = await parseBody(req)
     if (!isObject(body) || !Object.hasOwn(templates, body.template) || body.dryRun !== undefined && typeof body.dryRun !== 'boolean') return fail(res, 400, '委託範本無效'), true
+    if (selfManaged(db.prepare('SELECT is_self, service_mode FROM customers WHERE id=? AND tenant_id=?').get(templateMatch[1], tenant))) return fail(res, 409, '自管客戶不套用委託範本；要由我們負責，請先把客戶切換為托管'), true
     const preview = templateChanges(tenant, templateMatch[1], body.template)
     if (!preview) return fail(res, 404, '客戶不存在'), true
     if (body.dryRun !== false) return json(res, 200, { ...preview, applied: false }), true
