@@ -341,6 +341,78 @@ test('自辦表單列出待核對的類別', async () => {
 })
 test('其他客戶取不到自辦表單', async () => { const { plateId } = makePlate(); assert.equal((await request(`/my/plates/${plateId}/self-handled/form`, 'GET', undefined, 'second-client')).status, 404) })
 
+// ── 驗車、備案由客戶標記已辦好 ──
+// 第 6 年上線檢驗：首次登記日推回 6 年，令今年那一期在 20 天後到期
+function inspectionPlate() {
+  const made = makePlate()
+  const due = shift(20), registered = `${Number(due.slice(0, 4)) - 6}${due.slice(4)}`
+  state.db.prepare('UPDATE vehicles SET first_registered_on=? WHERE id=?').run(registered, made.vehicleId)
+  return { ...made, period: due.slice(0, 4) }
+}
+const markInspection = (plateId, extra = {}) => submit(plateId, { kind: 'inspection_done', photos: [photo], ...extra })
+test('客戶端到期項目標示驗車可標記已辦好', async () => {
+  const { plateId, vehicleId, period } = inspectionPlate()
+  const item = (await deadlines(plateId)).find(entry => entry.code === 'inspection' && entry.ownerId === vehicleId)
+  assert.equal(item.markable, true); assert.equal(item.period, period)
+})
+test('按日期記錄的到期項目不標示可標記', async () => {
+  const { plateId } = makePlate()
+  setDate('plate', plateId, 'hk_crp', shift(20))
+  assert.ok(!(await deadlines(plateId)).find(entry => entry.code === 'hk_crp').markable)
+})
+test('客戶標記驗車已辦好後不再提醒', async () => {
+  const { plateId, vehicleId, period } = inspectionPlate()
+  const r = await markInspection(plateId, { period })
+  assert.equal(r.status, 201)
+  assert.ok(state.db.prepare("SELECT 1 FROM rule_completions WHERE code='inspection' AND owner_id=? AND period=?").get(vehicleId, period))
+  assert.ok(!(await deadlines(plateId)).some(entry => entry.code === 'inspection' && entry.period === period))
+  assert.equal(r.body.details.label, '第 6 年上線檢驗')
+})
+test('標記驗車沒有附相片回 400', async () => { const { plateId, period } = inspectionPlate(); const r = await markInspection(plateId, { period, photos: [] }); assert.equal(r.status, 400); assert.match(r.body.error, /相片/) })
+test('標記驗車期數不是現在這一期回 400', async () => { const { plateId } = inspectionPlate(); assert.equal((await markInspection(plateId, { period: '1999' })).status, 400) })
+test('標記驗車沒有期數回 400', async () => { const { plateId } = inspectionPlate(); assert.equal((await markInspection(plateId, {})).status, 400) })
+test('標記驗車期數不是文字回 400', async () => { const { plateId } = inspectionPlate(); assert.equal((await markInspection(plateId, { period: 2026 })).status, 400) })
+test('已標記辦好的一期不能再標記', async () => {
+  const { plateId, vehicleId, period } = inspectionPlate()
+  state.db.prepare('INSERT INTO rule_completions(tenant_id,code,owner_id,period,completed_by,completed_at) VALUES (?,?,?,?,?,?)').run('default', 'inspection', vehicleId, period, null, new Date().toISOString())
+  assert.equal((await markInspection(plateId, { period })).status, 409)
+})
+test('沒有綁定車輛的牌照不能標記驗車', async () => { const { plateId } = makePlate({ vehiclePlate: null }); assert.equal((await markInspection(plateId, { period: hkToday().slice(0, 4) })).status, 400) })
+test('標記驗車的車不屬於這個牌照回 400', async () => {
+  const { plateId, period } = inspectionPlate(), other = makePlate()
+  assert.equal((await markInspection(plateId, { period, ownerId: other.vehicleId })).status, 400)
+})
+test('其他客戶不能標記驗車', async () => { const { plateId, period } = inspectionPlate(); assert.equal((await submit(plateId, { kind: 'inspection_done', period, photos: [photo] }, 'second-client')).status, 404) })
+test('客戶標記新批文備案已辦好', async () => {
+  const validFrom = shift(-170)
+  const { plateId } = makePlate({ card: { validFrom } })
+  const item = (await deadlines(plateId)).find(entry => entry.code === 'new_card_filing')
+  assert.equal(item.markable, true)
+  const r = await submit(plateId, { kind: 'filing_done', period: item.period, photos: [photo] })
+  assert.equal(r.status, 201)
+  assert.ok(!(await deadlines(plateId)).some(entry => entry.code === 'new_card_filing'))
+})
+test('標記備案沒有附相片的錯誤訊息說明要回執', async () => {
+  const { plateId } = makePlate({ card: { validFrom: shift(-170) } })
+  const r = await submit(plateId, { kind: 'filing_done', period: shift(-170) })
+  assert.equal(r.status, 400); assert.match(r.body.error, /備案回執/)
+})
+test('退回驗車標記後恢復提醒', async () => {
+  const { plateId, vehicleId, period } = inspectionPlate()
+  await markInspection(plateId, { period })
+  const row = (await request('/self-handled', 'GET', undefined, 'admin')).body.find(item => item.plateId === plateId)
+  assert.equal((await request(`/self-handled/${row.id}/return`, 'POST', { note: '相片看不到檢驗標誌' }, 'admin')).status, 200)
+  assert.equal(state.db.prepare("SELECT COUNT(*) n FROM rule_completions WHERE code='inspection' AND owner_id=?").get(vehicleId).n, 0)
+  assert.ok((await deadlines(plateId)).some(entry => entry.code === 'inspection' && entry.period === period))
+})
+test('核對驗車標記後保持已辦好', async () => {
+  const { plateId, vehicleId, period } = inspectionPlate()
+  await markInspection(plateId, { period })
+  const row = (await request('/self-handled', 'GET', undefined, 'admin')).body.find(item => item.plateId === plateId)
+  assert.equal((await request(`/self-handled/${row.id}/accept`, 'POST', {}, 'admin')).status, 200)
+  assert.ok(state.db.prepare("SELECT 1 FROM rule_completions WHERE code='inspection' AND owner_id=? AND period=?").get(vehicleId, period))
+})
+
 // ── 管理端核對 ──
 const pendingFor = async plateId => (await request('/self-handled', 'GET', undefined, 'admin')).body.find(item => item.plateId === plateId)
 test('員工可查看客戶自辦待核對清單', async () => {

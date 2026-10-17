@@ -3,7 +3,7 @@ import { cardData } from './card.js'
 import { notify } from './client-portal.js'
 import { scopeMap } from './entrustment.js'
 import { plateFacts, vehicleFacts } from './plate-facts.js'
-import { ruleMatches } from './rules.js'
+import { computeDeadlines, ruleMatches } from './rules.js'
 import { plateLabel } from './client-edits.js'
 
 // 客戶自行辦理後更新資料（docs/tasks/self-handled-changes-design.md，管理者 2026-10-17 決定）：
@@ -15,9 +15,11 @@ CREATE INDEX IF NOT EXISTS idx_self_handled_plate ON self_handled(plate_asset_id
 CREATE TABLE IF NOT EXISTS self_handled_files(id TEXT PRIMARY KEY, record_id TEXT NOT NULL, mime TEXT NOT NULL, data BLOB NOT NULL, created_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_self_handled_files ON self_handled_files(record_id);`)
 
-export const kinds = { vehicle_change: '自行換車', renewal: '自行續期', driver_change: '自行換司機', stop_renewal: '不再續期' }
+export const kinds = { vehicle_change: '自行換車', renewal: '自行續期', driver_change: '自行換司機', stop_renewal: '不再續期', inspection_done: '自行驗車', filing_done: '自行備案' }
+// 客戶可自行標記辦好的到期事項（第七節第 4 項）：哪一類對應哪條規則、掛在甚麼對象上
+export const markable = { inspection_done: { code: 'inspection', ownerType: 'vehicle' }, filing_done: { code: 'new_card_filing', ownerType: 'plate' } }
 // 和這次自辦同類、仍未結案的工單：提示員工取消，以免重複辦理
-const sameService = { vehicle_change: ['vehicle_change'], renewal: ['renewal'], driver_change: ['driver_change'], stop_renewal: null }
+const sameService = { vehicle_change: ['vehicle_change'], renewal: ['renewal'], driver_change: ['driver_change'], stop_renewal: null, inspection_done: ['inspection'], filing_done: ['filing'] }
 const stopReasons = ['已賣車／不再使用', '放棄指標', '其他']
 const MAX_PHOTOS = 6, MAX_PHOTO_BYTES = 3500000
 
@@ -215,7 +217,30 @@ function prepareStop(ctx, body) {
     }
   }
 }
-const prepare = { vehicle_change: prepareVehicleChange, renewal: prepareRenewal, driver_change: prepareDriverChange, stop_renewal: prepareStop }
+// 驗車、備案由客戶標記辦好：只限這個牌照（或它綁定的車）現在仍未完成的那一期，並須附相片作證明
+function prepareMarkDone(ctx, body, kind) {
+  const { plate, tenantId } = ctx, { code, ownerType } = markable[kind]
+  if (typeof body.period !== 'string' || !body.period.trim()) return bad(400, '請選擇要標記的期數')
+  const owner = ownerType === 'plate' ? plate : plate.vehicle_id ? one('SELECT * FROM vehicles WHERE id=?', plate.vehicle_id) : null
+  if (!owner || owner.retired_on) return bad(400, '這個牌照沒有綁定車輛')
+  if (body.ownerId !== undefined && body.ownerId !== owner.id) return bad(400, '標記的對象不屬於這個牌照')
+  if (one('SELECT 1 FROM rule_completions WHERE code=? AND owner_id=? AND period=?', code, owner.id, body.period)) return bad(409, '這一期已標記辦好')
+  const rule = one('SELECT * FROM rules WHERE tenant_id=? AND code=? AND active=1 AND customer_visible=1', tenantId, code)
+  if (!rule) return bad(400, '這項目前不需要標記')
+  const decoded = { ...rule, match: JSON.parse(rule.match_json || '{}'), params: JSON.parse(rule.params_json || '{}'), remindDays: rule.remind_days }
+  const facts = ownerType === 'plate' ? plateFacts(owner) : vehicleFacts(owner)
+  const open = computeDeadlines({ rules: [decoded], owners: [{ ownerType, ownerId: owner.id, label: '', facts }], tracked: new Map(), completions: new Set(), windowDays: 180 })
+    .find(item => item.completable && item.period === body.period)
+  if (!open) return bad(400, '這一期目前不需要標記')
+  if (!ctx.photoCount) return bad(400, ownerType === 'vehicle' ? '請附上檢驗標誌或檢驗結果相片' : '請附上備案回執相片')
+  return {
+    write(userId) {
+      db.prepare('INSERT INTO rule_completions(tenant_id,code,owner_id,period,completed_by,completed_at) VALUES (?,?,?,?,?,?)').run(tenantId, code, owner.id, body.period, userId, now())
+      return { code, name: rule.name, period: body.period, label: open.detail, dueOn: open.dueOn, ownerType, ownerId: owner.id, ownerLabel: ownerType === 'vehicle' ? owner.plate : '' }
+    }
+  }
+}
+const prepare = { vehicle_change: prepareVehicleChange, renewal: prepareRenewal, driver_change: prepareDriverChange, stop_renewal: prepareStop, inspection_done: (ctx, body) => prepareMarkDone(ctx, body, 'inspection_done'), filing_done: (ctx, body) => prepareMarkDone(ctx, body, 'filing_done') }
 
 // 客戶端表單需要的資料：這個牌照適用哪些文件、新車和司機要填哪些到期日、現況
 function formFor(plate, tenantId) {
@@ -257,7 +282,7 @@ export async function selfHandledClientRoutes(req, res, url, user, { json, fail,
   if (one("SELECT id FROM self_handled WHERE plate_asset_id=? AND kind=? AND status='待核對'", plate.id, body.kind)) return fail(res, 409, `已提交「${kinds[body.kind]}」，顧問核對中；如需修改請聯絡你的顧問`), true
   const photos = checkPhotos(body.photos)
   if (photos.error) return fail(res, photos.status, photos.error), true
-  const ctx = { plate, tenantId, handledOn }
+  const ctx = { plate, tenantId, handledOn, photoCount: photos.files.length }
   const plan = prepare[body.kind](ctx, body)
   if (plan.error) return fail(res, plan.status, plan.error), true
   const recordId = id()
@@ -330,8 +355,10 @@ export async function selfHandledReviewRoutes(req, res, url, user, { json, fail,
   try {
     db.prepare("UPDATE self_handled SET status='已退回', reviewed_by=?, reviewed_by_name=?, reviewed_at=?, review_note=? WHERE id=?").run(user.id, user.name, now(), note, row.id)
     if (row.kind === 'stop_renewal') db.prepare('UPDATE plate_assets SET stopped_on=NULL, stop_reason=NULL, updated_at=? WHERE id=?').run(now(), row.plate_asset_id)
+    // 驗車、備案退回：撤銷客戶的「已辦好」，照舊提醒（員工之後自己標記的不動）
+    if (markable[row.kind]) { const d = JSON.parse(row.details_json); db.prepare('DELETE FROM rule_completions WHERE code=? AND owner_id=? AND period=? AND completed_by=?').run(d.code, d.ownerId, d.period, row.created_by) }
     db.exec('COMMIT')
   } catch (error) { db.exec('ROLLBACK'); throw error }
-  notify({ tenantId, customerId: row.customer_id, kind: 'self_handled_returned', title: `顧問未能確認你的「${kinds[row.kind]}」更新`, body: `${note}${row.kind === 'stop_renewal' ? '。牌照會照常提醒。' : '。請按顧問說明修正資料，或聯絡你的顧問。'}`, link: `/pages/plate-detail/plate-detail?id=${row.plate_asset_id}`, dedupeKey: `self_handled:${row.id}` })
+  notify({ tenantId, customerId: row.customer_id, kind: 'self_handled_returned', title: `顧問未能確認你的「${kinds[row.kind]}」更新`, body: `${note}${row.kind === 'stop_renewal' || markable[row.kind] ? '。這一項會照常提醒。' : '。請按顧問說明修正資料，或聯絡你的顧問。'}`, link: `/pages/plate-detail/plate-detail?id=${row.plate_asset_id}`, dedupeKey: `self_handled:${row.id}` })
   return json(res, 200, recordView(record(row.id))), true
 }

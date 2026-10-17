@@ -40,6 +40,10 @@ function lines(row) {
     d.removed.length ? `換走：${d.removed.map(item => `${item.name}${item.stillDrivesOther ? '（仍開其他牌照）' : '（不再提醒）'}`).join('、')}` : '',
     ...d.after.filter(item => item.missing.length).map(item => `${item.name} 未填：${item.missing.join('、')}`)
   ].filter(Boolean)
+  if (row.kind === 'inspection_done' || row.kind === 'filing_done') return [
+    `${d.name}${d.label ? `：${d.label}` : ''}${d.ownerLabel ? `（${d.ownerLabel}）` : ''}，到期日 ${d.dueOn}`,
+    '客戶表示已辦好，這一期已停止提醒；退回會恢復提醒'
+  ]
   return [`原因：${d.reason}${d.note ? `；${d.note}` : ''}`, '這個牌照已停止到期提醒；退回會恢復提醒']
 }
 const mismatch = row => row.details.cardMismatch ? (row.kind === 'driver_change' ? `批文卡駕駛人為 ${row.details.cardMismatch}` : `批文卡上車牌為 ${row.details.cardMismatch}`) : ''

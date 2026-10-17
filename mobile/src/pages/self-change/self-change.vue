@@ -6,7 +6,7 @@
     <view v-else-if="loaded && form.stoppedOn && kind!=='stop_renewal'" class="list-card warn-card"><text class="list-title">這個牌照已標記為不再續期</text><text class="list-sub">如要恢復，請聯絡你的顧問。</text></view>
     <template v-else-if="loaded">
       <!-- 新批文卡：換車、續期、換司機都會換一張新卡 -->
-      <view v-if="kind!=='stop_renewal'" class="card">
+      <view v-if="kind!=='stop_renewal'&&!marking" class="card">
         <text class="step-title">新批文卡</text>
         <text class="subtle">{{ cardHint }}</text>
         <view class="upload-actions"><button class="btn-sm" :disabled="busy" @click="uploadCard('front')">{{ uploaded.front?'✓ 已拍正面':'拍正面' }}</button><button class="btn-sm" :disabled="busy" @click="uploadCard('back')">{{ uploaded.back?'✓ 已拍背面':'拍背面' }}</button></view>
@@ -66,6 +66,13 @@
         <button v-if="drivers.length<3" class="btn-line add-driver" @click="addDriver">＋ 加一位司機</button>
       </view>
 
+      <!-- 驗車、新批文備案：標記這一期已辦好 -->
+      <view v-if="marking" class="card">
+        <text class="step-title">{{ mark.name }}</text>
+        <view class="kv mark-facts"><template v-if="mark.label"><text class="k">項目</text><text class="v">{{ mark.label }}</text></template><text class="k">到期日</text><text class="v num">{{ mark.dueOn || '—' }}</text></view>
+        <text class="subtle mark-hint">標記後這一期不再提醒；請附上{{ kind==='inspection_done' ? '檢驗標誌或檢驗結果' : '備案回執' }}相片，顧問會再核對。</text>
+      </view>
+
       <!-- 不再續期 -->
       <view v-if="kind==='stop_renewal'" class="card">
         <text class="step-title">為甚麼不再續期？</text>
@@ -79,7 +86,7 @@
         <text class="field-label first">{{ kind==='stop_renewal' ? '決定日期' : '辦好日期' }}</text>
         <picker mode="date" :value="handledOn" :end="today" @change="handledOn=$event.detail.value"><view class="field picker"><text class="num">{{ handledOn }}</text><text class="chev">›</text></view></picker>
         <template v-if="kind!=='stop_renewal'">
-          <text class="field-label">{{ photoLabel }}（可選，最多 6 張）</text>
+          <text class="field-label">{{ photoLabel }}（{{ marking ? '必須' : '可選' }}，最多 6 張）</text>
           <view class="photos"><image v-for="(p,index) in photos" :key="index" class="thumb" :src="p.path" mode="aspectFill" @click="viewPhoto(index)"/><view v-if="photos.length<6" class="thumb add" @click="addPhoto"><text>＋</text></view></view>
           <text v-if="photos.length" class="subtle">點相片可放大或移除。</text>
         </template>
@@ -92,7 +99,9 @@
 import { ref,computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { api,cardPhoto,forgetCardOriginal } from '../../lib/api'
-const names={vehicle_change:'自行換車',renewal:'自行續期',driver_change:'自行換司機',stop_renewal:'不再續期'}
+const names={vehicle_change:'自行換車',renewal:'自行續期',driver_change:'自行換司機',stop_renewal:'不再續期',inspection_done:'自行驗車',filing_done:'自行備案'}
+// 驗車、新批文備案只是標記一期辦好，不用拍新批文卡
+const marking=computed(()=>kind.value==='inspection_done'||kind.value==='filing_done'),mark=ref({period:'',name:'',label:'',dueOn:''})
 const plateId=ref(''),kind=ref('vehicle_change'),form=ref({}),loaded=ref(false),busy=ref(false),submitting=ref(false),uploaded=ref({})
 const todayIso=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 const today=todayIso(),handledOn=ref(today)
@@ -101,10 +110,10 @@ let wantedPlate='',approvalBefore=null
 const kindName=computed(()=>names[kind.value])
 const pendingHere=computed(()=>(form.value.pending||[]).includes(kind.value))
 const localName=computed(()=>form.value.route==='粵澳'?'澳門':'香港')
-const intro=computed(()=>kind.value==='stop_renewal'?'決定不再續期這個兩地牌（例如已賣車、放棄指標）？告訴我們，停止到期提醒。':`你自己辦好了${{vehicle_change:'換車',renewal:'續期',driver_change:'換司機'}[kind.value]}？在這裏一次更新，資料立即生效，你的顧問會再核對。自行辦理的變更，請在辦好後 7 天內更新。`)
+const intro=computed(()=>marking.value?`你自己辦好了${kind.value==='inspection_done'?'驗車':'新批文備案'}？在這裏標記，資料立即生效，你的顧問會再核對。`:kind.value==='stop_renewal'?'決定不再續期這個兩地牌（例如已賣車、放棄指標）？告訴我們，停止到期提醒。':`你自己辦好了${{vehicle_change:'換車',renewal:'續期',driver_change:'換司機'}[kind.value]}？在這裏一次更新，資料立即生效，你的顧問會再核對。自行辦理的變更，請在辦好後 7 天內更新。`)
 const cardHint=computed(()=>({vehicle_change:'換車後批文卡上的港澳車牌會改變，請拍下新卡正反面，顧問會對照核對。',renewal:'拍下新卡，系統會讀出新的有效期，填在下面。',driver_change:'新卡背面列出駕駛人，請拍下正反面，顧問會對照核對。'}[kind.value]))
-const photoLabel=computed(()=>({vehicle_change:'新車行車證、保險單相片',renewal:'新證件相片（例如香港許可證）',driver_change:'新司機證件相片'}[kind.value]))
-const submitText=computed(()=>kind.value==='stop_renewal'?'確認不再續期':'提交更新')
+const photoLabel=computed(()=>({vehicle_change:'新車行車證、保險單相片',renewal:'新證件相片（例如香港許可證）',driver_change:'新司機證件相片',inspection_done:'檢驗標誌或檢驗結果相片',filing_done:'備案回執相片'}[kind.value]))
+const submitText=computed(()=>kind.value==='stop_renewal'?'確認不再續期':marking.value?'標記已辦好':'提交更新')
 function fillDefaults(){
   const f=form.value
   if(kind.value==='vehicle_change'){const fromCard=f.card?.localPlate&&f.card.localPlate!==f.vehicle?.plate?f.card.localPlate:'';vehicle.value.plate=vehicle.value.plate||wantedPlate||fromCard;dates.value=Object.fromEntries((f.vehicleDates||[]).map(d=>[d.code,dates.value[d.code]||'']))}
@@ -126,6 +135,7 @@ function body(){
   if(kind.value==='stop_renewal')return{...base,reason:stop.value.reason,note:stop.value.note}
   const shared={...base,photos:photos.value.map(p=>p.data)}
   if(kind.value==='vehicle_change')return{...shared,vehicle:vehicle.value,dates:Object.fromEntries(Object.entries(dates.value).filter(([,v])=>v))}
+  if(marking.value)return{...shared,period:mark.value.period}
   if(kind.value==='renewal')return{...shared,documents:Object.fromEntries(Object.entries(renewal.value).map(([code,v])=>[code,v.done?{done:true,expiresOn:v.expiresOn}:{done:false}])),...(renewal.value.approval?.done?{newCardFiling:filingDone.value}:{})}
   return{...shared,drivers:drivers.value.map(d=>({name:d.name,role:d.role,phone:d.phone,dates:Object.fromEntries(Object.entries(d.dates).filter(([,v])=>v))}))}
 }
@@ -135,16 +145,17 @@ function problem(){
   if(kind.value==='renewal'){const done=Object.entries(renewal.value).filter(([,v])=>v.done);if(!done.length)return'請選出已續期的文件';if(done.some(([,v])=>!v.expiresOn))return'請填寫已續期文件的新到期日'}
   if(kind.value==='driver_change'&&drivers.value.some(d=>!d.name.trim()))return'請填寫司機姓名'
   if(kind.value==='stop_renewal'&&!stop.value.reason)return'請選擇不再續期的原因'
+  if(marking.value&&!photos.value.length)return kind.value==='inspection_done'?'請附上檢驗標誌或檢驗結果相片':'請附上備案回執相片'
   return''
 }
 async function submit(){
   const message=problem();if(message)return uni.showToast({title:message,icon:'none'})
   if(kind.value==='stop_renewal'){const ok=await new Promise(resolve=>uni.showModal({title:'確認不再續期？',content:'這個牌照會停止到期提醒，你的顧問會聯絡你確認。',confirmText:'確認',cancelText:'返回',success:r=>resolve(r.confirm)}));if(!ok)return}
   submitting.value=true
-  try{await api('/my/plates/'+encodeURIComponent(plateId.value)+'/self-handled','POST',body());uni.showToast({title:kind.value==='stop_renewal'?'已記錄，顧問會聯絡你':'已更新，顧問會再核對',icon:'none'});setTimeout(()=>uni.navigateBack({fail:()=>uni.redirectTo({url:'/pages/plate-detail/plate-detail?id='+encodeURIComponent(plateId.value)})}),700)}
+  try{await api('/my/plates/'+encodeURIComponent(plateId.value)+'/self-handled','POST',body());uni.showToast({title:kind.value==='stop_renewal'?'已記錄，顧問會聯絡你':marking.value?'已標記辦好，顧問會再核對':'已更新，顧問會再核對',icon:'none'});setTimeout(()=>uni.navigateBack({fail:()=>uni.redirectTo({url:'/pages/plate-detail/plate-detail?id='+encodeURIComponent(plateId.value)})}),700)}
   catch(e){uni.showToast({title:e.message,icon:'none'})}finally{submitting.value=false}
 }
-onLoad(options=>{plateId.value=decodeURIComponent(options.plate||'');kind.value=names[options.kind]?options.kind:'vehicle_change';wantedPlate=decodeURIComponent(options.newPlate||'');uni.setNavigationBarTitle({title:names[kind.value]});load()})
+onLoad(options=>{plateId.value=decodeURIComponent(options.plate||'');kind.value=names[options.kind]?options.kind:'vehicle_change';wantedPlate=decodeURIComponent(options.newPlate||'');mark.value={period:decodeURIComponent(options.period||''),name:decodeURIComponent(options.name||''),label:decodeURIComponent(options.label||''),dueOn:decodeURIComponent(options.dueOn||'')};uni.setNavigationBarTitle({title:names[kind.value]});load()})
 </script>
 <style scoped>
 .step-title{display:block;margin-bottom:4px;font-size:var(--fs-h);font-weight:800;color:var(--jade-deep)}
@@ -166,4 +177,5 @@ onLoad(options=>{plateId.value=decodeURIComponent(options.plate||'');kind.value=
 .thumb.add{display:flex;align-items:center;justify-content:center;color:var(--jade);font-size:var(--fs-title);font-weight:700}
 .photos+.subtle{margin-top:8px}
 .submit{margin-top:4px}
+.mark-facts{margin-top:8px}.mark-hint{margin-top:12px}
 </style>

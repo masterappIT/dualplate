@@ -24,7 +24,8 @@
           <view v-for="(item,index) in shownDeadlines" :key="index" class="line">
             <view class="grow"><text class="line-title">{{ item.name }}</text><text v-if="item.handledBy==='you'" class="who">{{ selfHandled }}</text><text v-if="isPending(item.ownerType,item.ownerId,'date:'+item.code)" class="pill amber pending-tag">已修改，待核對</text><text v-if="deadlineSub(item)" class="line-sub">{{ deadlineSub(item) }}</text></view>
             <picker v-if="item.editable" mode="date" :value="item.dueOn" @change="saveDate(item,$event.detail.value)"><view class="date-edit"><DueDate :date="item.dueOn" :days="item.daysLeft" :level="item.level" /><text class="link">修改</text></view></picker>
-            <view v-else class="date-edit"><DueDate :date="item.dueOn" :days="item.daysLeft" :level="item.level" /><text class="link date-spacer" aria-hidden="true">修改</text></view>
+            <view v-else-if="item.markable" class="date-edit" @click="markDone(item)"><DueDate :date="item.dueOn" :days="item.daysLeft" :level="item.level" /><text class="link">已辦好</text></view>
+            <view v-else class="date-edit"><DueDate :date="item.dueOn" :days="item.daysLeft" :level="item.level" /><text class="link date-spacer" aria-hidden="true">已辦好</text></view>
           </view>
           <text v-if="!deadlineList.length" class="line-sub">{{ summary.health==='pending' ? '你的顧問正在整理這個牌照的到期資料。' : '半年內沒有到期項目。' }}</text>
           <view v-if="deadlineList.length > 5" class="more" @click="allDeadlines=!allDeadlines">{{ allDeadlines ? '收起' : '顯示全部 '+deadlineList.length+' 項' }}</view>
@@ -178,7 +179,9 @@ const selfRecords=ref([])
 // 退回的說明顯示 30 天；不再續期待核對時，上面的「已標記不再續期」已說明，不重複
 const selfNotes=computed(()=>{const seen=new Set();return selfRecords.value.filter(r=>{if(seen.has(r.kind))return false;seen.add(r.kind);return (r.status==='已退回'&&Date.now()-Date.parse(r.reviewedAt)<30*86400000)||(r.status==='待核對'&&!(r.kind==='stop_renewal'&&plates.value[0]?.stopped_on))})})
 async function loadSelf(){try{selfRecords.value=await api('/my/plates/'+plateId+'/self-handled')}catch{selfRecords.value=[]}}
-function openSelf(kind,newPlate=''){uni.navigateTo({url:'/pages/self-change/self-change?plate='+encodeURIComponent(plateId)+'&kind='+kind+(newPlate?'&newPlate='+encodeURIComponent(newPlate):'')})}
+function openSelf(kind,newPlate='',extra={}){const query={plate:plateId,kind,...(newPlate?{newPlate}:{}),...extra};uni.navigateTo({url:'/pages/self-change/self-change?'+Object.entries(query).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&')})}
+// 驗車、新批文備案：客戶自己辦好了，附相片標記，顧問再核對
+function markDone(item){openSelf(item.code==='inspection'?'inspection_done':'filing_done','',{period:item.period,name:item.name,label:item.detail||'',dueOn:item.dueOn||''})}
 const selfKinds={renewal:'renewal',vehicle_change:'vehicle_change',driver_change:'driver_change'}
 function quickAction(code){if(!selfKinds[code])return startRequest(code,summary.value.id);uni.showActionSheet({itemList:['請我們代辦','已自己辦好，更新資料'],success:choice=>choice.tapIndex===0?startRequest(code,summary.value.id):openSelf(selfKinds[code])})}
 // 回傳 true＝辦了變更、false＝之前填錯、null＝取消
@@ -220,6 +223,8 @@ import StampMark from '../../components/StampMark.vue'
 .card-editor{margin-top:16px;padding:0 12px 12px;border-radius:var(--r-card);background:var(--paper)}
 .editor-actions{display:flex;gap:8px;margin-top:16px}.editor-actions .btn-sm{flex:1}
 .date-edit{display:flex;align-items:center;gap:8px}.date-spacer{visibility:hidden}
+/* 「修改」「已辦好」和佔位一樣寬，日期才對齊 */
+.date-edit .link{min-width:3em;text-align:right}
 .fill-link{display:block;margin-top:8px}
 .field-status{margin-left:8px;color:var(--due);font-size:var(--fs-cap);font-weight:700}.field-status.failed{color:var(--overdue)}
 .plate-pair{display:flex;gap:12px}.plate-item{flex:1;min-width:0}

@@ -11,7 +11,9 @@ import { companyGaps } from './plate-companies.js'
 // internal "missing data" items, rule codes or tenant details.
 const levelRank = { overdue: 0, due: 1, upcoming: 2, ok: 3 }
 // editable：客戶可在客戶端直接改這個到期日（按日期記錄、不是來自批文卡的事項）
-const publicDeadline = (item, editable = false) => ({ code: item.ruleCode, editable, handledBy: item.handler === 'client' ? 'you' : 'us', name: item.name, ownerType: item.ownerType, ownerId: item.ownerId, ownerLabel: item.ownerLabel, dueOn: item.dueOn, daysLeft: item.daysLeft, level: item.level, detail: item.method === 'expiry' ? '' : item.detail })
+// 客戶可自行標記「已辦好」的事項（驗車、新批文備案；docs/tasks/self-handled-changes-design.md 第七節第 4 項）
+const markableCodes = new Set(['inspection', 'new_card_filing'])
+const publicDeadline = (item, editable = false) => ({ code: item.ruleCode, editable, handledBy: item.handler === 'client' ? 'you' : 'us', name: item.name, ownerType: item.ownerType, ownerId: item.ownerId, ownerLabel: item.ownerLabel, dueOn: item.dueOn, daysLeft: item.daysLeft, level: item.level, detail: item.method === 'expiry' ? '' : item.detail, ...(markableCodes.has(item.ruleCode) && item.completable ? { markable: true, period: item.period } : {}) })
 const plateLabel = plate => `${plate.mainland_plate || '內地車牌待補'} · ${plate.local_plate || '港澳車牌待補'}`
 const companyStatus = company => company.status || '存續'
 const companyFields = item => ({ id: item.id, name: item.name, nameEn: item.name_en || '', jurisdiction: item.jurisdiction, registrationNo: item.registration_no || '', companyNumber: item.company_number || '', incorporatedOn: item.incorporated_on || '', taxpayerType: item.taxpayer_type || '', status: companyStatus(item) })
