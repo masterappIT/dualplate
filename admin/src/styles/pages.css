@@ -87,7 +87,31 @@ body { background: var(--canvas); color: var(--ink); font-family: var(--font-bod
 .company-name-pair { display: inline-grid; min-width: 0; gap: 2px; }
 .company-name-pair strong, .company-name-pair small { overflow-wrap: anywhere; }
 .company-name-missing { color: var(--status-due); }
-.customer-structure .key-value.company-name-missing div:nth-child(3) dd { color: var(--status-due); }
+/* 公司組：組頭（名稱、備註、編輯）→ 持有牌照 → 香港／澳門與內地兩欄公司卡；組與組之間用細線分開 */
+.company-group-block + .company-group-block { padding-top: 20px; border-top: 1px solid var(--rule); }
+.company-group-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.company-group-head h3 { margin: 0; }
+.company-group-head p { margin: 4px 0 0; }
+.company-group-block .group-plates { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; padding-top: 0; border-top: 0; }
+.group-plate { display: inline-grid; gap: 4px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--r-control); background: var(--surface); color: var(--ink); text-align: left; cursor: pointer; }
+.group-plate:hover { border-color: var(--jade); }
+.group-plate small { color: var(--ink-2); font-size: 12px; }
+.group-plate-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.company-column { display: grid; align-content: start; gap: 12px; min-width: 0; }
+.company-column-title { margin: 0; color: var(--ink-2); font-size: 12px; font-weight: 600; }
+.company-card .company-card-title { align-items: flex-start; flex-wrap: nowrap; }
+.company-card .company-card-actions { flex: none; flex-wrap: nowrap; }
+.company-card .key-value { padding: 12px 0 4px; border-top: 1px solid var(--border); }
+.expiry-compact { display: grid; padding-top: 12px; border-top: 1px solid var(--border); }
+.expiry-compact-title { margin: 0 0 4px; color: var(--ink-2); font-size: 12px; font-weight: 600; }
+.expiry-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 12px; padding: 8px 0; }
+.expiry-note-link { padding: 0; font-size: 12px; }
+.expiry-line + .expiry-line { border-top: 1px dashed var(--rule); }
+.expiry-line-main { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.expiry-line-main small { flex-basis: 100%; color: var(--ink-2); font-size: 12px; overflow-wrap: anywhere; }
+.expiry-note-edit { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.expiry-note-edit input { flex: 1 1 200px; min-width: 0; }
+@media (max-width: 600px) { .company-card .company-card-title { flex-wrap: wrap; } }
 .company-name-fields { grid-column: 1 / -1; display: grid; gap: 12px; min-width: 0; }
 .company-suggestion { grid-column: 1 / -1; }
 .import-preview-table { overflow-x: auto; }
