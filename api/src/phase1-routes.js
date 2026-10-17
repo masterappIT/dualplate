@@ -10,6 +10,7 @@ import { priceFor } from './pricing.js'
 import { insertFee } from './fees.js'
 import { computeDeadlines, ruleMatches, ruleScopes, ruleMethods, matchKeys, dateFields, itemGroups, defaultGroup, defaultService } from './rules.js'
 
+const isPlainObject = value => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 const date = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value + 'T00:00:00Z')) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 const integer = (value, min, max) => Number.isInteger(value) && value >= min && value <= max
@@ -32,7 +33,7 @@ export async function phase1Routes(req, res, url, user, h) {
   const path = url.pathname, method = req.method, tenant = user.tenant_id
   if (path === '/api/companies/filing-setup') return false
   if (!(/^\/api\/(company-groups|companies|tracked-items|rules|rule-completions|overview)(\/[^/]+)?$/.test(path) || path === '/api/tracked-items/bulk' || /^\/api\/companies\/[^/]+\/hk-lookup$/.test(path))) return false
-  const staffReadOnly = user.role === 'staff' && ((method === 'GET' && /^\/api\/(company-groups|companies|tracked-items|rules|overview)(\/[^/]+)?$/.test(path)) || ['/api/tracked-items', '/api/tracked-items/bulk'].includes(path) && method === 'PUT' || path === '/api/rule-completions' && ['POST', 'DELETE'].includes(method))
+  const staffReadOnly = user.role === 'staff' && ((method === 'GET' && /^\/api\/(company-groups|companies|tracked-items|rules|overview)(\/[^/]+)?$/.test(path)) || ['/api/tracked-items', '/api/tracked-items/bulk'].includes(path) && method === 'PUT' || path === '/api/rule-completions' && ['POST', 'DELETE'].includes(method) || path === '/api/rule-completions/batch' && method === 'POST')
   if (user.role !== 'admin' && !staffReadOnly) { fail(res, 403, '無權限'); return true }
   const send = (status, value) => { json(res, status, value); return true }
   const error = (status, message) => { fail(res, status, message); return true }
@@ -209,18 +210,21 @@ export async function phase1Routes(req, res, url, user, h) {
   }
   if (path === '/api/tracked-items/bulk' && method === 'PUT') {
     const body = await parseBody(req)
-    if (!Array.isArray(body.plateIds) || !body.plateIds.length || body.plateIds.length > 500 || new Set(body.plateIds).size !== body.plateIds.length || body.plateIds.some(plateId => typeof plateId !== 'string' || !plateId.trim()) || typeof body.code !== 'string' || !body.code.trim() || typeof body.expiresOn !== 'string' || !date(body.expiresOn)) return error(400, '牌照或到期日期無效')
-    const rule = one('SELECT * FROM rules WHERE tenant_id=? AND code=? AND scope=? AND method=? AND active=1', tenant, body.code, 'plate', 'expiry')
+    // 牌照沿用 plateIds；公司用 ownerType: 'company' + ownerIds（同一事項、同一日期一次填多間公司）
+    const isCompany = isPlainObject(body) && body.ownerType === 'company'
+    const ids = isPlainObject(body) ? (isCompany ? body.ownerIds : body.plateIds) : null
+    if (!isPlainObject(body) || (body.ownerType !== undefined && body.ownerType !== 'company') || !Array.isArray(ids) || !ids.length || ids.length > 500 || new Set(ids).size !== ids.length || ids.some(ownerId => typeof ownerId !== 'string' || !ownerId.trim()) || typeof body.code !== 'string' || !body.code.trim() || typeof body.expiresOn !== 'string' || !date(body.expiresOn)) return error(400, isCompany ? '公司或到期日期無效' : '牌照或到期日期無效')
+    const rule = one('SELECT * FROM rules WHERE tenant_id=? AND code=? AND scope=? AND method=? AND active=1', tenant, body.code, isCompany ? 'company' : 'plate', 'expiry')
     if (!rule || JSON.parse(rule.params_json).field === 'cardExpiresOn') return error(400, '到期規則不適用')
-    const plates = body.plateIds.map(plateId => plateFor(user, plateId))
-    if (plates.some(plate => !plate || !ruleMatches(decoded(rule), facts('plate', plate)))) return error(400, '牌照不存在或規則不適用')
+    const owners = ids.map(ownerId => isCompany ? company(ownerId) : plateFor(user, ownerId))
+    if (owners.some(item => !item || !ruleMatches(decoded(rule), facts(isCompany ? 'company' : 'plate', item)))) return error(400, isCompany ? '公司不存在或規則不適用' : '牌照不存在或規則不適用')
     db.exec('BEGIN IMMEDIATE')
     try {
       const statement = db.prepare('INSERT INTO tracked_items(tenant_id,owner_type,owner_id,code,expires_on,notes,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(owner_type,owner_id,code) DO UPDATE SET expires_on=excluded.expires_on,updated_by=excluded.updated_by,updated_at=excluded.updated_at')
-      for (const plateId of body.plateIds) statement.run(tenant, 'plate', plateId, body.code, body.expiresOn, '', user.id, now())
+      for (const ownerId of ids) statement.run(tenant, isCompany ? 'company' : 'plate', ownerId, body.code, body.expiresOn, '', user.id, now())
       db.exec('COMMIT')
     } catch (failure) { db.exec('ROLLBACK'); throw failure }
-    return send(200, { updated: body.plateIds.length })
+    return send(200, { updated: ids.length })
   }
   if (path === '/api/rule-completions' && ['POST','DELETE'].includes(method)) {
     const body = await parseBody(req), rule = one('SELECT * FROM rules WHERE tenant_id=? AND code=? AND method<>?', tenant, body.ruleCode, 'expiry')
@@ -238,6 +242,40 @@ export async function phase1Routes(req, res, url, user, h) {
     const suggestion = price?.billing === 'per_time' && price.amount && !self ? { customerId: item.customer_id, kind: 'service', description: `${rule.name}（${body.period}）`, currency: price.currency, amount: price.amount, plateId: rule.scope === 'plate' ? item.id : null } : null
     if (suggestion && user.role !== 'admin') insertFee(tenant, { ...suggestion, periodKey: `done:${rule.code}:${item.id}:${body.period}`, notes: '員工標記辦好自動產生，請核對' }, user.id)
     return send(200, { ok: true, ...(suggestion && user.role === 'admin' ? { feeSuggestion: suggestion } : {}) })
+  }
+  // 一次標記多項「已辦好」：先逐項驗證（與單項相同的規則），全部合格才在同一交易內寫入
+  if (path === '/api/rule-completions/batch' && method === 'POST') {
+    const body = await parseBody(req)
+    if (!isPlainObject(body) || !Array.isArray(body.items) || !body.items.length || body.items.length > 200) return error(400, '請選擇 1–200 項')
+    const checked = []
+    for (const [index, entry] of body.items.entries()) {
+      const fail = message => error(400, `第 ${index + 1} 項：${message}`)
+      if (!isPlainObject(entry) || typeof entry.ruleCode !== 'string' || typeof entry.ownerId !== 'string' || typeof entry.period !== 'string') return fail('內容無效')
+      const rule = one('SELECT * FROM rules WHERE tenant_id=? AND code=? AND method<>?', tenant, entry.ruleCode, 'expiry')
+      const item = rule && owner(rule.scope, entry.ownerId)
+      if (!rule || !item) return fail('規則或對象不存在')
+      if (!rule.active || !ruleMatches(decoded(rule), facts(rule.scope, item))) return fail('規則不適用於此對象')
+      if (rule.method === 'since_last') return fail('此事項請錄入最近一次日期，不用標記完成')
+      if (!(rule.method === 'after_field' ? date(entry.period) : /^(\d{4}|\d{4}-(0[1-9]|1[0-2]))$/.test(entry.period))) return fail('期數無效')
+      checked.push({ rule, item, period: entry.period })
+    }
+    if (new Set(checked.map(entry => `${entry.rule.code}:${entry.item.id}:${entry.period}`)).size !== checked.length) return error(400, '同一項重複選擇')
+    const feeSuggestions = []
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      const statement = db.prepare('INSERT INTO rule_completions(tenant_id,code,owner_id,period,completed_by,completed_at) VALUES (?,?,?,?,?,?) ON CONFLICT(code,owner_id,period) DO UPDATE SET completed_by=excluded.completed_by,completed_at=excluded.completed_at')
+      for (const { rule, item, period } of checked) {
+        statement.run(tenant, rule.code, item.id, period, user.id, now())
+        // 按次收費：與單項相同——員工自動記未收，管理者回傳建議由前端一次確認
+        const price = item.customer_id ? priceFor(tenant, item.customer_id, rule.code, rule.scope === 'plate' ? item.route : '') : null
+        const self = item.customer_id && one('SELECT is_self FROM customers WHERE id=?', item.customer_id)?.is_self
+        const suggestion = price?.billing === 'per_time' && price.amount && !self ? { customerId: item.customer_id, kind: 'service', description: `${rule.name}（${period}）`, currency: price.currency, amount: price.amount, plateId: rule.scope === 'plate' ? item.id : null, periodKey: `done:${rule.code}:${item.id}:${period}` } : null
+        if (suggestion && user.role !== 'admin') insertFee(tenant, { ...suggestion, notes: '員工標記辦好自動產生，請核對' }, user.id)
+        else if (suggestion) feeSuggestions.push(suggestion)
+      }
+      db.exec('COMMIT')
+    } catch (failure) { db.exec('ROLLBACK'); throw failure }
+    return send(200, { completed: checked.length, feeSuggestions })
   }
   if (path === '/api/overview' && method === 'GET') {
     const days = url.searchParams.has('days') ? Number(url.searchParams.get('days')) : 90

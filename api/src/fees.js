@@ -147,6 +147,28 @@ export async function feeRoutes(req, res, url, user, { json, fail, parseBody }) 
     db.prepare('UPDATE fee_items SET customer_confirmed_at=?, updated_at=? WHERE id=?').run(now(), now(), fee.id)
     return json(res, 200, feeView(feeFor(tenant, fee.id))), true
   }
+  // 一次記多筆收款（例如客戶一次付清幾筆）：每筆按未收金額全數收妥；全部合格才在同一交易內寫入
+  if (path === '/api/fees/batch-payments') {
+    if (user.role !== 'admin') return fail(res, 403, '收費只限管理者'), true
+    if (method !== 'POST') return fail(res, 405, '不支援此操作'), true
+    const body = await parseBody(req)
+    if (!isObject(body) || !Array.isArray(body.feeIds) || !body.feeIds.length || body.feeIds.length > 200 || body.feeIds.some(feeId => typeof feeId !== 'string' || !feeId.trim()) || new Set(body.feeIds).size !== body.feeIds.length) return fail(res, 400, '請選擇 1–200 筆收費'), true
+    if (!safeDate(body.paidOn)) return fail(res, 400, '收款日期無效'), true
+    if (typeof body.method !== 'string' || !body.method.trim()) return fail(res, 400, '請填寫收款方式'), true
+    ensureAnnualFees(tenant)
+    const fees = body.feeIds.map(feeId => feeFor(tenant, feeId))
+    const missing = fees.findIndex(fee => !fee)
+    if (missing >= 0) return fail(res, 404, `第 ${missing + 1} 筆收費不存在`), true
+    const blocked = fees.findIndex(fee => fee.voided || fee.amount - paidOf(fee.id) <= 0)
+    if (blocked >= 0) return fail(res, 409, `「${fees[blocked].description}」${fees[blocked].voided ? '已作廢' : '已全數收妥'}`), true
+    const insert = db.prepare('INSERT INTO fee_payments(id,fee_item_id,paid_on,amount,method,proof_mime,proof,recorded_by,created_at) VALUES (?,?,?,?,?,?,?,?,?)')
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      for (const fee of fees) insert.run(id(), fee.id, body.paidOn, fee.amount - paidOf(fee.id), clean(body.method, 40), null, null, user.id, now())
+      db.exec('COMMIT')
+    } catch (failure) { db.exec('ROLLBACK'); throw failure }
+    return json(res, 200, { paid: fees.length, items: fees.map(fee => feeView(feeFor(tenant, fee.id))) }), true
+  }
   const feeMatch = path.match(/^\/api\/fees(?:\/([^/]+)(?:\/(void|payments)(?:\/([^/]+))?)?)?$/)
   const billingMatch = path.match(/^\/api\/customers\/([^/]+)\/billing$/)
   const planMatch = path === '/api/installment-plans'

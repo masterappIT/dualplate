@@ -11,6 +11,7 @@ import Field from '../ui/Field.vue'
 import Modal from '../ui/Modal.vue'
 import StampMark from '../ui/StampMark.vue'
 import Tag from '../ui/Tag.vue'
+import { floatBarEnter, floatBarLeave } from '../../composables/motion'
 
 const props = defineProps({ customerId: { type: String, default: '' } })
 const { customers, showSuccess } = useAdminStore()
@@ -34,6 +35,11 @@ const columns = computed(() => [
 const paymentRows = computed(() => data.value.items.flatMap(item => item.payments.map(payment => ({ ...payment, fee: item }))))
 const visibleItems = computed(() => filters.value.status === '待收' ? data.value.items.filter(item => item.outstanding > 0 && item.status !== '作廢') : data.value.items)
 const visibleTotals = computed(() => filters.value.status !== '待收' ? data.value.totals : Object.fromEntries(['amount', 'paid', 'outstanding'].map(key => [key, Object.fromEntries(currencies.map(currency => [currency, visibleItems.value.filter(item => item.currency === currency).reduce((sum, item) => sum + item[key], 0)]))])))
+// 一次記收款：勾選後只計尚未收、未作廢的收費；載入新資料後清掉已不在清單的勾選
+const selected = ref([])
+const payable = computed(() => data.value.items.filter(item => selected.value.includes(item.id) && item.outstanding > 0 && item.status !== '作廢'))
+const payableTotals = computed(() => Object.fromEntries(currencies.map(currency => [currency, payable.value.filter(item => item.currency === currency).reduce((sum, item) => sum + item.outstanding, 0)])))
+watch(visibleItems, items => { const ids = new Set(items.map(item => item.id)); selected.value = selected.value.filter(feeId => ids.has(feeId)) })
 function amounts(values) { return currencies.filter(currency => values?.[currency]).map(currency => rentMoney(values[currency], currency)).join(' · ') || '—' }
 async function load() {
   loading.value = true; error.value = ''
@@ -51,7 +57,7 @@ watch([() => props.customerId, filters], load, { immediate: true, deep: true })
 function open(type, item = null) {
   dialog.value = type; target.value = item; formError.value = ''; stamp.value = false
   proofFile.value = null
-  form.value = type === 'payment' ? { paidOn: new Date().toISOString().slice(0, 10), amount: (item.outstanding / 100).toFixed(2), method: '' }
+  form.value = type === 'batch-pay' ? { paidOn: new Date().toISOString().slice(0, 10), method: '' } : type === 'payment' ? { paidOn: new Date().toISOString().slice(0, 10), amount: (item.outstanding / 100).toFixed(2), method: '' }
     : type === 'edit' ? { description: item.description, amount: (item.amount / 100).toFixed(2), currency: item.currency, dueOn: item.dueOn || '', notes: item.notes || '' }
       : type === 'fee' ? { customerId: selectedCustomerId.value || eligibleCustomers.value[0]?.id || '', kind: 'service', currency: 'HKD', amount: '', description: '', dueOn: '', notes: '' }
         : type === 'plan' ? { customerId: selectedCustomerId.value || eligibleCustomers.value[0]?.id || '', name: '', currency: 'HKD', installments: [{ name: '定金', amount: '', dueOn: '' }, { name: '尾數', amount: '', dueOn: '' }] }
@@ -77,6 +83,10 @@ async function save() {
       // 收足才蓋「已收款」印章；部分收款只顯示提示
       const paysOff = positive(form.value.amount) >= (target.value?.outstanding || 0)
       if (await action(`/fees/${target.value.id}/payments`, 'POST', { ...form.value, amount: positive(form.value.amount), proof }, paysOff ? '收款已記錄，已全數收妥' : '已記錄部分收款')) stamp.value = paysOff
+    } else if (dialog.value === 'batch-pay') {
+      if (!form.value.paidOn || !form.value.method?.trim()) throw new Error('請填寫收款日期及方式。')
+      const count = payable.value.length
+      if (await action('/fees/batch-payments', 'POST', { feeIds: payable.value.map(item => item.id), paidOn: form.value.paidOn, method: form.value.method }, `已記錄 ${count} 筆收款，全數收妥`)) { selected.value = []; stamp.value = true }
     } else if (dialog.value === 'void') {
       if (!form.value.reason?.trim()) throw new Error('請填寫作廢原因。')
       await action(`/fees/${target.value.id}/void`, 'POST', { reason: form.value.reason }, '收費已作廢')
@@ -128,7 +138,7 @@ async function saveBilling() {
     <p v-if="error" role="alert" class="error">{{ error }} <Button size="sm" @click="load">重試</Button></p>
     <template v-else>
       <div class="fee-totals"><div v-for="key in ['amount', 'paid', 'outstanding']" :key="key" :class="`is-${key}`"><span>{{ { amount: '應收總額', paid: '已收', outstanding: '尚未收' }[key] }}</span><strong class="num">{{ amounts(visibleTotals[key]) }}</strong></div></div>
-      <DataTable :columns="columns" :data="visibleItems" :loading="loading">
+      <DataTable v-model:selected="selected" :columns="columns" :data="visibleItems" :loading="loading" selectable>
         <template #cell-amount="{ row }"><span class="num">{{ rentMoney(row.amount, row.currency) }}</span></template>
         <template #cell-dueOn="{ row }"><DueDate v-if="row.dueOn && ['未收', '部分收'].includes(row.status)" :date="row.dueOn" /><span v-else class="num">{{ row.dueOn || '—' }}</span></template>
         <template #cell-status="{ row }"><Tag :tone="row.overdue ? 'danger' : row.status === '已收' ? 'ok' : row.status === '部分收' ? 'info' : 'neutral'">{{ row.overdue ? '已逾期 · ' : '' }}{{ row.status }}</Tag></template>
@@ -138,11 +148,13 @@ async function saveBilling() {
     </template>
   </section>
   <section v-if="paymentRows.length" class="panel table-panel"><div class="panel-head"><div><h2>收款記錄</h2><p>每筆收款均可追溯，錯誤記錄可撤銷。</p></div></div><DataTable :columns="[{ key: 'description', title: '項目' }, { key: 'paidOn', title: '日期' }, { key: 'amount', title: '收款金額', align: 'right' }, { key: 'method', title: '方式' }, { key: 'actions', title: '操作' }]" :data="paymentRows"><template #cell-description="{ row }">{{ row.fee.description }}</template><template #cell-amount="{ row }"><span class="num">{{ rentMoney(row.amount, row.fee.currency) }}</span></template><template #cell-actions="{ row }"><Button v-if="row.fee.kind !== 'rent_commission'" size="sm" variant="text" @click="removePayment(row.fee, row)">撤銷收款</Button><span v-else class="muted-dash">—</span></template></DataTable></section>
+  <Teleport to="body"><Transition :css="false" @enter="floatBarEnter" @leave="floatBarLeave"><div v-if="selected.length && !dialog" class="float-bar fee-bulk-bar" role="region" aria-label="批量收款"><span class="float-bar-count">已選 <b class="tnum">{{ selected.length }}</b> 筆</span><span class="float-bar-sep" aria-hidden="true" /><template v-if="payable.length"><span class="num">尚未收 {{ amounts(payableTotals) }}</span><Button variant="primary" @click="open('batch-pay')">一次記收款（{{ payable.length }} 筆）</Button></template><span v-else class="cell-sub">所選收費都已收妥或已作廢</span><Button variant="text" size="sm" @click="selected = []">取消選擇</Button></div></Transition></Teleport>
   <div v-if="stamp" class="fee-stamp"><StampMark text="已收款" :play="stamp" /><Button size="sm" variant="text" @click="stamp = false">關閉</Button></div>
-  <Modal :open="!!dialog" :title="{ fee: '新增收費', edit: '編輯收費', payment: '記收款', void: '作廢收費', billing: '年費設定', plan: '新增分期', revoke: '撤銷收款' }[dialog]" @close="dialog = ''">
+  <Modal :open="!!dialog" :title="{ fee: '新增收費', edit: '編輯收費', payment: '記收款', 'batch-pay': '一次記收款', void: '作廢收費', billing: '年費設定', plan: '新增分期', revoke: '撤銷收款' }[dialog]" @close="dialog = ''">
     <template v-if="dialog === 'fee' || dialog === 'plan'"><Field v-if="!customerId" label="客戶" required><select v-model="form.customerId"><option v-for="customer in eligibleCustomers" :key="customer.id" :value="customer.id">{{ customer.name }}</option></select></Field></template>
     <template v-if="dialog === 'fee' || dialog === 'edit'"><Field v-if="dialog === 'fee'" label="類別"><select v-model="form.kind"><option v-for="(name, kind) in manualKinds" :key="kind" :value="kind">{{ name }}</option></select></Field><Field label="描述" required><input v-model="form.description" /></Field><Field label="金額（元）" required><input v-model="form.amount" inputmode="decimal" /></Field><Field label="幣種"><select v-model="form.currency"><option v-for="currency in currencies" :key="currency">{{ currency }}</option></select></Field><Field label="到期日"><DateInput v-model="form.dueOn" /></Field><Field label="備註"><input v-model="form.notes" /></Field></template>
     <template v-else-if="dialog === 'payment'"><p>{{ target.description }} · 尚未收 {{ rentMoney(target.outstanding, target.currency) }}</p><Field label="收款日期" required><DateInput v-model="form.paidOn" /></Field><Field label="金額（元）" required><input v-model="form.amount" inputmode="decimal" /></Field><Field label="收款方式" required><input v-model="form.method" placeholder="轉帳、現金等" /></Field><Field label="收款憑證（可選，JPG、PNG 或 PDF，最多 5 MB）"><input type="file" accept="image/jpeg,image/png,application/pdf" @change="proofFile = $event.target.files[0]" /></Field></template>
+    <template v-else-if="dialog === 'batch-pay'"><p>{{ payable.length }} 筆收費，每筆按尚未收金額全數收妥，合共 {{ amounts(payableTotals) }}。部分收款或要附憑證，請逐筆記收款。</p><ul class="fee-batch-list"><li v-for="item in payable" :key="item.id"><span>{{ item.customerName ? `${item.customerName} · ` : '' }}{{ item.description }}</span><span class="num">{{ rentMoney(item.outstanding, item.currency) }}</span></li></ul><Field label="收款日期" required><DateInput v-model="form.paidOn" /></Field><Field label="收款方式" required><input v-model="form.method" placeholder="轉帳、現金等" /></Field></template>
     <p v-else-if="dialog === 'revoke'">確認撤銷 {{ paymentTarget && rentMoney(paymentTarget.payment.amount, paymentTarget.item.currency) }} 的收款記錄？</p>
     <Field v-else-if="dialog === 'void'" label="作廢原因" required><input v-model="form.reason" /></Field>
     <template v-else-if="dialog === 'billing'"><Field v-if="!customerId" label="客戶"><select v-model="billingCustomerId" @change="loadBilling"><option v-for="customer in eligibleCustomers" :key="customer.id" :value="customer.id">{{ customer.name }}</option></select></Field><Field label="每年金額（元）" required><input v-model="form.annualAmount" inputmode="decimal" /></Field><Field label="幣種"><select v-model="form.currency"><option v-for="currency in currencies" :key="currency">{{ currency }}</option></select></Field><Field label="計費月份"><select v-model="form.billMonth"><option v-for="month in 12" :key="month" :value="month">{{ month }} 月</option></select></Field><Field label="啟用"><input v-model="form.active" type="checkbox" /></Field></template>
