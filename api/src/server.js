@@ -6,6 +6,7 @@ import { cardData, cleanCard, recognizeCard } from './card.js'
 import { phase1Routes } from './phase1-routes.js'
 import { customerRoutes, requestStatus } from './customer-routes.js'
 import { parseCsv, crossingPorts } from './plate-import.js'
+import { toSimplified } from './hans.js'
 import { computeDeadlines } from './rules.js'
 import { plateFacts } from './plate-facts.js'
 import { addCrossing, deleteCrossing, crossingSummary, setReminder } from './crossings.js'
@@ -78,20 +79,21 @@ function plateDetail(user, plateId) {
   if (!item) return null
   const images = query('SELECT side,mime,data FROM approval_card_images WHERE plate_asset_id=?', item.id)
   const imageValue = x => ['admin', 'staff'].includes(user.role) ? `data:${x.mime};base64,${x.data.toString('base64')}` : true
-  const companyStatuses = ['admin', 'staff'].includes(user.role) && item.group_id ? query('SELECT c.id,c.jurisdiction,c.name,c.status,c.status_changed_on FROM companies c JOIN company_groups g ON g.id=c.group_id AND g.tenant_id=c.tenant_id WHERE c.tenant_id=? AND c.group_id=? AND g.customer_id=? ORDER BY c.jurisdiction,c.name', user.tenant_id, item.group_id, item.customer_id) : []
+  const companyStatuses = ['admin', 'staff'].includes(user.role) && item.group_id ? query('SELECT c.id,c.jurisdiction,c.name,c.name_en,c.status,c.status_changed_on FROM companies c JOIN company_groups g ON g.id=c.group_id AND g.tenant_id=c.tenant_id WHERE c.tenant_id=? AND c.group_id=? AND g.customer_id=? ORDER BY c.jurisdiction,c.name', user.tenant_id, item.group_id, item.customer_id) : []
   const warnings = companyStatuses.filter(company => company.jurisdiction === '內地' && ['已註銷', '註銷中'].includes(company.status)).map(company => company.status === '已註銷' ? '內承單位已註銷' : '內承單位註銷中')
   return { ...item, cardData: cardData(item.card_data), rentals: query('SELECT * FROM plate_rentals WHERE plate_asset_id=? ORDER BY created_at DESC', item.id), rentalContracts: query('SELECT id,renter_name,renter_vehicle_plate,starts_on,ends_on,rent_amount,currency,collection_mode,status FROM rental_contracts WHERE plate_asset_id=? ORDER BY starts_on DESC', item.id), cardImages: Object.fromEntries(images.map(x => [x.side, imageValue(x)])), companyStatuses, warnings: [...new Set(warnings)] }
 }
 function plateSummary(item, tenantId) {
   const tracked = query('SELECT code,expires_on FROM tracked_items WHERE tenant_id=? AND owner_type=? AND owner_id=? AND code IN (?,?) ORDER BY code', tenantId, 'plate', item.id, 'hk_crp', 'mo_permit')
-  const groupCompanies = item.group_id ? query('SELECT jurisdiction,name FROM companies WHERE tenant_id=? AND group_id=? AND customer_id=? ORDER BY jurisdiction,name', tenantId, item.group_id, item.customer_id) : []
+  const groupCompanies = item.group_id ? query('SELECT jurisdiction,name,name_en FROM companies WHERE tenant_id=? AND group_id=? AND customer_id=? ORDER BY jurisdiction,name', tenantId, item.group_id, item.customer_id) : []
+  const holder = groupCompanies.find(company => company.jurisdiction !== '內地')
   const approval = item.card_expires_on
   const permit = tracked.find(entry => entry.code === (item.route === '粵港' ? 'hk_crp' : 'mo_permit'))?.expires_on || null
   const rules = query("SELECT * FROM rules WHERE tenant_id=? AND scope='plate'", tenantId).map(rule => ({ ...rule, match: JSON.parse(rule.match_json), params: JSON.parse(rule.params_json), remindDays: rule.remind_days }))
   const trackedItems = new Map(query("SELECT * FROM tracked_items WHERE tenant_id=? AND owner_type='plate' AND owner_id=?", tenantId, item.id).map(entry => [`plate:${item.id}:${entry.code}`, entry]))
   const levels = computeDeadlines({ rules, owners: [{ ownerType: 'plate', ownerId: item.id, customerId: item.customer_id, label: item.card_number, facts: plateFacts(item) }], tracked: trackedItems, completions: new Set(), windowDays: 365 }).map(entry => entry.level)
   const healthStatus = levels.includes('overdue') ? 'overdue' : levels.includes('due') ? 'due' : levels.includes('missing') || !levels.length ? 'missing' : 'ok'
-  return { ...item, card_data: cardData(item.card_data), holder_company: groupCompanies.find(company => company.jurisdiction !== '內地')?.name || null, mainland_company: groupCompanies.find(company => company.jurisdiction === '內地')?.name || null, permit_expires_on: permit, health_status: healthStatus }
+  return { ...item, card_data: cardData(item.card_data), holder_company: holder?.name || null, holder_company_en: holder?.jurisdiction === '香港' ? holder.name_en || '' : null, mainland_company: groupCompanies.find(company => company.jurisdiction === '內地')?.name || null, permit_expires_on: permit, health_status: healthStatus }
 }
 function pushActivity(requestId, actorId, kind, detail) { db.prepare('INSERT INTO activities VALUES (?,?,?,?,?,?)').run(id(), requestId, actorId, kind, detail, now()) }
 function addTasks(requestId, service, route) {
@@ -172,6 +174,7 @@ export const server = http.createServer(async (req, res) => {
       if (parsed.errors.length) return fail(res, 400, parsed.errors.join('；'))
       if (!parsed.rows.length) return fail(res, 400, 'CSV 沒有資料列')
       const seen = new Map()
+      const seenHongKongNames = new Map()
       const rows = parsed.rows.map(row => {
         const inputValue = row.values
         const value = { ...inputValue }
@@ -193,14 +196,39 @@ export const server = http.createServer(async (req, res) => {
         const key = customer && ['粵港', '粵澳'].includes(value['路線']) && value['批文卡號'] ? `${customer.id}:${value['路線']}:${value['批文卡號']}` : null
         const existing = key ? one('SELECT * FROM plate_assets WHERE customer_id=? AND route=? AND card_number=?', customer.id, value['路線'], value['批文卡號']) : null
         const existingGroup = existing?.group_id ? one('SELECT * FROM company_groups WHERE id=? AND customer_id=?', existing.group_id, customer.id) : null
-        const existingCompanies = existingGroup ? query('SELECT jurisdiction,name FROM companies WHERE group_id=? AND customer_id=?', existingGroup.id, customer.id) : []
+        const existingCompanies = existingGroup ? query('SELECT jurisdiction,name,name_en FROM companies WHERE group_id=? AND customer_id=?', existingGroup.id, customer.id) : []
         const foreignJurisdiction = value['路線'] === '粵港' ? '香港' : '澳門'
+        value['香港公司英文名'] = value['香港公司英文名']?.replace(/\s+/g, ' ')
+        const originalMainlandName = value['內地公司']
+        value['內地公司'] = toSimplified(originalMainlandName)
+        const conversions = originalMainlandName !== value['內地公司'] ? [`已轉為簡體：${originalMainlandName} → ${value['內地公司']}`] : []
         const incomingCompanies = [[value['香港／澳門公司'], foreignJurisdiction], [value['內地公司'], '內地']].filter(([name]) => name)
         if (existingGroup && incomingCompanies.some(([name, jurisdiction]) => !existingCompanies.some(company => company.jurisdiction === jurisdiction && company.name === name))) {
           errors.push(`公司名稱與現有公司組（${existingGroup.name}）不符；如需更換公司組請在牌照詳情處理`)
         }
         const group = existingGroup || customer && importCompanyGroup(customer.id, value['路線'], value['香港／澳門公司'], value['內地公司'])
         const groupAction = !existingGroup && (value['香港／澳門公司'] || value['內地公司']) && !group ? '新增公司組' : null
+        for (const [name, jurisdiction] of incomingCompanies) {
+          if (!customer) continue
+          const known = one('SELECT group_id FROM companies WHERE tenant_id=? AND customer_id=? AND jurisdiction=? AND name=?', user.tenant_id, customer.id, jurisdiction, name)
+          if (!known || !groupAction) continue
+          if (known.group_id) {
+            const assigned = one('SELECT name FROM company_groups WHERE id=? AND tenant_id=?', known.group_id, user.tenant_id)
+            errors.push(`${jurisdiction === '內地' ? '內地公司' : `${jurisdiction}公司`}已屬公司組（${assigned?.name || '未命名'}），請先在客戶的公司頁調整`)
+          } else conversions.push(`沿用現有公司：${name}`)
+        }
+        const existingHongKong = value['路線'] === '粵港' && customer && value['香港／澳門公司'] ? query('SELECT name_en FROM companies WHERE tenant_id=? AND customer_id=? AND jurisdiction=? AND name=?', user.tenant_id, customer.id, '香港', value['香港／澳門公司']) : []
+        const companyKey = value['路線'] === '粵港' && customer && value['香港／澳門公司'] ? `${customer.id}:${value['香港／澳門公司']}` : null
+        const previousEnglish = companyKey ? seenHongKongNames.get(companyKey) : null
+        const newHongKong = value['路線'] === '粵港' && value['香港／澳門公司'] && !existingHongKong.length
+        if (newHongKong && !value['香港公司英文名'] && !previousEnglish) errors.push('新建香港公司必須填寫英文名稱')
+        if (value['路線'] === '粵港' && value['香港公司英文名'] && existingHongKong.some(item => item.name_en && item.name_en !== value['香港公司英文名'])) errors.push('香港公司英文名稱與現有資料不符')
+        if (value['路線'] === '粵港' && value['香港公司英文名'] && existingHongKong.length && existingHongKong.every(item => !item.name_en)) conversions.push(`補上英文名稱：${value['香港公司英文名']}`)
+        if (value['路線'] === '粵港' && value['香港公司英文名'] && (value['香港公司英文名'].length > 160 || !/^[A-Za-z0-9 ., &()'\-/]+$/.test(value['香港公司英文名']))) errors.push('英文名稱只可用英文字母、數字和常見符號')
+        if (companyKey) {
+          if (value['香港公司英文名'] && previousEnglish && previousEnglish !== value['香港公司英文名']) errors.push('同一檔案內香港公司英文名稱不一致')
+          if (value['香港公司英文名'] && !previousEnglish) seenHongKongNames.set(companyKey, value['香港公司英文名'])
+        }
         const duplicate = key && seen.has(key)
         if (duplicate) errors.push('同一檔案重複的牌照')
         if (key) seen.set(key, true)
@@ -213,6 +241,7 @@ export const server = http.createServer(async (req, res) => {
           groupAction,
           existingId: existing?.id || null,
           values: value,
+          conversions,
           errors,
         }
       })
@@ -245,8 +274,18 @@ export const server = http.createServer(async (req, res) => {
                 groupId = id()
                 importedGroups.set(groupKey, groupId)
                 db.prepare('INSERT INTO company_groups(id,tenant_id,customer_id,name,notes,created_at) VALUES (?,?,?,?,?,?)').run(groupId, user.tenant_id, row.customerId, [value['香港／澳門公司'], value['內地公司']].filter(Boolean).join(' · '), 'CSV 匯入', now())
-                for (const [name, jurisdiction] of [[value['香港／澳門公司'], value['路線'] === '粵港' ? '香港' : '澳門'], [value['內地公司'], '內地']]) if (name) db.prepare('INSERT INTO companies(id,tenant_id,customer_id,group_id,jurisdiction,name,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)').run(id(), user.tenant_id, row.customerId, groupId, jurisdiction, name, now(), now())
+                for (const [name, jurisdiction] of [[value['香港／澳門公司'], value['路線'] === '粵港' ? '香港' : '澳門'], [value['內地公司'], '內地']]) if (name) {
+                  const known = one('SELECT id,group_id FROM companies WHERE tenant_id=? AND customer_id=? AND jurisdiction=? AND name=?', user.tenant_id, row.customerId, jurisdiction, name)
+                  if (!known) db.prepare('INSERT INTO companies(id,tenant_id,customer_id,group_id,jurisdiction,name,name_en,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)').run(id(), user.tenant_id, row.customerId, groupId, jurisdiction, name, jurisdiction === '香港' ? value['香港公司英文名'] || seenHongKongNames.get(`${row.customerId}:${name}`) || '' : '', now(), now())
+                  else if (known.group_id === null) {
+                    const assigned = db.prepare('UPDATE companies SET group_id=?,updated_at=? WHERE id=? AND tenant_id=? AND group_id IS NULL').run(groupId, now(), known.id, user.tenant_id)
+                    if (assigned.changes !== 1) throw new Error('現有公司歸組狀態已變更，請重新預覽')
+                  }
+                }
               }
+            }
+            if (value['路線'] === '粵港' && value['香港／澳門公司'] && value['香港公司英文名']) {
+              db.prepare("UPDATE companies SET name_en=?,updated_at=? WHERE tenant_id=? AND customer_id=? AND jurisdiction='香港' AND name=? AND name_en=''").run(value['香港公司英文名'], now(), user.tenant_id, row.customerId, value['香港／澳門公司'])
             }
             const incomingCard = { cardNumber: value['批文卡號'], mainlandPlate: value['內地車牌'], localPlate: value['港澳車牌'], validTo: value['批文到期'], company: value['香港／澳門公司'], contractor: value['內地公司'] }
             const oldCard = current ? cardData(current.card_data) : {}

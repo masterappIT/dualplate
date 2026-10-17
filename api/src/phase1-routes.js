@@ -5,6 +5,7 @@ import { driverFor } from './drivers.js'
 import { rentOverview } from './rentals.js'
 import { filingDeadlines } from './bookkeeping.js'
 import { scopeMap } from './entrustment.js'
+import { mainlandName, toSimplified, traditionalChars } from './hans.js'
 import { computeDeadlines, ruleMatches, ruleScopes, ruleMethods, matchKeys, dateFields } from './rules.js'
 
 const date = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value + 'T00:00:00Z')) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value
@@ -45,15 +46,15 @@ export async function phase1Routes(req, res, url, user, h) {
   }
   const facts = (type, item) => type === 'driver' ? {} : type === 'plate' ? plateFacts(item) : type === 'vehicle' ? { route: item.route, origin: item.origin, firstRegisteredOn: item.first_registered_on } : { jurisdiction: item.jurisdiction, status: item.status || '存續', companyStatus: item.status || '存續', incorporatedOn: item.incorporated_on }
   const statusWarnings = companies => [...new Set(companies.filter(item => item.jurisdiction === '內地' && ['已註銷', '註銷中'].includes(item.status)).map(item => item.status === '已註銷' ? '內承單位已註銷' : '內承單位註銷中'))]
-  const companyStatusInfo = (groupId, customerId) => query('SELECT id,jurisdiction,name,status,status_changed_on FROM companies WHERE tenant_id=? AND group_id=? AND customer_id=? ORDER BY jurisdiction,name', tenant, groupId, customerId)
+  const companyStatusInfo = (groupId, customerId) => query('SELECT id,jurisdiction,name,name_en,status,status_changed_on FROM companies WHERE tenant_id=? AND group_id=? AND customer_id=? ORDER BY jurisdiction,name', tenant, groupId, customerId)
   const rules = () => query('SELECT * FROM rules WHERE tenant_id=? ORDER BY sort,name', tenant).map(decoded)
   const companySummary = item => {
-    if (item.jurisdiction !== '香港') return item
+    if (item.jurisdiction !== '香港') return { ...item, nameEn: '' }
     const br = one('SELECT expires_on FROM tracked_items WHERE tenant_id=? AND owner_type=? AND owner_id=? AND code=?', tenant, 'company', item.id, 'hk_br')
     const nar1Rule = rules().find(rule => rule.code === 'hk_nar1' && rule.active)
     const completions = new Set(query('SELECT code,owner_id,period FROM rule_completions WHERE tenant_id=? AND code=? AND owner_id=?', tenant, 'hk_nar1', item.id).map(entry => `${entry.code}:${entry.owner_id}:${entry.period}`))
     const nar1 = nar1Rule && computeDeadlines({ rules: [nar1Rule], owners: [{ ownerType: 'company', ownerId: item.id, label: item.name, customerId: item.customer_id, facts: facts('company', item) }], tracked: new Map(), completions, windowDays: 365 }).find(entry => entry.ruleCode === 'hk_nar1')
-    return { ...item, brExpiresOn: br?.expires_on || null, nar1DueOn: nar1?.dueOn || null }
+    return { ...item, nameEn: item.name_en || '', brExpiresOn: br?.expires_on || null, nar1DueOn: nar1?.dueOn || null }
   }
   const customerId = url.searchParams.get('customerId')
 
@@ -93,9 +94,15 @@ export async function phase1Routes(req, res, url, user, h) {
     if (old && body.customerId !== undefined && body.customerId !== old.customer_id) return error(400, '公司不可搬到其他客戶')
     if (typeof targetCustomer !== 'string' || !targetCustomer.trim()) return error(400, '客戶 ID 無效')
     if (!customer(targetCustomer)) return error(404, '客戶不存在')
-    if (body.name !== undefined && typeof body.name !== 'string' || body.jurisdiction !== undefined && typeof body.jurisdiction !== 'string' || body.registrationNo !== undefined && body.registrationNo !== null && typeof body.registrationNo !== 'string' || body.groupId !== undefined && body.groupId !== null && typeof body.groupId !== 'string') return error(400, '公司欄位類型無效')
+    if (body.name !== undefined && typeof body.name !== 'string' || body.jurisdiction !== undefined && typeof body.jurisdiction !== 'string' || body.registrationNo !== undefined && body.registrationNo !== null && typeof body.registrationNo !== 'string' || body.groupId !== undefined && body.groupId !== null && typeof body.groupId !== 'string' || body.nameEn !== undefined && typeof body.nameEn !== 'string') return error(400, '公司欄位類型無效')
     const jurisdiction = body.jurisdiction ?? old?.jurisdiction, name = body.name ?? old?.name
     if (!['香港', '澳門', '內地'].includes(jurisdiction) || !clean(name)) return error(400, '公司名稱或司法區無效')
+    const nameEn = jurisdiction === '香港' ? String(body.nameEn ?? (old?.jurisdiction === '香港' ? old.name_en : '') ?? '').trim().replace(/\s+/g, ' ') : ''
+    if (jurisdiction === '香港' && !nameEn) return error(400, '香港公司必須填寫英文名稱')
+    if (jurisdiction === '香港' && (nameEn.length > 160 || !/^[A-Za-z0-9 ., &()'\-/]+$/.test(nameEn))) return error(400, '英文名稱只可用英文字母、數字和常見符號')
+    const normalizedName = jurisdiction === '內地' ? clean(mainlandName(name), 160) : clean(name, 160)
+    const traditional = jurisdiction === '內地' ? traditionalChars(normalizedName) : []
+    if (traditional.length) return send(400, { error: `內地公司名稱須用簡體字（${traditional.map(item => `${item.from}→${item.to}`).join('、')}），建議：${toSimplified(normalizedName)}`, suggestion: toSimplified(normalizedName) })
     if (jurisdiction === '內地' && body.taxpayerType !== undefined && body.taxpayerType !== null && typeof body.taxpayerType !== 'string') return error(400, '納稅人類型無效')
     if (body.incorporatedOn !== undefined && body.incorporatedOn !== '' && body.incorporatedOn !== null && !date(body.incorporatedOn)) return error(400, '成立日期無效')
     const statuses = ['存續', '經營異常', '註銷中', '已註銷']
@@ -108,14 +115,14 @@ export async function phase1Routes(req, res, url, user, h) {
     if (jurisdiction === '內地' && taxpayerType && !['小規模納稅人', '一般納稅人'].includes(taxpayerType)) return error(400, '納稅人類型無效')
     if (body.companyNumber !== undefined && body.companyNumber !== null && typeof body.companyNumber !== 'string') return error(400, '公司編號無效')
     const companyNumber = jurisdiction === '香港' ? clean(body.companyNumber ?? (old?.jurisdiction === '香港' ? old.company_number : ''), 100) : ''
-    const values = [tenant, targetCustomer, groupId || null, jurisdiction, clean(name, 160), clean(body.registrationNo ?? old?.registration_no, 100), body.incorporatedOn === undefined ? old?.incorporated_on || null : body.incorporatedOn || null, clean(taxpayerType, 100), clean(body.notes ?? old?.notes, 1000), status, body.statusChangedOn === undefined ? old?.status_changed_on || null : body.statusChangedOn || null, companyNumber]
+    const values = [tenant, targetCustomer, groupId || null, jurisdiction, normalizedName, nameEn, clean(body.registrationNo ?? old?.registration_no, 100), body.incorporatedOn === undefined ? old?.incorporated_on || null : body.incorporatedOn || null, clean(taxpayerType, 100), clean(body.notes ?? old?.notes, 1000), status, body.statusChangedOn === undefined ? old?.status_changed_on || null : body.statusChangedOn || null, companyNumber]
     if (old) {
-      db.prepare('UPDATE companies SET tenant_id=?,customer_id=?,group_id=?,jurisdiction=?,name=?,registration_no=?,incorporated_on=?,taxpayer_type=?,notes=?,status=?,status_changed_on=?,company_number=?,updated_at=? WHERE id=? AND tenant_id=?').run(...values, now(), old.id, tenant)
-      return send(200, company(old.id))
+      db.prepare('UPDATE companies SET tenant_id=?,customer_id=?,group_id=?,jurisdiction=?,name=?,name_en=?,registration_no=?,incorporated_on=?,taxpayer_type=?,notes=?,status=?,status_changed_on=?,company_number=?,updated_at=? WHERE id=? AND tenant_id=?').run(...values, now(), old.id, tenant)
+      return send(200, companySummary(company(old.id)))
     }
     const companyId = id()
-    db.prepare('INSERT INTO companies(id,tenant_id,customer_id,group_id,jurisdiction,name,registration_no,incorporated_on,taxpayer_type,notes,status,status_changed_on,company_number,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(companyId, ...values, now(), now())
-    return send(201, company(companyId))
+    db.prepare('INSERT INTO companies(id,tenant_id,customer_id,group_id,jurisdiction,name,name_en,registration_no,incorporated_on,taxpayer_type,notes,status,status_changed_on,company_number,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(companyId, ...values, now(), now())
+    return send(201, companySummary(company(companyId)))
   }
   const hkLookupMatch = path.match(/^\/api\/companies\/([^/]+)\/hk-lookup$/)
   if (hkLookupMatch && method === 'POST') {

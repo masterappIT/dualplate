@@ -64,7 +64,7 @@ export async function customerRoutes(req, res, url, user, h) {
   const plateOf = item => item.ownerType === 'plate' ? item.ownerId : item.ownerType === 'driver' ? mainPlate(item.ownerId) : item.ownerType === 'vehicle' ? plates.find(plate => plate.vehicle_id === item.ownerId)?.id : plates.find(plate => plate.group_id && companies.some(company => company.id === item.ownerId && company.group_id === plate.group_id))?.id
   function groupCompanies(groupId) {
     const members = companies.filter(item => item.group_id === groupId)
-    const pick = list => list.map(item => ({ id: item.id, name: item.name, jurisdiction: item.jurisdiction, registrationNo: item.registration_no || '', incorporatedOn: item.incorporated_on || '', status: companyStatus(item) }))
+    const pick = list => list.map(item => ({ id: item.id, name: item.name, nameEn: item.name_en || '', jurisdiction: item.jurisdiction, registrationNo: item.registration_no || '', incorporatedOn: item.incorporated_on || '', status: companyStatus(item) }))
     return { offshore: pick(members.filter(item => item.jurisdiction !== '內地')), mainland: pick(members.filter(item => item.jurisdiction === '內地')) }
   }
   function plateSummary(plate, all) {
@@ -126,7 +126,7 @@ export async function customerRoutes(req, res, url, user, h) {
       return { id: group.id, name: group.name, ...members, plates: group.plates.map(plate => ({ id: plate.id, label: plateLabel(plate), indicatorCategory: plate.indicator_category || '', port: plate.port || '' })),
         deadlines: visible(all).filter(item => item.ownerType === 'company' && companies.some(company => company.id === item.ownerId && company.group_id === group.id)) }
     })
-    const loose = companies.filter(item => !item.group_id).map(item => ({ id: item.id, name: item.name, jurisdiction: item.jurisdiction, registrationNo: item.registration_no || '', incorporatedOn: item.incorporated_on || '', status: companyStatus(item) }))
+    const loose = companies.filter(item => !item.group_id).map(item => ({ id: item.id, name: item.name, nameEn: item.name_en || '', jurisdiction: item.jurisdiction, registrationNo: item.registration_no || '', incorporatedOn: item.incorporated_on || '', status: companyStatus(item) }))
     return json(res, 200, { groups: result, ungrouped: loose }), true
   }
   if (reminderPut) {

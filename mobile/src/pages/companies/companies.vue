@@ -5,7 +5,7 @@
       <text v-if="!group.offshore.length && !group.mainland.length" class="list-title">{{ group.name }}</text>
       <view v-for="c in [...group.offshore, ...group.mainland]" :key="c.id" class="company">
         <view class="row"><text class="side-label">{{ c.jurisdiction }}公司</text><text v-if="c.status!=='存續'" class="pill" :class="c.status==='已註銷'?'gray':'amber'">{{ c.status }}</text></view>
-        <text class="company-name">{{ c.name }}</text>
+        <text class="company-name">{{ c.name }}</text><text v-if="c.jurisdiction==='香港'" class="company-sub"><text :class="!c.nameEn?'note-amber':''">{{ c.nameEn || '未填英文名稱' }}</text></text>
         <text v-if="c.registrationNo" class="company-sub">{{ regLabel(c) }} <text class="num">{{ c.registrationNo }}</text></text>
         <view v-if="filings[c.id]?.length" class="filings"><text class="filing-title">每月報帳</text><view class="filing-cells"><view v-for="f in filings[c.id].slice(0,3)" :key="f.period" class="filing-cell"><text class="filing-month num">{{ Number(f.period.slice(5)) }}月</text><text class="pill" :class="filingTone(f)">{{ filingWord(f) }}</text></view></view></view>
       </view>
@@ -18,7 +18,7 @@
         <view v-for="(d,index) in group.deadlines" :key="index" class="row deadline"><view class="grow"><text class="item-name">{{ d.name }}</text><text v-if="d.handledBy==='you'" class="who">{{ selfHandled }}</text><text class="company-sub">{{ d.ownerLabel }}</text></view><DueDate :date="d.dueOn" :days="d.daysLeft" :level="d.level" /></view>
       </view>
     </view>
-    <view v-for="c in data.ungrouped" :key="c.id" class="card"><text class="side-label">{{ c.jurisdiction }}公司</text><text class="company-name">{{ c.name }}</text><text v-if="c.status!=='存續'" class="pill gray">{{ c.status }}</text></view>
+    <view v-for="c in data.ungrouped" :key="c.id" class="card"><text class="side-label">{{ c.jurisdiction }}公司</text><text class="company-name">{{ c.name }}</text><text v-if="c.jurisdiction==='香港'" class="company-sub"><text :class="!c.nameEn?'note-amber':''">{{ c.nameEn || '未填英文名稱' }}</text></text><text v-if="c.status!=='存續'" class="pill gray">{{ c.status }}</text></view>
     <view v-if="loaded && !data.groups.length && !data.ungrouped.length" class="card empty">公司資料由你的顧問整理後會顯示在這裡。</view>
   </view>
 </template>

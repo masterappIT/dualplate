@@ -140,6 +140,7 @@ addColumn('vehicles', 'first_registered_on', 'TEXT')
 addColumn('companies', 'status', "TEXT NOT NULL DEFAULT '存續'")
 addColumn('companies', 'status_changed_on', 'TEXT')
 addColumn('companies', 'company_number', 'TEXT')
+addColumn('companies', 'name_en', "TEXT NOT NULL DEFAULT ''")
 const companyJurisdictionMigration = 'company-jurisdiction-fields-v1'
 if (!db.prepare('SELECT name FROM schema_migrations WHERE name=?').get(companyJurisdictionMigration)) {
   db.exec('BEGIN IMMEDIATE')

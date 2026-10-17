@@ -33,7 +33,12 @@ const nodes = computed<GraphNode[]>(() => {
 const links = computed<GraphLink[]>(() => nodes.value.filter(node => node.from && nodes.value.some(other => other.id === node.from)).map(node => ({ a: node.from!, b: node.id, flow: 'forward', tone: node.tone === 'danger' ? 'danger' : undefined })))
 const current = computed(() => nodes.value.find(node => node.id === chosen.value))
 const currentPlate = computed(() => props.plates.find(plate => chosen.value === `plate:${plate.id}`))
-const summary = computed(() => [{ label: '類別', value: current.value?.sub || '' }, { label: '狀態', value: current.value?.tone === 'danger' ? '已註銷' : '可查看' }])
+const currentCompany = computed(() => props.companies.find(company => chosen.value === `company:${company.id}`))
+const summary = computed(() => {
+  const items = [{ label: '類別', value: current.value?.sub || '' }, { label: '狀態', value: current.value?.tone === 'danger' ? '已註銷' : '可查看' }]
+  if (currentCompany.value?.jurisdiction === '香港') items.push({ label: '英文名稱', value: currentCompany.value.nameEn || currentCompany.value.name_en || '未填英文名稱' })
+  return items
+})
 const graphHeight = computed(() => size.value.w < 650 ? Math.max(650, ...nodes.value.map(node => node.y + 80)) : undefined)
 </script>
 <template><div class="customer-structure"><RelationGraph v-model:size="size" variant="stage" :style="graphHeight ? { height: `${graphHeight}px` } : undefined" :nodes="nodes" :links="links" :active-id="chosen" label="客戶公司與牌照結構" pannable @select="chosen = $event.id" @back="chosen = null"><template #tl><div class="panorama-crumb">拖動平移 · Ctrl／⌘ + 滾輪縮放 · Esc 返回</div></template><template #br><div v-if="current" class="panorama-insight"><h2>{{ current.label }}</h2><KeyValue :items="summary" /><PlateChip v-if="currentPlate" :plate="currentPlate.mainland_plate || currentPlate.local_plate" /><div v-if="currentPlate" class="panorama-actions"><Button @click="emit('request', currentPlate.id)">開工單</Button><Button @click="emit('plate', currentPlate.id)">到牌照詳情</Button></div></div></template></RelationGraph><div v-if="current" class="panorama-insight is-mobile"><h2>{{ current.label }}</h2><KeyValue :items="summary" /><PlateChip v-if="currentPlate" :plate="currentPlate.mainland_plate || currentPlate.local_plate" /><div v-if="currentPlate" class="panorama-actions"><Button @click="emit('request', currentPlate.id)">開工單</Button><Button @click="emit('plate', currentPlate.id)">到牌照詳情</Button></div></div></div></template>

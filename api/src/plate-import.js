@@ -9,7 +9,7 @@ const headers = [
   '香港／澳門公司',
   '內地公司',
 ]
-const optionalHeaders = ['口岸', '指標類別']
+const optionalHeaders = ['香港公司英文名', '口岸', '指標類別']
 // 系統認可的口岸名稱；匯入、表內修改與管理端選單共用同一份
 export const crossingPorts = ['深圳灣', '港珠澳大橋', '蓮塘／香園圍', '落馬洲', '皇崗', '文錦渡', '沙頭角', '拱北', '橫琴', '其他']
 

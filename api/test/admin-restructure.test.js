@@ -231,13 +231,13 @@ test('CSV 匯入新公司組與公司並顯示預覽動作', async () => {
   const values = importRow(`客戶${fixture.customer}`, 'CARD-GROUP')
   values[7] = '香港持牌公司'
   values[8] = '內地承辦公司'
-  const content = csv(values)
+  const content = `${requiredHeaders.join(',')},香港公司英文名\n${values.join(',')},HK HOLDER LIMITED`
   const previewResult = await preview(content)
   assert.equal(previewResult.body.rows[0].groupAction, '新增公司組')
   assert.equal((await confirm(content, previewResult.body.previewKey)).status, 200)
   const plate = fixture.db.prepare('SELECT group_id FROM plate_assets WHERE card_number=?').get('CARD-GROUP')
   assert.ok(plate.group_id)
-  assert.deepEqual(fixture.db.prepare('SELECT name FROM companies WHERE group_id=? ORDER BY name').all(plate.group_id).map(item => item.name), ['內地承辦公司', '香港持牌公司'])
+  assert.deepEqual(fixture.db.prepare('SELECT name FROM companies WHERE group_id=? ORDER BY name').all(plate.group_id).map(item => item.name), ['内地承办公司', '香港持牌公司'])
 })
 
 test('批量填日期保留既有備註並防止重複', async () => {
@@ -260,7 +260,7 @@ test('批量日期空值、錯誤類型與不適用規則拒絕', async () => {
 })
 
 test('香港及澳門公司不儲存納稅人類型並保留香港 CR', async () => {
-  const created = await request('/companies', 'POST', { customerId: fixture.customer, jurisdiction: '香港', name: '香港公司', taxpayerType: ['忽略'], companyNumber: 'CR123' })
+  const created = await request('/companies', 'POST', { customerId: fixture.customer, jurisdiction: '香港', name: '香港公司', nameEn: 'HONG KONG COMPANY LIMITED', taxpayerType: ['忽略'], companyNumber: 'CR123' })
   assert.equal(created.status, 201)
   assert.equal(created.body.taxpayer_type, '')
   assert.equal(created.body.company_number, 'CR123')
@@ -270,9 +270,9 @@ test('香港及澳門公司不儲存納稅人類型並保留香港 CR', async ()
 })
 
 test('內地公司納稅人類型拒絕其他選項', async () => {
-  const company = await request('/companies', 'POST', { customerId: fixture.customer, jurisdiction: '內地', name: '內地公司', taxpayerType: '錯誤' })
+  const company = await request('/companies', 'POST', { customerId: fixture.customer, jurisdiction: '內地', name: '内地公司', taxpayerType: '錯誤' })
   assert.equal(company.status, 400)
-  assert.equal((await request('/companies', 'POST', { customerId: fixture.customer, jurisdiction: '內地', name: '內地公司', taxpayerType: '小規模納稅人' })).body.taxpayer_type, '小規模納稅人')
+  assert.equal((await request('/companies', 'POST', { customerId: fixture.customer, jurisdiction: '內地', name: '内地公司', taxpayerType: '小規模納稅人' })).body.taxpayer_type, '小規模納稅人')
 })
 
 test('公司欄位錯誤類型、空白名稱及跨租戶客戶拒絕', async () => {
@@ -280,7 +280,7 @@ test('公司欄位錯誤類型、空白名稱及跨租戶客戶拒絕', async ()
 })
 
 test('香港公司卡片資料回傳 BR 日期與 NAR1', async () => {
-  const company = await request('/companies', 'POST', { customerId: fixture.customer, jurisdiction: '香港', name: '周年公司', incorporatedOn: '2020-01-01' })
+  const company = await request('/companies', 'POST', { customerId: fixture.customer, jurisdiction: '香港', name: '周年公司', nameEn: 'ANNIVERSARY COMPANY LIMITED', incorporatedOn: '2020-01-01' })
   assert.equal((await request('/tracked-items', 'PUT', { ownerType: 'company', ownerId: company.body.id, code: 'hk_br', expiresOn: '2028-01-01' })).status, 200)
   const item = (await request(`/companies?customerId=${fixture.customer}`)).body.find(entry => entry.id === company.body.id)
   assert.equal(item.brExpiresOn, '2028-01-01')

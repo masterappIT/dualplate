@@ -146,7 +146,7 @@
       class="company-status-list"
     >
       <span v-for="company in selectedPlate.companyStatuses" :key="company.id"
-        >{{ company.jurisdiction }} · {{ company.name }}：{{
+        >{{ company.jurisdiction }} · <CompanyName :company="company" />：{{
           company.status
         }}</span
       >
@@ -178,6 +178,7 @@ import TextInput from '../components/ui/TextInput.vue';
 import Select from '../components/ui/Select.vue';
 import DateInput from '../components/ui/DateInput.vue';
 import PlateDrivers from '../components/business/PlateDrivers.vue'
+import CompanyName from '../components/business/CompanyName.vue'
 const {
   selectedPlate,
   view,

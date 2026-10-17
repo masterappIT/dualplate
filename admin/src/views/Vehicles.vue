@@ -9,6 +9,7 @@ import Segmented from '../components/ui/Segmented.vue'
 import Drawer from '../components/ui/Drawer.vue'
 import PlateChip from '../components/ui/PlateChip.vue'
 import DueDate from '../components/ui/DueDate.vue'
+import CompanyName from '../components/business/CompanyName.vue'
 import DateInput from '../components/ui/DateInput.vue'
 import Tag from '../components/ui/Tag.vue'
 import StatusTag from '../components/ui/StatusTag.vue'
@@ -37,8 +38,8 @@ const usageText = status => ({ '待核對': '使用待確認' }[status] || statu
 const columns = [{ key: 'mainland_plate', title: '車牌', width: 190 }, { key: 'holder_company', title: '持牌公司', width: 150 }, { key: 'customer_id', title: '客戶', width: 120 }, { key: 'port', title: '口岸', width: 72 }, { key: 'card_expires_on', title: '批文到期', width: 128 }, { key: 'permit_expires_on', title: 'CRP／通行證到期', width: 138 }, { key: 'lastCrossing', title: '上次過關', width: 150 }, { key: 'health_status', title: '狀態／使用', width: 96 }, { key: 'action', title: '操作', className: 'col-actions', width: 72 }]
 const importOpen = ref(false)
 const importHeaders = ref([])
-const csvFields = ['客戶', '路線', '內地車牌', '港澳車牌', '批文卡號', '批文到期', 'CRP／通行證到期', '香港／澳門公司', '內地公司', '口岸', '指標類別']
-const requiredCsvFields = csvFields.slice(0, 9)
+const csvFields = ['客戶', '路線', '內地車牌', '港澳車牌', '批文卡號', '批文到期', 'CRP／通行證到期', '香港／澳門公司', '香港公司英文名', '內地公司', '口岸', '指標類別']
+const requiredCsvFields = csvFields.filter(field => field !== '香港公司英文名' && field !== '口岸' && field !== '指標類別')
 const csvMapping = ref({})
 const csvOriginal = ref('')
 const mappingError = ref('')
@@ -79,7 +80,7 @@ function readCsv(event) {
 }
 async function confirmImport() { await confirmPlateImport(); if (importPreview.value && !importPreview.value.dryRun) importOpen.value = false }
 function downloadTemplate() {
-  const csv = '\uFEFF客戶,路線,內地車牌,港澳車牌,批文卡號,批文到期,CRP／通行證到期,香港／澳門公司,內地公司,口岸,指標類別\n'
+  const csv = '\uFEFF客戶,路線,內地車牌,港澳車牌,批文卡號,批文到期,CRP／通行證到期,香港／澳門公司,香港公司英文名,內地公司,口岸,指標類別\n'
   const link = document.createElement('a')
   link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
   link.download = '牌照匯入範本.csv'
@@ -94,7 +95,7 @@ function downloadTemplate() {
     <template #alt><PanoramaGraph v-if="plateView === 'panorama'" title="牌照全景" :categories="panoramaCategories" :summary="panoramaSummary" @summary="filter => { plateFilter = filter; plateView = 'table' }" @plate="id => openPlate(useAdminStore().plates.value.find(item => item.id === id))" @request="requestForPlate" /><PortStarMap v-else :plates="useAdminStore().plates.value" :customers="useAdminStore().customers.value" :is-overdue="plateDanger" @plate="id => openPlate(useAdminStore().plates.value.find(item => item.id === id))" /></template>
     <template #search><Field label="搜尋牌照"><TextInput v-model="plateSearch" placeholder="搜尋車牌、客戶或公司" /></Field><Field label="來源"><select v-model="ownership"><option value="all">全部</option><option value="client">客戶的</option><option value="self">自有的</option></select></Field><Field label="過關"><label><input v-model="crossingFilter" type="checkbox" /> 90 天內未過關</label></Field><p v-if="crossingError" role="alert">{{ crossingError }}</p></template>
     <template #cell-mainland_plate="{ row }"><HoverCard><button class="text-button" @click="openPlate(row)"><PlateChip :plate="row.mainland_plate" /> <PlateChip :plate="row.local_plate" :route="row.route" /></button><template #card><strong>{{ customerName(row.customer_id) }}</strong><p>{{ row.route }} · {{ row.port || '口岸待設定' }}</p><p>批文：{{ row.card_number || '待補' }} · {{ row.card_expires_on || '到期待錄入' }}</p></template></HoverCard><small>{{ row.route }} · {{ row.card_number || '批文卡號待補' }}</small></template>
-    <template #cell-holder_company="{ row }"><span :class="{ 'missing-note': !row.holder_company && !row.card_data?.company }">{{ row.holder_company || row.card_data?.company || '持牌公司待補充' }}</span></template>
+    <template #cell-holder_company="{ row }"><CompanyName v-if="row.holder_company" :company="{ name: row.holder_company, nameEn: row.holder_company_en, jurisdiction: row.route === '粵港' ? '香港' : '澳門' }" /><span v-else :class="{ 'missing-note': !row.card_data?.company }">{{ row.card_data?.company || '持牌公司待補充' }}</span></template>
     <template #cell-customer_id="{ row }">{{ customerName(row.customer_id) }}</template>
     <template #cell-port="{ row }"><select v-if="user()?.role === 'admin'" :value="row.port || ''" :disabled="portSaving === row.id" :aria-label="`${row.mainland_plate || row.local_plate}口岸`" @change="savePort(row, $event.target.value)"><option value="">待設定</option><option v-for="port in ports" :key="port" :value="port">{{ port }}</option></select><span v-else>{{ row.port || '待設定' }}</span></template>
     <template #cell-card_expires_on="{ row }"><DueDate :date="row.card_expires_on" /><Tag v-if="plateHandler(row)?.handler === 'client'" tone="neutral">客戶自理</Tag><Tag v-else-if="plateHandler(row)?.handler === 'outsourced'" tone="warning">外包：{{ plateHandler(row).providerName }}</Tag></template>
@@ -108,7 +109,7 @@ function downloadTemplate() {
     <div class="import-steps"><Button @click="downloadTemplate">下載範本</Button><label class="file-button button">選擇 CSV<input type="file" accept=".csv,text/csv" @change="readCsv" /></label></div>
     <GeneratorPipeline v-if="importHeaders.length" :headers="importHeaders" :fields="csvFields" @change="csvMapping = $event; previewMapped()" />
     <p v-if="mappingError" role="alert">{{ mappingError }}</p>
-    <template v-if="importPreview"><div class="import-summary"><span>新增 {{ importPreview.summary.create }}</span><span>更新 {{ importPreview.summary.update }}</span><span>錯誤 {{ importPreview.summary.error }}</span></div><div class="table-wrap"><table><thead><tr><th>列</th><th>結果</th><th v-for="header in importPreview.headers" :key="header">{{ header }}</th><th>原因</th></tr></thead><tbody><tr v-for="row in importPreview.rows" :key="row.rowNumber"><td>{{ row.rowNumber }}</td><td><StatusTag :status="!row.errors.length" :tone="row.errors.length ? 'danger' : row.action === '更新' ? 'info' : 'ok'" :on="row.action" off="錯誤" /></td><td v-for="header in importPreview.headers" :key="header">{{ row.values[header] || '—' }}</td><td>{{ row.errors.join('；') || '可寫入' }}</td></tr></tbody></table></div></template>
+    <template v-if="importPreview"><div class="import-summary"><span>新增 {{ importPreview.summary.create }}</span><span>更新 {{ importPreview.summary.update }}</span><span>錯誤 {{ importPreview.summary.error }}</span></div><div v-if="importPreview.rows.some(row => row.conversions?.length)" class="dialog-note import-conversions"><p v-for="row in importPreview.rows" :key="row.rowNumber"><span v-for="conversion in row.conversions" :key="conversion">第 {{ row.rowNumber }} 列：{{ conversion }}</span></p></div><div class="table-wrap import-preview-table"><table><thead><tr><th>列</th><th>結果</th><th v-for="header in importPreview.headers" :key="header">{{ header }}</th><th>原因</th></tr></thead><tbody><tr v-for="row in importPreview.rows" :key="row.rowNumber"><td>{{ row.rowNumber }}</td><td><StatusTag :status="!row.errors.length" :tone="row.errors.length ? 'danger' : row.action === '更新' ? 'info' : 'ok'" :on="row.action" off="錯誤" /></td><td v-for="header in importPreview.headers" :key="header">{{ row.values[header] || '—' }}</td><td>{{ [...row.conversions, ...row.errors].join('；') || '可寫入' }}</td></tr></tbody></table></div></template>
     <template #footer><Button @click="importOpen = false; importPreview = null">取消</Button><Button v-if="importPreview?.dryRun && !importPreview.summary.error" variant="primary" @click="confirmImport">確認寫入</Button></template>
   </Drawer>
 </template>

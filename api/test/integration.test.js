@@ -48,13 +48,13 @@ describe('第一階段 API 整合測試', { concurrency:false }, () => {
     state.db.prepare('INSERT INTO plate_assets(id,customer_id,route,card_number,card_expires_on,created_at,updated_at) VALUES (?,?,?,?,?,?,?)').run(state.plateA,state.customerA,'粵港',state.plateA,expires,new Date().toISOString(),new Date().toISOString())
     state.db.prepare('INSERT INTO plate_assets(id,customer_id,route,card_number,created_at,updated_at) VALUES (?,?,?,?,?,?)').run(state.plateB,state.customerB,'粵港',state.plateB,new Date().toISOString(),new Date().toISOString())
     state.db.prepare('INSERT INTO vehicles(id,customer_id,route,origin,type,plate) VALUES (?,?,?,?,?,?)').run(state.vehicleA,state.customerA,'粵港','香港','私家車','粵Z·TEST')
-    state.db.prepare('INSERT INTO companies(id,tenant_id,customer_id,jurisdiction,name,created_at,updated_at) VALUES (?,?,?,?,?,?,?)').run(state.mainlandCompany,state.tenantA,state.customerA,'內地','內地公司',new Date().toISOString(),new Date().toISOString())
+    state.db.prepare('INSERT INTO companies(id,tenant_id,customer_id,jurisdiction,name,created_at,updated_at) VALUES (?,?,?,?,?,?,?)').run(state.mainlandCompany,state.tenantA,state.customerA,'內地','内地公司',new Date().toISOString(),new Date().toISOString())
     state.adminA = (await state.request('/admin/login','POST',{username:`user${state.tenantA}`,password:'password123'})).body.token
     state.adminB = (await state.request('/admin/login','POST',{username:`user${state.tenantB}`,password:'password123'})).body.token
     state.client = (await state.request('/login','POST',{email:'client@test.invalid',password:'password123'})).body.token
     const group = await state.request('/company-groups','POST',{customerId:state.customerA,name:'第一組'},state.adminA); assert.equal(group.status,201); state.group = group.body
     assert.equal((await state.request(`/companies/${state.mainlandCompany}`,'PATCH',{groupId:state.group.id},state.adminA)).status,200)
-    const company = await state.request('/companies','POST',{customerId:state.customerA,groupId:state.group.id,jurisdiction:'香港',name:'香港甲',incorporatedOn:'2020-02-29'},state.adminA); assert.equal(company.status,201); state.company = company.body
+    const company = await state.request('/companies','POST',{customerId:state.customerA,groupId:state.group.id,jurisdiction:'香港',name:'香港甲',nameEn:'HONG KONG A LIMITED',incorporatedOn:'2020-02-29'},state.adminA); assert.equal(company.status,201); state.company = company.body
   })
   after(() => { state.db?.close(); state.server?.close(); if (state.directory) rmSync(state.directory,{recursive:true,force:true}) })
 
@@ -129,8 +129,8 @@ describe('第一階段 API 整合測試', { concurrency:false }, () => {
   })
 
   test('已註銷公司不出現在總覽，註銷中公司仍有提醒', async () => {
-    const dissolved = await state.request('/companies','POST',{customerId:state.customerA,jurisdiction:'香港',name:'已註銷香港公司',incorporatedOn:'2020-01-01',status:'已註銷'},state.adminA); assert.equal(dissolved.status,201)
-    const activeClosing = await state.request('/companies','POST',{customerId:state.customerA,jurisdiction:'香港',name:'註銷中香港公司',incorporatedOn:'2020-01-01',status:'註銷中'},state.adminA); assert.equal(activeClosing.status,201)
+    const dissolved = await state.request('/companies','POST',{customerId:state.customerA,jurisdiction:'香港',name:'已註銷香港公司',nameEn:'DISSOLVED HK LIMITED',incorporatedOn:'2020-01-01',status:'已註銷'},state.adminA); assert.equal(dissolved.status,201)
+    const activeClosing = await state.request('/companies','POST',{customerId:state.customerA,jurisdiction:'香港',name:'註銷中香港公司',nameEn:'CLOSING HK LIMITED',incorporatedOn:'2020-01-01',status:'註銷中'},state.adminA); assert.equal(activeClosing.status,201)
     assert.equal((await state.request('/tracked-items','PUT',{ownerType:'company',ownerId:dissolved.body.id,code:'hk_br',expiresOn:'2026-01-01'},state.adminA)).status,200)
     assert.equal((await state.request('/tracked-items','PUT',{ownerType:'company',ownerId:activeClosing.body.id,code:'hk_br',expiresOn:'2026-01-01'},state.adminA)).status,200)
     const overview = (await state.request('/overview','GET',undefined,state.adminA)).body
@@ -140,7 +140,7 @@ describe('第一階段 API 整合測試', { concurrency:false }, () => {
   })
 
   test('香港公司註冊處查無結果時不自動改狀態', async () => {
-    const created = await state.request('/companies','POST',{customerId:state.customerA,jurisdiction:'香港',name:'查無香港公司',registrationNo:'12345678'},state.adminA); assert.equal(created.status,201)
+    const created = await state.request('/companies','POST',{customerId:state.customerA,jurisdiction:'香港',name:'查無香港公司',nameEn:'NO RESULT HK LIMITED',registrationNo:'12345678'},state.adminA); assert.equal(created.status,201)
     const lookup = await state.request(`/companies/${created.body.id}/hk-lookup`,'POST',{},state.adminA)
     assert.equal(lookup.status,404); assert.equal(lookup.body.error,'公司註冊處查無此存續公司，請人工核實')
     const stored = (await state.request('/companies','GET',undefined,state.adminA)).body.find(item => item.id === created.body.id)
@@ -148,7 +148,7 @@ describe('第一階段 API 整合測試', { concurrency:false }, () => {
   })
 
   test('香港公司註冊處查詢只回傳結果，確認後才寫入', async () => {
-    const created = await state.request('/companies','POST',{customerId:state.customerA,jurisdiction:'香港',name:'待查香港公司',registrationNo:'68249242'},state.adminA); assert.equal(created.status,201)
+    const created = await state.request('/companies','POST',{customerId:state.customerA,jurisdiction:'香港',name:'待查香港公司',nameEn:'PENDING LOOKUP HK LIMITED',registrationNo:'68249242'},state.adminA); assert.equal(created.status,201)
     const lookup = await state.request(`/companies/${created.body.id}/hk-lookup`,'POST',{},state.adminA)
     assert.equal(lookup.status,200); assert.equal(lookup.body.name,'曲坤有限公司'); assert.equal(lookup.body.incorporatedOn,'2017-09-26')
     assert.equal((await state.request('/companies','GET',undefined,state.adminA)).body.find(item => item.id === created.body.id).name,'待查香港公司')
@@ -339,7 +339,7 @@ describe('第一階段 API 整合測試', { concurrency:false }, () => {
   })
 
   test('香港及澳門公司忽略納稅人類型，香港保存 CR 編號', async () => {
-    const result = await state.request('/companies', 'POST', { customerId: state.customerA, jurisdiction: '香港', name: '新香港公司', taxpayerType: '一般納稅人', companyNumber: 'CR123' }, state.adminA)
+    const result = await state.request('/companies', 'POST', { customerId: state.customerA, jurisdiction: '香港', name: '新香港公司', nameEn: 'NEW HK LIMITED', taxpayerType: '一般納稅人', companyNumber: 'CR123' }, state.adminA)
     assert.equal(result.status, 201)
     assert.equal(result.body.taxpayer_type, '')
     assert.equal(result.body.company_number, 'CR123')
