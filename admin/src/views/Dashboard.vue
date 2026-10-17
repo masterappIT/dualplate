@@ -6,6 +6,7 @@
     <StatCard label="待錄入資料" tone="neutral" :value="todayCounts.missing" hint="補上日期或資料" :active="todayTab === 'missing'" @click="choose('missing')" />
     <StatCard label="進行中業務" tone="info" :value="todayCounts.active" hint="未完成工單" :active="todayTab === 'active'" @click="choose('active')" />
   </div>
+  <CustomerChanges />
   <section ref="queuePanel" class="panel">
     <div class="panel-head"><div><h2>工作隊列</h2><p>日期可直接錄入；批文卡有效期請回到批文卡修改。</p></div></div>
     <FilterBar><Segmented v-model="todayTab" :options="tabs" label="工作隊列分類" /><label>來源<select v-model="todayOwnership"><option value="all">全部</option><option value="client">客戶的</option><option value="self">自有的</option></select></label><label>客戶<select v-model="todayCustomerId"><option value="">全部客戶</option><option v-for="customer in customers" :key="customer.id" :value="customer.id">{{ customer.name }}</option></select></label><label>狀態<select v-model="todayStatus"><option value="">全部狀態</option><option value="overdue">已逾期</option><option value="due">需處理</option><option value="missing">待錄入</option><option value="待開始">待開始</option><option value="進行中">進行中</option><option value="待客戶提供">待客戶提供</option></select></label></FilterBar>
@@ -50,6 +51,7 @@ import PlateChip from '../components/ui/PlateChip.vue'
 import DataTable from '../components/ui/DataTable.vue'
 import Tag from '../components/ui/Tag.vue'
 import FilterBar from '../components/business/FilterBar.vue'
+import CustomerChanges from '../components/business/CustomerChanges.vue'
 import { useAdminStore } from '../store'
 import { api, rentMoney } from '../api'
 import { offerFee, offerFees } from '../composables/fee-suggestion'
