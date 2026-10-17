@@ -23,6 +23,7 @@ import { reportRoutes } from './reports.js'
 import { renterPublicRoutes, renterAdminRoutes } from './renter-portal.js'
 import { clientEditRoutes, changeReviewRoutes, logCreated, logCompanyCreated, logCardChanges, logPlateChanges } from './client-edits.js'
 import { selfHandledClientRoutes, selfHandledReviewRoutes } from './self-handled.js'
+import { publicTermsRoutes, termsGate, termsRoutes } from './terms.js'
 import { plateCompanyRoutes, linkPlateCompanies } from './plate-companies.js'
 import { seedDemo } from './demo-seed.js'
 import { passwordProblem, authenticate, createSession, lockedMinutes, recordFailure, clearFailures, loginPhone, PHONE_RULE, clientIp, audit, auditRoutes, logError, health } from './security.js'
@@ -155,8 +156,13 @@ export const server = http.createServer(async (req, res) => {
       return json(res, 200, { token, user: { id: account.id, name: account.name, email: account.email, role: account.role, customerId: account.customer_id } })
     }
     if (await publicPortalRoutes(req, res, url, { json, fail, parseBody })) return
+    if (await publicTermsRoutes(req, res, url, { json, fail })) return
     const user = auth(req)
     if (!user) return fail(res, 401, '請先登入')
+    // 強制同意服務條款：客戶未同意最新版本前只可看條款、同意、改密碼
+    const termsBlock = termsGate(user, path)
+    if (termsBlock) return json(res, 403, termsBlock)
+    if (await termsRoutes(req, res, url, user, { json, fail, parseBody, clientIp })) return
     audit(req, res, user, path)
     if (await auditRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (path === '/api/me' && req.method === 'GET') return json(res, 200, { id: user.id, name: user.name, email: user.email, role: user.role, customerId: user.customer_id })

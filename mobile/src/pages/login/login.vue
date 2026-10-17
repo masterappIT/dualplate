@@ -42,6 +42,7 @@
       </view>
       <!-- #endif -->
       <text class="help">帳戶由你的顧問開通。忘記密碼請聯絡顧問。</text>
+      <view class="terms-links"><text class="link" @click="openTerms('terms')">服務條款</text><text class="terms-dot">·</text><text class="link" @click="openTerms('privacy')">私隱聲明</text></view>
       <view v-if="done" class="done"><StampMark text="已登入" tone="jade" play /></view>
     </view>
   </view>
@@ -49,6 +50,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
 import { api, saveSession } from '../../lib/api'
+function openTerms(tab){uni.navigateTo({url:'/pages/terms/terms?tab='+tab})}
 import PlateChip from '../../components/PlateChip.vue'
 import StampMark from '../../components/StampMark.vue'
 
@@ -168,6 +170,7 @@ onBeforeUnmount(() => { if (raf) (canvas?.cancelAnimationFrame || cancelAnimatio
 .area{width:128px;display:flex;align-items:center;justify-content:space-between;gap:4px}
 .phone{flex:1;min-width:0;width:auto}
 .help{display:block;margin-top:16px;text-align:center;color:var(--ink-3);font-size:var(--fs-meta)}
+.terms-links{display:flex;justify-content:center;gap:8px;margin-top:12px;font-size:var(--fs-meta)}.terms-links .link{font-size:var(--fs-meta)}.terms-dot{color:var(--ink-3)}
 .done{position:absolute;right:16px;top:16px}
 .shake{animation:shake .38s ease}
 @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(2px)}}

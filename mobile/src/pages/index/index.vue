@@ -47,14 +47,14 @@
 <script setup>
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { api, getUser, openPlate, startRequest, requestTone, clientStage, detailText, selfHandled } from '../../lib/api'
+import { api, getUser, openPlate, startRequest, requestTone, clientStage, detailText, selfHandled,checkTerms } from '../../lib/api'
 import DueDate from '../../components/DueDate.vue'
 import PlateChip from '../../components/PlateChip.vue'
 import AdvisorCard from '../../components/AdvisorCard.vue'
 import WelcomeGuide from '../../components/WelcomeGuide.vue'
 const user=ref(getUser())
 const data=ref({unreadNotifications:0,advisor:null,customerName:'',counts:{pending:0,ok:0,due:0,overdue:0},plates:[],deadlines:[],todos:[],activeRequests:[]})
-async function load(){user.value=getUser();if(!user.value)return uni.navigateTo({url:'/pages/login/login'});try{data.value=await api('/my/overview')}catch(e){uni.showToast({title:e.message,icon:'none'})}}
+async function load(){user.value=getUser();if(!user.value)return uni.navigateTo({url:'/pages/login/login'});checkTerms();try{data.value=await api('/my/overview')}catch(e){uni.showToast({title:e.message,icon:'none'})}}
 function goPlates(filter){uni.setStorageSync('plateFilter',filter||'');uni.switchTab({url:'/pages/vehicles/vehicles'})}
 function goCompanies(){uni.switchTab({url:'/pages/companies/companies'})}
 function goNotices(){uni.navigateTo({url:'/pages/notifications/notifications'})}

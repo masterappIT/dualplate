@@ -84,6 +84,12 @@
         "navigationStyle": "custom",
         "navigationBarTitleText": "登入"
       }
+    },
+    {
+      "path": "pages/terms/terms",
+      "style": {
+        "navigationBarTitleText": "服務條款及私隱聲明"
+      }
     }
   ],
   "tabBar": {

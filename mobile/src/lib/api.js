@@ -10,10 +10,37 @@ export function api(path, method = 'GET', data) {
       success(response) {
         if (response.statusCode >= 200 && response.statusCode < 300) return resolve(response.data)
         if (response.statusCode === 401 && path !== '/login' && !path.startsWith('/wechat/')) { clearSession(); uni.navigateTo({ url: '/pages/login/login' }) }
+        // 管理者設定「強制同意」而未同意最新條款：先到條款頁（同一時間只轉一次）
+        if (response.statusCode === 403 && response.data?.code === 'TERMS_REQUIRED') openTerms(true)
         reject(Object.assign(new Error(response.data?.error || '操作失敗'), { status: response.statusCode, data: response.data }))
       }, fail(error) { reject(new Error('連不上伺服器，請檢查網絡後再試')) }
     })
   })
+}
+// 不用登入的請求（登入頁的服務條款連結；日後自助註冊）
+export function publicApi(path) {
+  return new Promise((resolve, reject) => uni.request({ url: base + '/api' + path, method: 'GET',
+    success: response => response.statusCode >= 200 && response.statusCode < 300 ? resolve(response.data) : reject(Object.assign(new Error(response.data?.error || '載入失敗'), { status: response.statusCode })),
+    fail: () => reject(new Error('連不上伺服器，請檢查網絡後再試')) }))
+}
+// 服務條款：強制時 reLaunch（不能返回）；提示時每次開啟 App 只彈一次，可稍後再看
+let termsOpening = false, termsPrompted = false
+function openTerms(force) {
+  const pages = getCurrentPages(), here = pages[pages.length - 1]?.route || ''
+  if (termsOpening || here === 'pages/terms/terms') return
+  termsOpening = true
+  setTimeout(() => { termsOpening = false }, 1500)
+  force ? uni.reLaunch({ url: '/pages/terms/terms' }) : uni.navigateTo({ url: '/pages/terms/terms' })
+}
+export async function checkTerms() {
+  if (!getUser() || termsPrompted) return
+  try {
+    const terms = await api('/my/terms')
+    if (!terms.published || terms.accepted) return
+    termsPrompted = true
+    if (terms.mode === 'force') return openTerms(true)
+    uni.showModal({ title: '服務條款已更新', content: '請查看並同意最新的服務條款及私隱聲明。', confirmText: '查看', cancelText: '稍後', success: r => { if (r.confirm) openTerms(false) } })
+  } catch { /* 網絡問題時下次再提示 */ }
 }
 // Shared wording and colours for deadline states on the client screens.
 export const levelLabel = { overdue: '已逾期', due: '快到期', upcoming: '即將到期', ok: '正常' }

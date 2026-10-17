@@ -19,6 +19,7 @@
     <AdvisorCard v-if="loaded" :advisor="advisor" placeholder />
     <view class="card menu">
       <view class="menu-row" @click="guide=true"><text class="menu-name">使用導覽</text><text class="chev">›</text></view>
+      <view class="menu-row" @click="goTerms"><text class="menu-name">服務條款及私隱聲明</text><text class="chev">›</text></view>
       <view class="menu-row" @click="logout"><text class="menu-name">退出登入</text><text class="chev">›</text></view>
     </view>
     <WelcomeGuide v-if="guide" force @closed="guide=false" />
@@ -37,6 +38,7 @@ const account=computed(()=>{const email=user.value?.email||'';return email.endsW
 async function load(){user.value=getUser();if(!user.value)return uni.navigateTo({url:'/pages/login/login'});try{const [list,overview,plateList]=await Promise.all([api('/requests'),api('/my/overview'),api('/plate-assets')]);requests.value=list;plates.value=plateList;advisor.value=overview.advisor;unread.value=overview.unreadNotifications||0;api('/my/fees').then(r=>{unpaid.value=Object.keys(r.outstanding||{}).length>0}).catch(()=>{})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
 // 辦理記錄一律用內地車牌標識，與首頁一致
 function plateOf(item){return plates.value.find(p=>p.id===item.plate_asset_id)?.mainland_plate||''}
+function goTerms(){uni.navigateTo({url:'/pages/terms/terms'})}
 function openRequest(id){uni.navigateTo({url:'/pages/request-detail/request-detail?id='+id})}
 function newRequest(){startRequest('')}
 function goNotices(){uni.navigateTo({url:'/pages/notifications/notifications'})}
