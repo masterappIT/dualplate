@@ -32,6 +32,12 @@
       <text class="field-label">密碼</text>
       <input class="field" v-model="password" password placeholder="輸入密碼" :class="{ invalid: error && !password }" @confirm="login" />
       <text v-if="error" class="error">{{ error }}</text>
+      <!-- 自行申請仍在審批或未獲批准：只顯示狀態和聯絡方式，不能進入 app -->
+      <view v-if="application" class="application">
+        <text class="application-title">{{ application.text }}</text>
+        <text v-if="application.pending" class="subtle">我們會先聯絡你核實手機號碼。</text>
+        <ContactCard public :messages="false" />
+      </view>
       <button class="primary login-button" :class="{ busy: loading }" :disabled="loading" @click="login">{{ loading ? '登入中' : '登入' }}</button>
       <!-- #ifdef MP-WEIXIN -->
       <button v-if="!binding" class="secondary wechat-button" :disabled="loading" @click="wechatLogin">微信快速登入</button>
@@ -41,7 +47,8 @@
         <view class="bind-actions"><button class="secondary" @click="binding=false">取消</button><button class="primary" :disabled="loading" @click="bindWechat">綁定並登入</button></view>
       </view>
       <!-- #endif -->
-      <text class="help">帳戶由你的顧問開通。忘記密碼請聯絡顧問。</text>
+      <button class="btn-line signup-button" @click="goSignup">沒有帳戶？申請使用</button>
+      <text class="help">托管客戶的帳戶由顧問開通。忘記密碼請聯絡我們。</text>
       <view class="terms-links"><text class="link" @click="openTerms('terms')">服務條款</text><text class="terms-dot">·</text><text class="link" @click="openTerms('privacy')">私隱聲明</text></view>
       <view v-if="done" class="done"><StampMark text="已登入" tone="jade" play /></view>
     </view>
@@ -51,10 +58,12 @@
 import { ref, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
 import { api, saveSession } from '../../lib/api'
 function openTerms(tab){uni.navigateTo({url:'/pages/terms/terms?tab='+tab})}
+function goSignup(){uni.navigateTo({url:'/pages/signup/signup'})}
 import PlateChip from '../../components/PlateChip.vue'
+import ContactCard from '../../components/ContactCard.vue'
 import StampMark from '../../components/StampMark.vue'
 
-const email = ref(''), phone = ref(''), mode = ref('phone'), password = ref(''), binding = ref(false), bindCode = ref(''), loading = ref(false), error = ref(''), shake = ref(false), done = ref(false)
+const email = ref(''), phone = ref(''), mode = ref('phone'), password = ref(''), binding = ref(false), bindCode = ref(''), loading = ref(false), error = ref(''), shake = ref(false), done = ref(false), application = ref(null)
 const top = (uni.getSystemInfoSync().statusBarHeight || 20) + 28
 const instance = getCurrentInstance()
 
@@ -64,7 +73,7 @@ const areaIndex = ref(Math.max(0, areaCodes.findIndex(item => item.code === uni.
 function pickArea(event) { areaIndex.value = Number(event.detail.value); uni.setStorageSync('loginArea', areaCodes[areaIndex.value].code) }
 
 async function login() {
-  error.value = ''
+  error.value = ''; application.value = null
   const area = areaCodes[areaIndex.value], digits = phone.value.replace(/\D/g, '')
   if (mode.value === 'phone' ? !digits || !password.value : !email.value || !password.value) return fail(mode.value === 'phone' ? '請填寫手機號碼和密碼' : '請填寫電郵和密碼')
   if (mode.value === 'phone' && !area.pattern.test(digits)) return fail(`${area.label.split(' ')[0]}手機號碼應為 ${area.hint.replace('手機號碼', '').trim()}`)
@@ -73,7 +82,10 @@ async function login() {
     const result = await api('/login', 'POST', { login: mode.value === 'phone' ? `${area.code}${digits}` : email.value, password: password.value })
     if (result.user.role !== 'customer') throw new Error('此帳號請使用管理端登入')
     enter(result)
-  } catch (e) { fail(e.message) } finally { loading.value = false }
+  } catch (e) {
+    if (['SIGNUP_PENDING', 'SIGNUP_REJECTED'].includes(e.data?.code)) application.value = { pending: e.data.code === 'SIGNUP_PENDING', text: e.message }
+    else fail(e.message)
+  } finally { loading.value = false }
 }
 function enter(result) {
   saveSession(result)
@@ -169,6 +181,8 @@ onBeforeUnmount(() => { if (raf) (canvas?.cancelAnimationFrame || cancelAnimatio
 .phone-row{display:flex;gap:8px}.phone-row picker{flex:none}
 .area{width:128px;display:flex;align-items:center;justify-content:space-between;gap:4px}
 .phone{flex:1;min-width:0;width:auto}
+.signup-button{width:100%;margin-top:12px}
+.application{margin-top:16px;padding-top:16px;border-top:1px solid var(--rule)}.application-title{display:block;font-size:var(--fs-h);font-weight:800;color:var(--jade-deep);margin-bottom:4px}
 .help{display:block;margin-top:16px;text-align:center;color:var(--ink-3);font-size:var(--fs-meta)}
 .terms-links{display:flex;justify-content:center;gap:8px;margin-top:12px;font-size:var(--fs-meta)}.terms-links .link{font-size:var(--fs-meta)}.terms-dot{color:var(--ink-3)}
 .done{position:absolute;right:16px;top:16px}

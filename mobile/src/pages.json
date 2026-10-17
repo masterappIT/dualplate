@@ -92,6 +92,12 @@
       }
     },
     {
+      "path": "pages/signup/signup",
+      "style": {
+        "navigationBarTitleText": "申請使用"
+      }
+    },
+    {
       "path": "pages/messages/messages",
       "style": {
         "navigationBarTitleText": "聯絡我們"

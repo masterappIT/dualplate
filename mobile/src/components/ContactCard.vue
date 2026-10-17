@@ -14,12 +14,13 @@
 </template>
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { api, copyText, openLink } from '../lib/api'
-const props = defineProps({ messages: { type: Boolean, default: true } })
+import { api, publicApi, copyText, openLink } from '../lib/api'
+// public：未登入的畫面（申請使用、審批中、未獲批准）用公開接口
+const props = defineProps({ messages: { type: Boolean, default: true }, public: { type: Boolean, default: false } })
 const contact = ref({ whatsapp: '', whatsappLink: '', wechatId: '', wechatQr: '', wecomLink: '' })
 const hasChannel = computed(() => Boolean(contact.value.whatsappLink || contact.value.wechatId || contact.value.wecomLink || contact.value.wechatQr))
 const phoneText = value => String(value || '').replace(/^\+(852|853)(\d{4})(\d{4})$/, '+$1 $2 $3').replace(/^\+86(\d{3})(\d{4})(\d{4})$/, '+86 $1 $2 $3')
-onMounted(async () => { try { contact.value = await api('/my/contact') } catch {} })
+onMounted(async () => { try { contact.value = props.public ? await publicApi('/public/contact') : await api('/my/contact') } catch {} })
 function goMessages() { uni.navigateTo({ url: '/pages/messages/messages' }) }
 function previewQr() { uni.previewImage({ urls: [contact.value.wechatQr] }) }
 </script>

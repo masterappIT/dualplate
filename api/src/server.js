@@ -30,6 +30,7 @@ import { seedDemo } from './demo-seed.js'
 import { serviceModeRoutes, modes, startSelfManaged } from './service-mode.js'
 import { seal } from './password-vault.js'
 import { supportRoutes } from './support.js'
+import { signupPublicRoutes, signupRoutes, applicationLogin } from './signup.js'
 import { passwordProblem, authenticate, createSession, lockedMinutes, recordFailure, clearFailures, loginPhone, PHONE_RULE, clientIp, audit, auditRoutes, logError, health } from './security.js'
 
 const port = Number(process.env.PORT || 4100)
@@ -154,6 +155,9 @@ export const server = http.createServer(async (req, res) => {
       const account = login.includes('@') ? one("SELECT * FROM users WHERE role='customer' AND active=1 AND email=?", login) : one("SELECT * FROM users WHERE role='customer' AND active=1 AND phone=?", login)
       const ip = clientIp(req), wait = lockedMinutes('customer', login, ip)
       if (wait) return fail(res, 429, `登入失敗次數過多，請 ${wait} 分鐘後再試`)
+      // 自行申請仍在審批或被拒絕：密碼正確才顯示狀態，不能進入 app
+      const application = account ? null : applicationLogin(login, body.password)
+      if (application) return json(res, 403, application)
       if (!account || !verifyPassword(String(body.password || ''), account.password_hash)) { recordFailure('customer', login, ip); return fail(res, 401, '帳號或密碼不正確') }
       clearFailures('customer', login)
       const token = createSession(account.id)
@@ -164,6 +168,7 @@ export const server = http.createServer(async (req, res) => {
     }
     if (await publicPortalRoutes(req, res, url, { json, fail, parseBody })) return
     if (await publicTermsRoutes(req, res, url, { json, fail })) return
+    if (await signupPublicRoutes(req, res, url, { json, fail, parseBody, clientIp })) return
     const user = auth(req)
     if (!user) return fail(res, 401, '請先登入')
     // 強制同意服務條款：客戶未同意最新版本前只可看條款、同意、改密碼
@@ -178,6 +183,7 @@ export const server = http.createServer(async (req, res) => {
     if (await entrustmentRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await serviceModeRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await supportRoutes(req, res, url, user, { json, fail, parseBody })) return
+    if (await signupRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await workOrderRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await driverRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await vehicleDocumentRoutes(req, res, url, user, { json, fail, parseBody })) return
