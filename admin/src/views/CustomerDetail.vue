@@ -25,10 +25,36 @@
   <FormDialog :open="!!loginTarget" :title="`修改${loginTarget?.name || ''}的登入資料`" layout="stack" :saving="loginSaving" submit-text="儲存" @close="loginTarget = null" @submit="saveLogin"><Field label="顯示名稱" required><TextInput v-model="loginForm.name" /></Field><p class="dialog-note">電郵或手機號碼至少填一項。改了電郵或手機後，客戶原有登入會失效，需用新帳號重新登入。</p><Field label="電郵"><TextInput v-model="loginForm.email" type="email" /></Field><Field label="手機號碼"><PhoneInput v-model="loginForm.phone" /></Field><p v-if="loginError" class="error" role="alert">{{ loginError }}</p></FormDialog>
   <Modal :open="!!deleteAccountTarget" title="刪除客戶帳號" :sub="`刪除 ${deleteAccountTarget?.name || ''} 後無法再登入，也無法復原。有上傳或操作紀錄的帳號不能刪除，請改用停用。`" @close="deleteAccountTarget = null"><p v-if="accountActionError" role="alert" class="error">{{ accountActionError }}</p><template #footer><Button @click="deleteAccountTarget = null">取消</Button><Button variant="danger" :loading="!!accountSaving" @click="deleteAccount">確認刪除</Button></template></Modal>
   <Modal :open="customerDeleteOpen" title="刪除客戶" :sub="`確定刪除「${selectedCustomer?.name || ''}」？刪除後無法復原。`" @close="customerDeleteOpen = false"><p v-if="customerDeleteError" role="alert" class="error">{{ customerDeleteError }}</p><template #footer><Button @click="customerDeleteOpen = false">取消</Button><Button variant="danger" :loading="customerDeleting" @click="deleteCustomer">確認刪除</Button></template></Modal>
-  <Modal :open="templateOpen" title="套用委託範本" sub="先預覽變更清單，確認後才更新。" @close="templateOpen = false; preview = null"><Field label="範本"><select v-model="templateKey" @change="preview = null"><option value="full">全權托管</option><option value="plates_only">只管牌照</option><option value="plates_and_mainland">牌照＋內地公司</option></select></Field><p v-if="templateError" role="alert">{{ templateError }}</p><div v-for="change in preview?.changes || []" :key="`${change.ownerType}-${change.ownerId}-${change.item}`" class="record-row">{{ change.ownerLabel }} · {{ change.itemLabel }}：{{ handlerName(change.from) }} → {{ handlerName(change.to) }}</div><p v-if="preview && !preview.changes.length">沒有需要變更的項目。</p><template #footer><Button @click="templateOpen = false">取消</Button><Button v-if="!preview" @click="previewTemplate">預覽變更</Button><Button v-else variant="primary" :disabled="!preview.changes.length || templateBusy" @click="applyTemplate">{{ templateBusy ? '套用中…' : '確認套用' }}</Button></template></Modal>
-  <Drawer :open="matrixOpen" title="委託範圍" sub="按公司和牌照逐件設定由誰辦理；改動累計後一次提交。" :width="960" @close="closeMatrix"><p v-if="matrixError" class="error" role="alert">{{ matrixError }}</p><p v-if="matrixLoading">載入委託範圍中…</p><ServiceScopeMatrix v-else-if="matrix" :data="matrix" :pending="pending" :is-self="!!selectedCustomer?.is_self" :saving="matrixSaving" @change="setMatrix" @column="setColumn" @items="openItems" /><section v-if="matrix && !selectedCustomer?.is_self" class="scope-section"><div class="panel-head"><div><h2>收費方式</h2><p>只有管理者看得到，客戶端不顯示價錢。改動只影響這位客戶，其餘沿用價目表。</p></div></div><PriceTable :customer-id="selectedCustomer.id" @saved="showSuccess" @error="showError" /></section><div v-for="item in outsourcedItems" :key="item" class="record-row"><Field :label="`${itemName(item)}外包單位（${Object.values(pending).filter(change => change.item === item && change.handler === 'outsourced').length} 格）`" required :hint="item === 'monthly_filing' ? '與報帳報稅頁共用；名單在報帳報稅頁的會計公司管理。' : ''"><Select v-if="item === 'monthly_filing'" :model-value="Object.values(pending).find(change => change.item === item && change.handler === 'outsourced')?.providerId || null" :options="firms.map(firm => ({ value: firm.id, label: firm.name }))" placeholder="選擇會計公司" empty-text="還沒有會計公司，請先到報帳報稅頁新增" @update:model-value="setFirm($event)" /><TextInput v-else :model-value="providerFor(item)" @update:model-value="setProvider(item, $event)" /></Field></div></Drawer>
+  <Modal :open="templateOpen" title="套用委託範本" sub="選範本後即時列出會改動的地方，確認才更新；之後仍可在委託範圍逐格調整。" :width="640" @close="templateOpen = false; preview = null">
+    <div class="template-pick"><Segmented v-model="templateKey" :options="templateOptions" label="委託範本" /><p class="cell-sub">{{ templateDesc[templateKey] }}</p></div>
+    <p v-if="templateError" class="error" role="alert">{{ templateError }}</p>
+    <p v-else-if="!preview" class="cell-sub">計算改動中…</p>
+    <p v-else-if="!preview.changes.length" class="template-none">目前的設定已和這個範本一致，不用改動。</p>
+    <template v-else>
+      <p class="template-total">會改動 <b class="tnum">{{ preview.changes.length }}</b> 項：</p>
+      <ul class="template-summary"><li v-for="row in templateSummary" :key="row.key"><span>{{ row.itemLabel }}</span><span class="tnum">{{ row.count }} {{ row.unit }}</span><span>{{ handlerName(row.from) }} → <b>{{ handlerName(row.to) }}</b></span></li></ul>
+      <details class="template-details"><summary>看逐間明細</summary><div v-for="owner in templateOwners" :key="owner.key" class="template-owner"><strong>{{ owner.label }}</strong><span v-for="change in owner.changes" :key="change.item">{{ change.itemLabel }}：{{ handlerName(change.from) }} → {{ handlerName(change.to) }}</span></div></details>
+    </template>
+    <template #footer><Button @click="templateOpen = false">取消</Button><Button variant="primary" :loading="templateBusy" :disabled="!preview?.changes.length" @click="applyTemplate">套用{{ preview?.changes.length ? `（${preview.changes.length} 項）` : '' }}</Button></template>
+  </Modal>
+  <Drawer :open="matrixOpen" title="委託範圍" sub="每格選由誰辦理；改動先累計，按底部「提交變更」才儲存。" :width="960" @close="closeMatrix">
+    <p v-if="matrixError" class="error" role="alert">{{ matrixError }}</p>
+    <p v-if="matrixLoading">載入委託範圍中…</p>
+    <template v-else-if="matrix">
+      <Segmented v-model="matrixTab" :options="matrixTabs" label="委託範圍分類" class="matrix-tabs" />
+      <ServiceScopeMatrix v-if="matrixTab !== 'prices'" :data="matrix" :pending="pending" :is-self="!!selectedCustomer?.is_self" :saving="matrixSaving" :category="matrixTab" @change="setMatrix" @column="setColumn" @items="openItems" />
+      <section v-else class="scope-section"><div class="panel-head"><div><h2>收費方式</h2><p>只有管理者看得到，客戶端不顯示價錢。每行改完即儲存，只影響這位客戶，其餘沿用價目表。</p></div></div><PriceTable :customer-id="selectedCustomer.id" @saved="showSuccess" @error="showError" /></section>
+    </template>
+  </Drawer>
   <Teleport to="body"><div v-if="matrixOpen && Object.keys(pending).length && !impact && !itemsSection" class="float-bar in-drawer"><span>{{ Object.keys(pending).length }} 格待提交</span><Button @click="pending = {}">放棄</Button><Button variant="primary" :disabled="matrixSaving" @click="reviewMatrix">{{ matrixSaving ? '處理中…' : '提交變更' }}</Button></div></Teleport>
-  <Modal :open="!!impact" title="確認提交委託範圍" sub="以下是這次改動的影響。" @close="impact = null"><p v-if="impact?.toClient">{{ impact.toClient }} 項到期提醒將改為只提醒客戶，不再產生我們的工作。</p><p v-if="impact?.fromClient">{{ impact.fromClient }} 項改由我們跟進，會出現在今日工作。</p><template v-if="impact?.openRequests.length"><p>這些牌照有進行中的工單，工單不會自動取消：</p><div v-for="request in impact.openRequests" :key="request.id" class="record-row">{{ request.title }}</div></template><template #footer><Button @click="impact = null">返回修改</Button><Button variant="primary" :disabled="matrixSaving" @click="saveMatrix">{{ matrixSaving ? '提交中…' : '確認提交' }}</Button></template></Modal>
+  <Modal :open="!!impact" title="確認提交委託範圍" :sub="`共 ${Object.keys(pending).length} 格改動。`" @close="impact = null">
+    <div v-if="outsourcedItems.length" class="scope-providers"><p>改為外包的事項，請填外包單位：</p><Field v-for="item in outsourcedItems" :key="item" :label="`${itemName(item)}（${Object.values(pending).filter(change => change.item === item && change.handler === 'outsourced').length} 格）`" required :hint="item === 'monthly_filing' ? '與報帳報稅頁共用；名單在報帳報稅頁的「會計公司」管理。' : ''"><Select v-if="item === 'monthly_filing'" :model-value="Object.values(pending).find(change => change.item === item && change.handler === 'outsourced')?.providerId || null" :options="firms.map(firm => ({ value: firm.id, label: firm.name }))" placeholder="選擇會計公司" empty-text="還沒有會計公司，請先到報帳報稅頁新增" @update:model-value="setFirm($event)" /><TextInput v-else :model-value="providerFor(item)" placeholder="例如：信達會計（廣州）" @update:model-value="setProvider(item, $event)" /></Field></div>
+    <p v-if="impact?.toClient">{{ impact.toClient }} 項到期提醒將改為只提醒客戶，不再產生我們的工作。</p>
+    <p v-if="impact?.fromClient">{{ impact.fromClient }} 項改由我們跟進，會出現在今日工作。</p>
+    <template v-if="impact?.openRequests.length"><p>這些牌照有進行中的工單，工單不會自動取消：</p><div v-for="request in impact.openRequests" :key="request.id" class="record-row">{{ request.title }}</div></template>
+    <p v-if="impactError" class="error" role="alert">{{ impactError }}</p>
+    <template #footer><Button @click="impact = null">返回修改</Button><Button variant="primary" :loading="matrixSaving" :disabled="missingProvider" @click="saveMatrix">確認提交</Button></template>
+  </Modal>
   <Modal :open="!!itemsSection" :title="`${itemsSection?.label || ''}的事項`" sub="勾選這位客戶要管的事項。不在清單上的事，系統不會提醒任何人；已填的日期會保留。停用的事項（例如審計及利得稅）要先在規則頁啟用。" @close="itemsSection = null"><template v-for="group in itemsGroups" :key="group.label"><h3 v-if="group.label">{{ group.label }}</h3><div v-for="item in group.items" :key="item.code" class="record-row"><Checkbox :model-value="!!itemsChecked[item.code]" :label="item.name" @update:model-value="itemsChecked = { ...itemsChecked, [item.code]: $event }; itemsPreview = null" /></div></template><p v-if="itemsError" class="error" role="alert">{{ itemsError }}</p><template v-if="itemsPreview"><p v-for="item in itemsPreview.removed" :key="`r-${item.code}`">移除「{{ item.name }}」：{{ item.owners }} {{ ownerUnit }}不再提醒任何人{{ item.ours ? `（其中 ${item.ours} ${ownerUnit}原由我們跟進）` : '' }}。</p><p v-for="item in itemsPreview.added" :key="`a-${item.code}`">加入「{{ item.name }}」：{{ item.owners }} {{ ownerUnit }}開始提醒。</p><template v-if="itemsPreview.openRequests.length"><p>這些牌照有進行中的工單，工單不會自動取消：</p><div v-for="request in itemsPreview.openRequests" :key="request.id" class="record-row">{{ request.title }}</div></template></template><template #footer><Button @click="itemsSection = null">取消</Button><Button v-if="!itemsPreview" :disabled="!itemsDiff.add.length && !itemsDiff.remove.length" @click="previewItems">預覽變更</Button><Button v-else variant="primary" :disabled="itemsBusy" @click="applyItems">{{ itemsBusy ? '儲存中…' : '確認' }}</Button></template></Modal>
 </template>
 <script setup>
@@ -62,6 +88,7 @@ import Companies from './Companies.vue'
 import DriverList from '../components/business/DriverList.vue'
 import FeeLedger from '../components/business/FeeLedger.vue'
 import { useAdminStore } from '../store'
+import { confirm } from '../composables/confirm'
 const { view, selectedCustomer, modal, customerTab, customerPlates, customerVehicles, customerRequests, recentCustomerAccounts, overviewData, companyGroups: allGroups, companyRecords, newRequest, saveTrackedItem, refresh, openPlate, openPlateById, openVehicle, openRequest, iconFor, showSuccess, showError } = useAdminStore()
 const isAdmin = user()?.role === 'admin'
 const router = useRouter()
@@ -171,12 +198,27 @@ const route = useRoute()
 watch(() => route.query.tab, value => { if (tabs.some(tab => tab.value === value)) customerTab.value = value }, { immediate: true })
 const templateOpen = ref(false), templateKey = ref('full'), preview = ref(null), templateError = ref(''), templateBusy = ref(false)
 const handlerName = value => ({ us: '我們做', outsourced: '外包', client: '客戶自理' }[value] || value)
-async function previewTemplate() { try { preview.value = await api(`/customers/${selectedCustomer.value.id}/apply-template`, 'POST', { template: templateKey.value, dryRun: true }); templateError.value = '' } catch (error) { templateError.value = error.message } }
+// 範本：選了即計算改動（不用另按預覽），按事項彙總，逐間明細收起
+const templateOptions = [{ value: 'full', label: '全權托管' }, { value: 'plates_only', label: '只管牌照' }, { value: 'plates_and_mainland', label: '牌照＋內地公司' }]
+const templateDesc = { full: '牌照和全部公司的事項都由我們做。', plates_only: '牌照的事項由我們做；香港、澳門、內地公司的事項改為客戶自理。', plates_and_mainland: '牌照和內地公司的事項由我們做；香港、澳門公司的事項改為客戶自理。' }
+async function previewTemplate() { preview.value = null; templateError.value = ''; const key = templateKey.value; try { const result = await api(`/customers/${selectedCustomer.value.id}/apply-template`, 'POST', { template: key, dryRun: true }); if (key === templateKey.value) preview.value = result } catch (error) { templateError.value = error.message } }
+watch([templateOpen, templateKey], () => { if (templateOpen.value) previewTemplate() })
+const templateSummary = computed(() => { const rows = new Map(); for (const change of preview.value?.changes || []) { const key = `${change.itemLabel}:${change.from}:${change.to}`; const row = rows.get(key) || { key, itemLabel: change.itemLabel, from: change.from, to: change.to, count: 0, unit: change.ownerType === 'plate' ? '個牌照' : '間公司' }; row.count += 1; rows.set(key, row) } return [...rows.values()] })
+const templateOwners = computed(() => { const owners = new Map(); for (const change of preview.value?.changes || []) { const key = `${change.ownerType}:${change.ownerId}`; owners.set(key, { key, label: change.ownerLabel, changes: [...(owners.get(key)?.changes || []), change] }) } return [...owners.values()] })
 async function applyTemplate() { templateBusy.value = true; try { await api(`/customers/${selectedCustomer.value.id}/apply-template`, 'POST', { template: templateKey.value, dryRun: false }); templateOpen.value = false; preview.value = null; showSuccess('委託範本已套用'); await refresh() } catch (error) { templateError.value = error.message } finally { templateBusy.value = false } }
 const matrixOpen = ref(false), matrix = ref(null), matrixLoading = ref(false), matrixError = ref(''), matrixSaving = ref(false), pending = ref({}), impact = ref(null)
 const firms = ref([])
 async function loadMatrix() { matrixLoading.value = true; matrixError.value = ''; try { [matrix.value, firms.value] = await Promise.all([api(`/customers/${selectedCustomer.value.id}/scope`), api('/accounting-firms')]) } catch (error) { matrixError.value = error.message } finally { matrixLoading.value = false } }
-function closeMatrix() { matrixOpen.value = false; pending.value = {}; impact.value = null }
+// 抽屜按段分頁（香港公司、澳門公司、內地公司、車牌、收費方式），不用一直往下捲
+const matrixTab = ref('')
+const matrixTabs = computed(() => [...(matrix.value?.sections || []).filter(section => section.owners.length).map(section => ({ value: section.category, label: `${section.label}（${section.owners.length}）` })), ...(selectedCustomer.value?.is_self ? [] : [{ value: 'prices', label: '收費方式' }])])
+watch(matrixTabs, tabs => { if (!tabs.some(tab => tab.value === matrixTab.value)) matrixTab.value = tabs[0]?.value || '' })
+// 有未提交的改動時，關閉前先問
+async function closeMatrix() {
+  const count = Object.keys(pending.value).length
+  if (count && !await confirm({ title: '放棄未提交的改動？', message: `還有 ${count} 格改動沒有提交，關閉後會放棄。`, confirmText: '放棄並關閉', danger: true })) return
+  matrixOpen.value = false; pending.value = {}; impact.value = null
+}
 // 一格可代表多件事（車牌小組），逐件累計；改回原值就從待提交移除
 function setMatrix(owner, codes, handler) {
   const next = { ...pending.value }
@@ -195,16 +237,25 @@ const outsourcedItems = computed(() => [...new Set(Object.values(pending.value).
 const providerFor = item => Object.values(pending.value).find(change => change.item === item && change.handler === 'outsourced')?.providerName || ''
 function setFirm(id) { const firm = firms.value.find(item => item.id === id); pending.value = Object.fromEntries(Object.entries(pending.value).map(([key, change]) => [key, change.item === 'monthly_filing' && change.handler === 'outsourced' ? { ...change, providerId: firm?.id, providerName: firm?.name || '' } : change])) }
 function setProvider(item, value) { pending.value = Object.fromEntries(Object.entries(pending.value).map(([key, change]) => [key, change.item === item && change.handler === 'outsourced' ? { ...change, providerName: value } : change])) }
+// 提交：先試算影響；有外包要填單位或有影響時打開確認框（外包單位在確認框內填），否則直接儲存
+const impactError = ref('')
+const missingProvider = computed(() => Object.values(pending.value).some(change => change.handler === 'outsourced' && !change.providerName?.trim()))
 async function reviewMatrix() {
-  if (Object.values(pending.value).some(change => change.handler === 'outsourced' && !change.providerName?.trim())) { matrixError.value = '外包須填寫單位名稱'; return }
-  matrixSaving.value = true; matrixError.value = ''
+  matrixSaving.value = true; matrixError.value = ''; impactError.value = ''
   try {
-    const result = await api('/service-scopes/batch', 'PUT', { changes: Object.values(pending.value), dryRun: true })
-    if (result.impact.toClient || result.impact.fromClient || result.impact.openRequests.length) impact.value = result.impact
+    // 試算時外包單位可能未填：影響只看是否「客戶自理」，外包與我們做相同，所以未填的先當我們做試算
+    const result = await api('/service-scopes/batch', 'PUT', { changes: Object.values(pending.value).map(change => change.handler === 'outsourced' && !change.providerName?.trim() ? { ...change, handler: 'us', providerName: '' } : change), dryRun: true })
+    if (outsourcedItems.value.length || result.impact.toClient || result.impact.fromClient || result.impact.openRequests.length) impact.value = result.impact
     else { matrixSaving.value = false; await saveMatrix() }
   } catch (error) { matrixError.value = error.message } finally { matrixSaving.value = false }
 }
-async function saveMatrix() { matrixSaving.value = true; matrixError.value = ''; try { await api('/service-scopes/batch', 'PUT', { changes: Object.values(pending.value) }); pending.value = {}; impact.value = null; await loadMatrix(); showSuccess('委託範圍已更新'); await refresh() } catch (error) { matrixError.value = error.message; impact.value = null } finally { matrixSaving.value = false } }
+async function saveMatrix() {
+  if (missingProvider.value) { impactError.value = '請填寫外包單位'; return }
+  matrixSaving.value = true; impactError.value = ''
+  try { await api('/service-scopes/batch', 'PUT', { changes: Object.values(pending.value) }); pending.value = {}; impact.value = null; await loadMatrix(); showSuccess('委託範圍已更新'); await refresh() }
+  catch (error) { if (impact.value) impactError.value = error.message; else matrixError.value = error.message }
+  finally { matrixSaving.value = false }
+}
 // 事項清單：勾選後先預覽影響，確認才寫入
 const itemsSection = ref(null), itemsChecked = ref({}), itemsPreview = ref(null), itemsBusy = ref(false), itemsError = ref('')
 function openItems(section) { itemsSection.value = section; itemsChecked.value = Object.fromEntries([...section.items.map(item => [item.code, true]), ...section.available.map(item => [item.code, false])]); itemsPreview.value = null; itemsError.value = '' }

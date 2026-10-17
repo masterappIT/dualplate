@@ -117,6 +117,14 @@
 .scope-board .scope-matrix-detail-group { display: grid; gap: 4px; min-width: 200px; }
 .scope-board .scope-matrix-detail-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .scope-board .scope-matrix-detail-item .scope-matrix-cell { width: auto; padding: 4px 0; }
+/* 每格的下拉：左邊色條標出誰做（綠＝我們做、藍＝外包、灰＝客戶自理、橙＝混合），下面一行寫外包單位 */
+.scope-matrix-choice { display: grid; gap: 4px; width: 100%; min-width: 0; padding-left: 8px; border-left: 3px solid var(--status-muted); }
+.scope-matrix-choice.is-us { border-left-color: var(--status-ok); }
+.scope-matrix-choice.is-outsourced { border-left-color: var(--status-progress); }
+.scope-matrix-choice.is-mixed { border-left-color: var(--status-due); }
+.scope-matrix-choice .select-trigger { width: 100%; }
+.scope-matrix-choice small { color: var(--ink-2); font-size: 12px; overflow-wrap: anywhere; }
+.scope-board .scope-matrix-detail-item .scope-matrix-choice { width: 140px; }
 @media (max-width: 600px) {
   .scope-board .scope-matrix { min-width: 0; }
   .scope-board .scope-matrix-row { grid-template-columns: 1fr 1fr; }

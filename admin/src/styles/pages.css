@@ -112,6 +112,21 @@ body { background: var(--canvas); color: var(--ink); font-family: var(--font-bod
 .expiry-note-edit { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .expiry-note-edit input { flex: 1 1 200px; min-width: 0; }
 @media (max-width: 600px) { .company-card .company-card-title { flex-wrap: wrap; } }
+/* 套用委託範本：範本說明 → 按事項彙總的改動 → 收起的逐間明細 */
+.template-pick { display: grid; gap: 8px; margin-bottom: 16px; }
+.template-pick p { margin: 0; }
+.template-total, .template-none { margin: 0 0 8px; }
+.template-summary { display: grid; margin: 0 0 12px; padding: 0; list-style: none; border-top: 1px solid var(--border); }
+.template-summary li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.template-details summary { color: var(--primary); font-weight: 600; cursor: pointer; }
+.template-details { max-height: 280px; overflow-y: auto; }
+.template-owner { display: grid; gap: 2px; padding: 8px 0; border-bottom: 1px dashed var(--rule); }
+.template-owner span { color: var(--ink-2); font-size: 12px; }
+@media (max-width: 600px) { .template-summary li { grid-template-columns: minmax(0, 1fr) auto; }.template-summary li > span:last-child { grid-column: 1 / -1; } }
+/* 委託範圍抽屜：分段頁籤；確認框內的外包單位欄 */
+.matrix-tabs { margin-bottom: 16px; max-width: 100%; overflow-x: auto; }
+.scope-providers { display: grid; gap: 12px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.scope-providers p { margin: 0; }
 /* 一次記收款彈窗：所選收費清單（描述左、未收金額右） */
 .fee-batch-list { display: grid; max-height: 240px; overflow-y: auto; margin: 0 0 16px; padding: 0; list-style: none; border-top: 1px solid var(--border); }
 .fee-batch-list li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
