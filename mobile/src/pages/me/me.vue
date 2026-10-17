@@ -1,7 +1,6 @@
 <template>
   <view class="page me">
-    <text class="page-title">{{ user?.name || '我的' }}</text>
-    <text class="subtle">{{ account }}</text>
+    <view class="profile-head" @click="goProfile"><view class="grow"><text class="page-title">{{ user?.name || '我的' }}</text><text class="subtle">{{ account }}</text></view><text class="link">我的資料 ›</text></view>
     <view class="card menu">
       <view class="menu-row" @click="goDeadlines"><text class="menu-name">到期提醒</text><text class="chev">›</text></view>
       <view class="menu-row" @click="goNotices"><text class="menu-name">通知</text><text v-if="unread" class="pill amber num">{{ unread }} 則未讀</text><text class="chev">›</text></view>
@@ -41,6 +40,7 @@ const account=computed(()=>{const email=user.value?.email||'';return email.endsW
 async function load(){user.value=getUser();if(!user.value)return uni.navigateTo({url:'/pages/login/login'});try{const [list,overview,plateList]=await Promise.all([api('/requests'),api('/my/overview'),api('/plate-assets')]);requests.value=list;plates.value=plateList;advisor.value=overview.advisor;unread.value=overview.unreadNotifications||0;api('/my/fees').then(r=>{unpaid.value=Object.keys(r.outstanding||{}).length>0}).catch(()=>{})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
 // 辦理記錄一律用內地車牌標識，與首頁一致
 function plateOf(item){return plates.value.find(p=>p.id===item.plate_asset_id)?.mainland_plate||''}
+function goProfile(){uni.navigateTo({url:'/pages/profile/profile'})}
 function goTerms(){uni.navigateTo({url:'/pages/terms/terms'})}
 function openRequest(id){uni.navigateTo({url:'/pages/request-detail/request-detail?id='+id})}
 function newRequest(){startRequest('')}
@@ -52,6 +52,7 @@ async function logout(){if(await confirmBox.ask({title:'退出登入',msg:'確�
 onShow(load)
 </script>
 <style scoped>
+.profile-head{display:flex;align-items:center;gap:12px}
 .menu{margin-top:16px;padding:0 16px}
 .menu-row{display:flex;align-items:center;gap:8px;min-height:52px;border-bottom:1px solid var(--rule)}.menu-row:last-child{border-bottom:0}
 .menu-name{flex:1;font-size:var(--fs-h);font-weight:700;color:var(--ink)}

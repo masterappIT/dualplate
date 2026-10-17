@@ -90,6 +90,12 @@
       "style": {
         "navigationBarTitleText": "服務條款及私隱聲明"
       }
+    },
+    {
+      "path": "pages/profile/profile",
+      "style": {
+        "navigationBarTitleText": "我的資料"
+      }
     }
   ],
   "tabBar": {

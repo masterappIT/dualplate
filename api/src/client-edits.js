@@ -26,10 +26,14 @@ const specs = {
   plate: { table: 'plate_assets', fields: { mainlandPlate: ['mainland_plate', '內地車牌號'], localPlate: ['local_plate', '香港／澳門車牌號'], installationStatus: ['installation_status', '上牌狀態'], vehicleId: ['vehicle_id', '綁定車輛'], cardExpiresOn: ['card_expires_on', '批文卡有效期至', true], notes: ['notes', '備註'], cardNumber: ['card_number', '批文卡編號'] } },
   company: { table: 'companies', fields: { name: ['name', '公司名稱'], nameEn: ['name_en', '英文名稱'], registrationNo: ['registration_no', '登記號碼'], companyNumber: ['company_number', '公司編號'], incorporatedOn: ['incorporated_on', '成立日期', true], taxpayerType: ['taxpayer_type', '納稅人類型'] } },
   vehicle: { table: 'vehicles', fields: { plate: ['plate', '車牌'], brand: ['brand', '品牌'], model: ['model', '型號'], vin: ['vin', '車架號碼'], manufacturedYear: ['manufactured_year', '製造年份'], firstRegisteredOn: ['first_registered_on', '首次登記日期', true] } },
-  driver: { table: 'drivers', fields: { name: ['name', '姓名'], phone: ['phone', '電話'], hkIdNo: ['hk_id_no', '香港身份證號碼'], homeReturnPermitNo: ['home_return_permit_no', '回鄉證號碼'] } }
+  driver: { table: 'drivers', fields: { name: ['name', '姓名'], phone: ['phone', '電話'], hkIdNo: ['hk_id_no', '香港身份證號碼'], homeReturnPermitNo: ['home_return_permit_no', '回鄉證號碼'] } },
+  // 委託人資料（我的資料，2026-10-18）：名稱會用在合約和帳單，所以改了也要管理者核對
+  customer: { table: 'customers', fields: { name: ['name', '委託人名稱'], kind: ['kind', '類型'], phone: ['phone', '聯絡電話'] } }
 }
+// 沒有 updated_at 欄的資料表
+const noUpdatedAt = new Set(['vehicles', 'customers'])
 const registrationLabel = jurisdiction => jurisdiction === '內地' ? '統一社會信用代碼' : jurisdiction === '澳門' ? '商業登記編號' : '商業登記號碼'
-const entityName = { card: '批文卡', plate: '牌照', company: '公司', vehicle: '車輛', driver: '司機' }
+const entityName = { card: '批文卡', plate: '牌照', company: '公司', vehicle: '車輛', driver: '司機', customer: '委託人資料' }
 
 export const plateLabel = plate => plate.mainland_plate || plate.local_plate || `批文卡 ${plate.card_number || ''}`.trim()
 const vehicleText = vehicleId => vehicleId ? db.prepare('SELECT plate FROM vehicles WHERE id=?').get(vehicleId)?.plate || '' : '未綁定'
@@ -38,6 +42,7 @@ function labelOf(type, row) {
   if (type === 'card' || type === 'plate') return plateLabel(row)
   if (type === 'company') return row.name
   if (type === 'vehicle') return row.plate
+  if (type === 'customer') return row.name
   return `司機 ${row.name}`
 }
 
@@ -96,7 +101,7 @@ function writeField(change, value) {
   const { table, fields } = specs[type], column = fields[field][0]
   const stored = column === 'manufactured_year' ? (value === '' ? null : Number(value)) : column === 'name_en' ? value : value === '' && !['name', 'plate'].includes(column) ? null : value
   db.prepare(`UPDATE ${table} SET ${column}=? WHERE id=?`).run(stored, change.entity_id)
-  if (table !== 'vehicles') db.prepare(`UPDATE ${table} SET updated_at=? WHERE id=?`).run(now(), change.entity_id)
+  if (!noUpdatedAt.has(table)) db.prepare(`UPDATE ${table} SET updated_at=? WHERE id=?`).run(now(), change.entity_id)
 }
 // 改回前檢查：改回後的資料仍要合乎原本的規則
 function revertProblem(change, row) {
@@ -171,7 +176,7 @@ export async function changeReviewRoutes(req, res, url, user, { json, fail, pars
     markCardChecked(change, user)
     db.exec('COMMIT')
   } catch (error) { db.exec('ROLLBACK'); throw error }
-  notify({ tenantId: tenant, customerId: change.customer_id, kind: 'change_reverted', title: `顧問已把「${change.field_label}」改回原來的資料`, body: `${change.entity_label}：${change.after_text || '（空白）'} → ${change.before_text || '（空白）'}。如有疑問請聯絡你的顧問。`, link: ['card', 'plate'].includes(change.entity_type) ? `/pages/plate-detail/plate-detail?id=${change.entity_id}` : change.entity_type === 'company' ? '/pages/companies/companies' : '', dedupeKey: `change_reverted:${change.id}` })
+  notify({ tenantId: tenant, customerId: change.customer_id, kind: 'change_reverted', title: `顧問已把「${change.field_label}」改回原來的資料`, body: `${change.entity_label}：${change.after_text || '（空白）'} → ${change.before_text || '（空白）'}。如有疑問請聯絡你的顧問。`, link: ['card', 'plate'].includes(change.entity_type) ? `/pages/plate-detail/plate-detail?id=${change.entity_id}` : change.entity_type === 'company' ? '/pages/companies/companies' : change.entity_type === 'customer' ? '/pages/profile/profile' : '', dedupeKey: `change_reverted:${change.id}` })
   return json(res, 200, changeView({ ...pendingRow(change.id), customer_name: '' })), true
 }
 
@@ -181,7 +186,7 @@ export async function clientEditRoutes(req, res, url, user, { json, fail, parseB
   const companyMatch = path.match(/^\/api\/my\/companies\/([^/]+)$/)
   const vehicleMatch = path.match(/^\/api\/my\/vehicles\/([^/]+)$/)
   const driverMatch = path.match(/^\/api\/my\/drivers\/([^/]+)$/)
-  const known = path === '/api/my/pending' || path === '/api/my/drivers' || path === '/api/my/dates' || companyMatch || vehicleMatch || driverMatch
+  const known = path === '/api/my/pending' || path === '/api/my/drivers' || path === '/api/my/dates' || path === '/api/my/profile' || path === '/api/my/profile/name' || path === '/api/my/customer' || companyMatch || vehicleMatch || driverMatch
   if (!known) return false
   if (user.role !== 'customer') return fail(res, 403, '此功能只供客戶使用'), true
   const tenant = user.tenant_id, customerId = user.customer_id
@@ -190,6 +195,16 @@ export async function clientEditRoutes(req, res, url, user, { json, fail, parseB
   if (path === '/api/my/pending') {
     if (method !== 'GET') return fail(res, 405, '不支援此操作'), true
     return json(res, 200, db.prepare("SELECT entity_type entityType, entity_id entityId, field FROM customer_changes WHERE tenant_id=? AND customer_id=? AND status='待核對'").all(tenant, customerId)), true
+  }
+  // 我的資料（2026-10-18）：登入帳號＋委託人資料＋同一委託人的其他登入（只列名字）
+  if (path === '/api/my/profile') {
+    if (method !== 'GET') return fail(res, 405, '不支援此操作'), true
+    const me = db.prepare('SELECT name,email,phone,wechat_openid FROM users WHERE id=?').get(user.id)
+    const customer = db.prepare('SELECT name,kind,phone FROM customers WHERE id=?').get(customerId)
+    const others = db.prepare('SELECT name FROM users WHERE customer_id=? AND tenant_id=? AND id<>? AND active=1 ORDER BY name').all(customerId, tenant, user.id)
+    // 系統建立帳號時，沒有電郵的會用內部佔位地址，不顯示給客戶
+    const email = me.email && !/@(phone|wechat)\.invalid$/i.test(me.email) ? me.email : ''
+    return json(res, 200, { me: { name: me.name, email, phone: me.phone || '', wechatBound: !!me.wechat_openid }, customer: { name: customer.name, kind: customer.kind, phone: customer.phone || '' }, otherLogins: others.map(row => row.name) }), true
   }
   if (path === '/api/my/drivers') {
     if (method !== 'GET') return fail(res, 405, '不支援此操作'), true
@@ -214,7 +229,7 @@ export async function clientEditRoutes(req, res, url, user, { json, fail, parseB
         changes.push({ field, label: extra.labels?.[field] || label, before: row[column], after: value, isDate })
         db.prepare(`UPDATE ${table} SET ${column}=? WHERE id=?`).run(value === '' && !['name', 'plate', 'name_en'].includes(column) ? null : column === 'manufactured_year' ? Number(value) : value, row.id)
       }
-      if (table !== 'vehicles') db.prepare(`UPDATE ${table} SET updated_at=? WHERE id=?`).run(now(), row.id)
+      if (!noUpdatedAt.has(table)) db.prepare(`UPDATE ${table} SET updated_at=? WHERE id=?`).run(now(), row.id)
       const updated = db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(row.id)
       logChanges({ tenantId: tenant, customerId, user, entityType: type, entityId: row.id, entityLabel: labelOf(type, updated), changes })
       db.exec('COMMIT')
@@ -222,6 +237,27 @@ export async function clientEditRoutes(req, res, url, user, { json, fail, parseB
     } catch (error) { db.exec('ROLLBACK'); throw error }
   }
 
+  if (path === '/api/my/profile/name') {
+    if (method !== 'PATCH') return fail(res, 405, '不支援此操作'), true
+    const { body, error } = await readBody(['name'])
+    if (error) return fail(res, 400, error), true
+    const name = clean(body.name, 60)
+    if (!name) return fail(res, 400, '顯示名稱不可為空'), true
+    db.prepare('UPDATE users SET name=? WHERE id=?').run(name, user.id)
+    return json(res, 200, { name }), true
+  }
+  if (path === '/api/my/customer') {
+    if (method !== 'PATCH') return fail(res, 405, '不支援此操作'), true
+    const customer = db.prepare('SELECT * FROM customers WHERE id=? AND tenant_id=?').get(customerId, tenant)
+    const { body, error } = await readBody(['name', 'kind', 'phone'])
+    if (error) return fail(res, 400, error), true
+    const next = {}
+    if (body.name !== undefined) { next.name = clean(body.name, 120); if (!next.name) return fail(res, 400, '委託人名稱不可為空'), true }
+    if (body.kind !== undefined) { if (!['個人', '公司'].includes(body.kind)) return fail(res, 400, '類型只可以是個人或公司'), true; next.kind = body.kind }
+    if (body.phone !== undefined) { if (body.phone.trim() && !/^\+?[\d\s-]{8,20}$/.test(body.phone.trim())) return fail(res, 400, '聯絡電話格式無效'), true; next.phone = clean(body.phone, 30) }
+    const updated = save('customer', customer, next)
+    return json(res, 200, { name: updated.name, kind: updated.kind, phone: updated.phone || '' }), true
+  }
   if (companyMatch) {
     if (method !== 'PATCH') return fail(res, 405, '不支援此操作'), true
     const company = db.prepare('SELECT * FROM companies WHERE id=? AND tenant_id=? AND customer_id=?').get(companyMatch[1], tenant, customerId)
