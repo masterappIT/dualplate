@@ -1,6 +1,8 @@
 <template>
   <view class="page plate-library">
     <text class="intro">名下 <text class="num">{{ plates.length }}</text> 個兩地牌。點擊查看到期、使用情況和辦理。</text>
+    <!-- 新增牌照放在最上方：批文卡多時，放在卡疊下面要捲很久才看得到 -->
+    <button class="btn-line add-plate" @click="addPlate">＋ 新增牌照</button>
     <view v-if="plates.length" class="segmented view-switch"><text class="seg" :class="{on:mode==='cards'}" @click="setMode('cards')">批文卡</text><text class="seg" :class="{on:mode==='list'}" @click="setMode('list')">列表</text></view>
     <view v-if="mode==='list' && plates.length">
       <input v-model="keyword" class="field search" placeholder="搜尋車牌、公司"/>
@@ -19,7 +21,6 @@
         <ApprovalCard :data="details[p.id]?.cardData || {}" :flip-on-tap="false" :tap-label="'單獨查看此批文卡'" @card-tap="selectPlate(p)"/>
       </view>
     </view>
-    <button class="btn-line add-plate" @click="addPlate">＋ 新增牌照</button>
     <view v-if="selectedPlate" class="wallet-overlay" @click="closeCard">
       <view class="wallet-focus" @click.stop>
         <view class="focus-head"><view class="plates"><PlateChip :plate="selectedPlate.mainland_plate" region="內地" /><PlateChip v-if="selectedPlate.local_plate" :plate="selectedPlate.local_plate" :region="selectedPlate.route==='粵澳'?'澳門':'香港'" /></view><button class="close-focus" aria-label="關閉批文卡預覽" @click="closeCard">×</button></view>
@@ -68,7 +69,7 @@ import PlateChip from '../../components/PlateChip.vue'
 <style scoped>
 .plates{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
 .view-switch{margin-bottom:16px}.search{margin-top:0}
-.add-plate{width:100%;margin-top:16px}
+.add-plate{width:100%;margin-bottom:16px}
 .empty-library{text-align:center;padding:24px 16px}
 .card-deck{position:relative;min-height:465rpx;margin:12rpx 0 9rpx}
 .deck-card{position:absolute;left:0;right:0;top:0;transform-origin:center bottom;transition:transform .35s cubic-bezier(.22,.67,.22,1);will-change:transform}
