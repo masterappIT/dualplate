@@ -66,6 +66,11 @@ button::after{border:0}
 .btn-line{background:var(--card);color:var(--jade);border:1px solid var(--rule);font-size:var(--fs-body);height:44px;line-height:42px}
 .primary[disabled],.secondary[disabled],.btn-sm[disabled],.btn-line[disabled]{opacity:.55}
 .field-label{display:block;color:var(--ink-2);font-size:var(--fs-body);font-weight:700;margin:16px 0 8px}
+/* 客戶自行修改的行內表單（牌照、司機、車輛、公司共用） */
+.inline-editor{display:flow-root;margin:4px 0 12px;padding:0 12px 12px;border-radius:var(--r-card);background:var(--paper)}
+.inline-editor .editor-actions{display:flex;gap:8px;margin-top:16px}.inline-editor .editor-actions .btn-sm{flex:1}
+.inline-editor .picker{display:flex;align-items:center;justify-content:space-between}
+.pending-tag{margin-top:4px}
 /* 輸入框用 16px，避免手機點擊時自動放大 */
 .field{width:100%;background:#fff;border:1px solid var(--rule);border-radius:var(--r-control);min-height:48px;padding:12px;font-size:var(--fs-h);color:var(--ink)}
 .field:focus{border-color:var(--jade);box-shadow:0 0 0 3px rgba(242,194,48,.45)}
