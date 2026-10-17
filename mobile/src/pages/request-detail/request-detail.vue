@@ -22,8 +22,12 @@
     <view class="section-head"><text class="section-title">辦理步驟</text><text class="subtle num">{{ item.tasks.length }} 步</text></view><view class="card list"><view v-for="(task,index) in item.tasks" :key="task.id" class="task"><view class="step" :class="task.status==='已完成'?'done':''">{{ task.status==='已完成'?'✓':index+1 }}</view><view class="grow"><text class="task-title">{{ todoTitle(task.title) }}</text><text class="line-sub">{{ task.jurisdiction }} · {{ task.status }}</text></view></view></view>
     <view v-if="selectedSources.length"><text class="section-title">官方依據</text><view class="card list"><view v-for="source in selectedSources" :key="source.id" class="official-row" @click="openSource(source.url)"><view class="grow"><text class="task-title">{{ source.title }}</text><text class="line-sub">{{ source.agency }} · 點擊複製官方連結</text></view><text class="chev">›</text></view></view></view>
   </view>
+  <wd-action-sheet custom-class="choice-sheet" v-model="sheet.show" :title="sheet.title" :actions="sheet.actions" cancel-text="取消" @select="onSelect" @close="onClose" />
+  <wd-message-box />
 </view></template>
 <script setup>
+import { useChoice,useConfirm } from '../../lib/choice'
+const { sheet,choose,onSelect,onClose }=useChoice(),confirmBox=useConfirm()
 import { ref,computed } from 'vue'
 import { onLoad,onShow } from '@dcloudio/uni-app'
 import { api,friendlyDate,pickPhotos,pickPdf,uploadAttachment,attachmentTone,attachmentLabel,requestTone,clientStage } from '../../lib/api'
@@ -45,15 +49,15 @@ function filesFor(taskId){return files.value.filter(f=>f.taskId===taskId)}
 function taskTitle(taskId){const task=(item.value?.tasks||[]).find(t=>t.id===taskId);return task?task.title+' · ':''}
 function sizeText(size){return size>=1048576?(size/1048576).toFixed(1)+' MB':Math.max(1,Math.round(size/1024))+' KB'}
 // 拍照／相簿或 PDF；逐份上傳，任何一份失敗都告訴客戶是哪一份
-function chooseUpload(taskId){uni.showActionSheet({itemList:['拍照或選相片','選擇 PDF 文件'],success:async({tapIndex})=>{
+async function chooseUpload(taskId){const tapIndex=await choose('上傳甚麼文件？',['拍照或選相片','選擇 PDF 文件']);if(tapIndex<0)return;{
   let picked=[];try{picked=tapIndex===0?await pickPhotos():await pickPdf()}catch(e){return uni.showToast({title:e.message,icon:'none'})}
   if(!picked.length)return
   uploading.value=true;let ok=0;const failed=[]
   for(const [index,file] of picked.entries()){uni.showLoading({title:`上傳中 ${index+1}/${picked.length}`,mask:true});try{await uploadAttachment(requestId,file,taskId);ok++}catch(e){failed.push(`${file.name}：${e.message}`)}}
   uni.hideLoading();uploading.value=false
-  if(failed.length)uni.showModal({title:ok?`已上傳 ${ok} 份，${failed.length} 份未成功`:'上傳未成功',content:failed.join('\n'),showCancel:false})
+  if(failed.length)confirmBox.notice({title:ok?`已上傳 ${ok} 份，${failed.length} 份未成功`:'上傳未成功',msg:failed.join('\n')})
   else uni.showToast({title:`已上傳 ${ok} 份`,icon:'success'})
-  loadFiles()}})}
+  loadFiles()}}
 async function loadFiles(){try{files.value=await api('/my/requests/'+requestId+'/attachments')}catch{files.value=[]}}
 let requestId=''
 async function load(){if(!requestId)return;try{const [record,catalog]=await Promise.all([api('/requests/'+requestId),api('/catalog')]);item.value=record;sources.value=catalog.sources;loadFiles()}catch(e){uni.showToast({title:e.message,icon:'none'})}}

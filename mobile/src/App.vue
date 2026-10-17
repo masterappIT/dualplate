@@ -17,6 +17,11 @@ page{
   /* Wot Design Uni 主題：只用它的操作與組件行為，外觀換成本產品 */
   --wot-color-theme:#0F5C4A;--wot-color-success:#2E7D52;--wot-color-warning:#C47A00;--wot-color-danger:#C2362A;
   --wot-button-medium-radius:4px;--wot-button-large-radius:4px;--wot-button-small-radius:4px;
+  /* 底部選單與確認框：紙色卡面、通行綠字、與「有變動？」等選單同一外觀 */
+  --wot-action-sheet-bg:var(--card);--wot-action-sheet-radius:12px;--wot-action-sheet-color:var(--ink);--wot-action-sheet-fs:16px;--wot-action-sheet-weight:700;--wot-action-sheet-action-height:56px;
+  --wot-action-sheet-subname-color:var(--ink-2);--wot-action-sheet-subname-fs:13px;--wot-action-sheet-title-fs:18px;--wot-action-sheet-title-height:56px;
+  --wot-action-sheet-cancel-bg:var(--jade-soft);--wot-action-sheet-cancel-color:var(--jade);--wot-action-sheet-cancel-radius:4px;--wot-action-sheet-cancel-height:44px;--wot-action-sheet-active-color:var(--paper);
+  --wot-message-box-bg:var(--card);--wot-message-box-radius:12px;--wot-message-box-title-color:var(--ink);--wot-message-box-title-fs:18px;--wot-message-box-content-color:var(--ink-2);--wot-message-box-content-fs:14px;
   background:var(--paper);color:var(--ink);font-size:var(--fs-body);line-height:1.5;
   font-family:-apple-system,BlinkMacSystemFont,'PingFang TC','Microsoft JhengHei','Noto Sans TC','PingFang SC',sans-serif
 }
@@ -95,4 +100,13 @@ button::after{border:0}
 .primary:active,.secondary:active,.btn-sm:active,.btn-line:active{opacity:.9;transform:scale(.985)}
 @media screen and (min-width:780px){.page{max-width:640px;margin:0 auto;padding:32px 24px 120px}}
 @media (prefers-reduced-motion:reduce){.primary,.secondary,.btn-sm,.btn-line,.card,.field,.list-card,.chip{transition:none}}
+/* Wot 底部選單（lib/choice.js）：選項做成左對齊的卡片，說明放第二行，與線框圖一致 */
+.choice-sheet.wd-action-sheet .wd-action-sheet__header{padding:0 48px 0 16px;text-align:left;font-weight:800;color:var(--ink)}
+.choice-sheet.wd-action-sheet .wd-action-sheet__actions{padding:4px 16px 8px}
+.choice-sheet.wd-action-sheet .wd-action-sheet__action{height:auto;min-height:48px;margin-bottom:8px;padding:12px 14px;line-height:1.4;text-align:left;white-space:normal;border:1px solid var(--rule);border-radius:var(--r-card)}
+.choice-sheet.wd-action-sheet .wd-action-sheet__name{display:block;font-size:var(--fs-h);font-weight:700;color:var(--ink)}
+.choice-sheet.wd-action-sheet .wd-action-sheet__subname{display:block;margin:4px 0 0;font-size:var(--fs-meta);font-weight:400;line-height:1.5;color:var(--ink-2)}
+.choice-sheet.wd-action-sheet .wd-action-sheet__cancel{width:calc(100% - 32px);margin:0 16px 16px}
+/* 桌面寬度時，選單和確認框跟頁面同寬（640px）置中，不鋪滿整個視窗 */
+@media screen and (min-width:780px){.wd-popup.wd-action-sheet__popup{left:0;right:0;width:640px;margin:0 auto}}
 </style>

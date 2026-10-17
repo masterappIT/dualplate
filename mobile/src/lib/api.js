@@ -32,14 +32,15 @@ function openTerms(force) {
   setTimeout(() => { termsOpening = false }, 1500)
   force ? uni.reLaunch({ url: '/pages/terms/terms' }) : uni.navigateTo({ url: '/pages/terms/terms' })
 }
-export async function checkTerms() {
+// ask：頁面的 Wot 確認框（lib/choice.js useConfirm().ask），不用系統原生對話框
+export async function checkTerms(ask) {
   if (!getUser() || termsPrompted) return
   try {
     const terms = await api('/my/terms')
     if (!terms.published || terms.accepted) return
     termsPrompted = true
     if (terms.mode === 'force') return openTerms(true)
-    uni.showModal({ title: '服務條款已更新', content: '請查看並同意最新的服務條款及私隱聲明。', confirmText: '查看', cancelText: '稍後', success: r => { if (r.confirm) openTerms(false) } })
+    if (ask && await ask({ title: '服務條款已更新', msg: '請查看並同意最新的服務條款及私隱聲明。', ok: '查看', cancel: '稍後' }) === 'confirm') openTerms(false)
   } catch { /* 網絡問題時下次再提示 */ }
 }
 // Shared wording and colours for deadline states on the client screens.

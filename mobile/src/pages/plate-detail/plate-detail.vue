@@ -5,7 +5,7 @@
     <view v-for="p in plates" :key="p.id">
       <!-- 頁首：車牌＋整體狀態；批文卡平時收起，點「批文卡」才打開 -->
       <view class="head">
-        <view class="head-plates"><PlateChip :plate="p.mainland_plate || summary.mainlandPlate" region="內地" size="lg" /><PlateChip v-if="p.local_plate" :plate="p.local_plate" :region="p.route==='粵澳'?'澳門':'香港'" size="lg" /><text v-if="summary.health" class="pill" :class="healthTone[summary.health]">{{ healthLabel[summary.health] }}</text></view>
+        <view class="head-plates"><PlateChip :plate="p.mainland_plate || summary.mainlandPlate" region="內地" size="lg" /><PlateChip v-if="p.local_plate" :plate="p.local_plate" :region="p.route==='粵澳'?'澳門':'香港'" size="lg" /><text v-if="clientTodoCount" class="pill amber">{{ clientTodoCount }} 項待辦</text><text v-else-if="summary.health" class="pill" :class="healthTone[summary.health]">{{ healthLabel[summary.health] }}</text></view>
         <text class="subtle head-sub">{{ [p.route+'兩地牌', summary.holder].filter(Boolean).join(' · ') }}</text>
       </view>
       <text v-if="summary.id" class="link head-card" @click="openFold('card')">{{ p.card_expires_on ? '批文有效期至 '+p.card_expires_on+' · ' : '' }}批文卡 ›</text>
@@ -160,16 +160,20 @@
       </view>
     </view>
     <text v-if="!creating && summary.id && !plates[0]?.stopped_on" class="link stop-link" @click="openSelf('stop_renewal')">不再續期這個牌照 ›</text>
+    <wd-action-sheet custom-class="choice-sheet" v-model="sheet.show" :title="sheet.title" :actions="sheet.actions" cancel-text="取消" @select="onSelect" @close="onClose" />
+    <wd-message-box />
   </view>
 </template>
 <script setup>
 import { ref,computed,nextTick } from 'vue'
 import { onLoad,onShow } from '@dcloudio/uni-app'
+import { useChoice,useConfirm } from '../../lib/choice'
 import { api,getUser,startRequest,requestTone,clientStage,detailText,selfHandled,money,cardPhoto,viewCardOriginal,forgetCardOriginal,viewVehicleDocument,daysLeft } from '../../lib/api'
 import PlateChip from '../../components/PlateChip.vue'
 import ApprovalCard from '../../components/ApprovalCard.vue'
 import MainlandPlate from '../../components/MainlandPlate.vue'
 import HongKongPlate from '../../components/HongKongPlate.vue'
+const { sheet,choose,onSelect,onClose }=useChoice(),confirmBox=useConfirm()
 const vehicles=ref([]),detail=ref({}),plates=ref([]),plateDetail=ref({}),sources=ref([])
 const crossingBusy=ref(false),justCrossed=ref(false),loaded=ref(false),cardBack=ref(false),allDeadlines=ref(false)
 const healthLabel={ok:'正常',due:'快到期',overdue:'已逾期',pending:'資料整理中'},healthTone={ok:'',due:'amber',overdue:'red',pending:'gray'}
@@ -201,7 +205,7 @@ function fieldStatusText(status){return status?.status==='uncertain'?'請核對'
 function fieldStatusClass(status){return status?.status==='failed'?'failed':'uncertain'}
 async function saveCard(p){const before=plateDetail.value[p.id]?.cardData||{},why=await askWhy(before,cardDraft.value);if(why===null)return;try{const updated=await api('/plate-assets/'+p.id,'PUT',{cardData:cardDraft.value});plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editingCardId.value='';summary.value=await api('/my/plates/'+p.id);loadPending();if(why)return openSelf(why.kind,why.newPlate);uni.showToast({title:'已更新，顧問會再核對',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}}
 // 上傳批文卡：先選正面或背面，再選「只保存正本」（資料不變，只留相片）或「上傳並讀取內容」（辨識、填入、標待核對）
-function uploadCard(p){uni.showActionSheet({itemList:['正面','背面'],success:choice=>{const side=choice.tapIndex===0?'front':'back';uni.showActionSheet({itemList:['只保存正本（資料不變）','上傳並讀取內容'],success:mode=>mode.tapIndex===0?saveCardOriginal(p,side):readCard(p,side)})}})}
+async function uploadCard(p){const face=await choose('上傳哪一面？',['正面','背面']);if(face<0)return;const side=face===0?'front':'back';const mode=await choose('怎樣處理這張相片？',[{title:'只保存正本',sub:'資料不變，只留相片記錄'},{title:'上傳並讀取內容',sub:'系統讀出卡上的文字填入，顧問會再核對'}]);if(mode===0)saveCardOriginal(p,side);else if(mode===1)readCard(p,side)}
 function saveCardOriginal(p,side){uni.chooseImage({count:1,sizeType:['original'],sourceType:['album','camera'],success:async result=>{uni.showLoading({title:'正在上傳',mask:true});try{const image=(await cardPhoto(result)).data;await api('/plate-assets/'+p.id+'/card/'+side,'POST',{image,recognize:false});forgetCardOriginal(p.id);const updated=await api('/plate-assets/'+p.id);plateDetail.value={...plateDetail.value,[p.id]:updated};uni.hideLoading();uni.showToast({title:'正本已保存，資料沒有改動',icon:'none'})}catch(e){uni.hideLoading();uni.showToast({title:e.message||'上傳失敗',icon:'none'})}}})}
 function readCard(p,side){uni.chooseImage({count:1,sizeType:['original'],sourceType:['album','camera'],success:async result=>{uni.showLoading({title:'正在上傳辨識',mask:true});try{const image=(await cardPhoto(result)).data;const before={...(plateDetail.value[p.id]?.cardData||{})};const response=await api('/plate-assets/'+p.id+'/card/'+side,'POST',{image});forgetCardOriginal(p.id);fieldStatus.value=response.fieldStatus||{};const updated=await api('/plate-assets/'+p.id);plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editCard(p);summary.value=await api('/my/plates/'+p.id);loadPending();uni.hideLoading();const why=await askWhy(before,response.cardData||{},true);if(why){editingCardId.value='';return openSelf(why.kind,why.newPlate)}uni.showToast({title:'已辨識，請核對欄位',icon:'none'})}catch(e){uni.hideLoading();uni.showToast({title:e.message||'上傳失敗',icon:'none'})}}})}
 // 上傳過的批文卡照片（正本）：有哪一面就看哪一面，預設打開目前翻到的那面
@@ -234,20 +238,24 @@ function openSelf(kind,newPlate='',extra={}){const query={plate:plateId,kind,...
 // 驗車、新批文備案：客戶自己辦好了，附相片標記，顧問再核對
 function markDone(item){openSelf(item.code==='inspection'?'inspection_done':item.code==='mo_vehicle_tax'?'tax_paid':'filing_done','',{period:item.period,name:item.name,label:item.detail||'',dueOn:item.dueOn||''})}
 // 「有變動？」（2026-10-18 管理者確認的線框圖）：取代頂部四個辦理按鈕和各處「修改…」，只問一條
-function askChanges(){uni.showActionSheet({itemList:['我已經自己辦好','請顧問幫我辦','資料有錯字'],success:c=>[doneSelf,askAdvisor,fixTypo][c.tapIndex]()})}
-function doneSelf(){const own=[['續期','renewal'],['換車','vehicle_change'],['換司機','driver_change'],...(plates.value[0]?.route==='粵港'?[['口岸變更','crossing_change']]:[]),['商號變更','company_change'],['補領批文卡','replacement']];uni.showActionSheet({itemList:own.map(x=>x[0]),success:c=>openSelf(own[c.tapIndex][1])})}
-function askAdvisor(){const list=[['續期','renewal'],['換車','vehicle_change'],['換司機','driver_change'],['其他','other']];uni.showActionSheet({itemList:list.map(x=>x[0]),success:c=>startRequest(list[c.tapIndex][1],summary.value.id)})}
-function fixTypo(){const p=plates.value[0];const list=[['批文卡內容',()=>{editCard(p);openFold('card')}],['牌照資料',()=>{showEdit.value=true;openFold('plate')}],...(boundVehicles.value.length?[['車輛資料',()=>{editingVehicleId.value='';editVehicle(boundVehicles.value[0]);openFold('vehicle')}]]:[]),...(summary.value.drivers?.length?[['司機資料',()=>openFold('drivers')]]:[])];uni.showActionSheet({itemList:list.map(x=>x[0]),success:c=>list[c.tapIndex][1]()})}
+const changeOptions=[{title:'我已經自己辦好',sub:'續期、換車、換司機、口岸或商號變更、補領，在這裏更新資料',run:()=>doneSelf()},{title:'請顧問幫我辦',sub:'開一張辦理申請，顧問會跟進',run:()=>askAdvisor()},{title:'資料有錯字',sub:'直接修改，顧問會再核對',run:()=>fixTypo()}]
+async function askChanges(){const i=await choose('這個牌照有甚麼變動？',changeOptions);if(i>=0)changeOptions[i].run()}
+async function doneSelf(){const own=[['續期','renewal'],['換車','vehicle_change'],['換司機','driver_change'],...(plates.value[0]?.route==='粵港'?[['口岸變更','crossing_change']]:[]),['商號變更','company_change'],['補領批文卡','replacement']];const i=await choose('你自己辦好了甚麼？',own.map(x=>x[0]));if(i>=0)openSelf(own[i][1])}
+async function askAdvisor(){const list=[['續期','renewal'],['換車','vehicle_change'],['換司機','driver_change'],['其他','other']];const i=await choose('請顧問幫你辦甚麼？',list.map(x=>x[0]));if(i>=0)startRequest(list[i][1],summary.value.id)}
+async function fixTypo(){const p=plates.value[0];const list=[['批文卡內容',()=>{editCard(p);openFold('card')}],['牌照資料',()=>{showEdit.value=true;openFold('plate')}],...(boundVehicles.value.length?[['車輛資料',()=>{editingVehicleId.value='';editVehicle(boundVehicles.value[0]);openFold('vehicle')}]]:[]),...(summary.value.drivers?.length?[['司機資料',()=>openFold('drivers')]]:[])];const i=await choose('要修改哪一項？',list.map(x=>x[0]));if(i>=0)list[i][1]()}
 // 其他資料平時收起；從別處（批文卡連結、下一件事、有錯字）打開時捲到該區
 const open=ref({})
 function toggle(key){open.value={...open.value,[key]:!open.value[key]}}
 function openFold(key){open.value={...open.value,[key]:true};nextTick(()=>setTimeout(()=>uni.pageScrollTo({selector:'#fold-'+key,duration:200}),50))}
+const clientTodoCount=computed(()=>(summary.value.deadlines||[]).filter(i=>['due','overdue'].includes(i.level)&&(i.handledBy==='you'||i.code==='crossing_90')).length)
 const levelWord={overdue:'已逾期',due:'快到期'}
 const deadlineSummary=computed(()=>{const list=deadlineList.value;if(!list.length)return summary.value.health==='pending'?'整理中':'半年內沒有';const urgent=list.filter(i=>['overdue','due'].includes(i.level));return list.length+' 項'+(urgent.length?' · '+urgent.length+' 項'+levelWord[urgent.some(i=>i.level==='overdue')?'overdue':'due']:'')})
 const crossingSummary=computed(()=>{const c=summary.value.crossing;return !c?.enabled?'未開啟':c.lastCrossedOn?'上次 '+c.lastCrossedOn:'未記錄過關日期'})
 const vehicleSummary=computed(()=>{const v=boundVehicles.value[0];if(!v)return '尚未登記車輛';const list=docs.value[v.id]?.documents||[];return v.plate+(list.length?' · 證件 '+list.filter(d=>d.uploaded).length+'/'+list.length+' 已上傳':'')})
-const driverSummary=computed(()=>{const list=summary.value.drivers||[];if(!list.length)return '未登記';const main=list.find(d=>d.role==='主')||list[0];return main.name+(list.length>1?' 等 '+list.length+' 人':'')})
-const usageSummary=computed(()=>{const s=summary.value;return s.rental?'使用安排：'+s.rental.renter:s.usageStatus==='自用'?'自用':s.installationStatus==='未上牌'?'空置（未上牌）':'確認中'})
+const driverSummary=computed(()=>{const list=summary.value.drivers||[];if(!list.length)return '未登記';const main=list.find(d=>d.role==='主')||list[0];return main.name+'（'+(main.role==='主'?'主':'副')+'）'+(list.length>1?' 等 '+list.length+' 人':'')})
+// 有使用安排時，摘要加最近一期使用費的收款狀態
+const paidWord=a=>{const list=a?.invoices||[];if(list.some(i=>i.status==='逾期'))return '有逾期未收';const last=[...list].sort((x,y)=>String(y.period).localeCompare(String(x.period)))[0];return !last?'未有使用費記錄':last.status==='已收'?'已收':last.status==='部分收'?'部分收到':'未到期'}
+const usageSummary=computed(()=>{const s=summary.value,active=arrangements.value.find(a=>a.status==='生效')||arrangements.value[0];if(active)return active.user.name+' · '+paidWord(active);return s.rental?'使用安排：'+s.rental.renter:s.usageStatus==='自用'?'自用':s.installationStatus==='未上牌'?'空置（未上牌）':'確認中'})
 const plateSummary=computed(()=>{const p=plates.value[0];return p?(p.installation_status==='待核對'?'確認中':p.installation_status)+' · '+boundVehicle(p):''})
 // 下一件要做的事：先逾期、再快到期（你自理的事項、90 天過關），然後是車輛登記和必要證件
 const nextBusy=ref(false)
@@ -265,7 +273,7 @@ const nextStep=computed(()=>{
 })
 async function runNext(){if(nextBusy.value||!nextStep.value)return;nextBusy.value=true;try{await nextStep.value.run()}finally{nextBusy.value=false}}
 // 回傳 true＝辦了變更、false＝之前填錯、null＝取消
-function askChange(what,change){return new Promise(resolve=>uni.showModal({title:what,content:'是自己辦了'+change+'，還是之前填錯？',confirmText:{換車:'辦了換車',換司機:'換了司機',續期:'辦了續期',口岸變更:'辦了變更',商號變更:'辦了變更',補領:'辦了補領'}[change],cancelText:'之前填錯',success:r=>resolve(r.confirm?true:r.cancel?false:null),fail:()=>resolve(null)}))}
+async function askChange(what,change){const r=await confirmBox.ask({title:what,msg:'是自己辦了'+change+'，還是之前填錯？',ok:{換車:'辦了換車',換司機:'換了司機',續期:'辦了續期',口岸變更:'辦了變更',商號變更:'辦了變更',補領:'辦了補領'}[change],cancel:'之前填錯'});return r==='confirm'?true:r==='cancel'?false:null}
 const driverNames=card=>['driver1','driver2','driver3'].map(k=>String(card[k]||'').trim()).filter(Boolean).sort().join('、')
 // 比較批文卡改動：港澳車牌→換車、駕駛人→換司機、有效期延後→續期。uploaded：新卡已存檔，只問不擋
 async function askWhy(before,after,uploaded=false){

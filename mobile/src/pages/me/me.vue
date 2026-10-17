@@ -23,9 +23,12 @@
       <view class="menu-row" @click="logout"><text class="menu-name">退出登入</text><text class="chev">›</text></view>
     </view>
     <WelcomeGuide v-if="guide" force @closed="guide=false" />
+    <wd-message-box />
   </view>
 </template>
 <script setup>
+import { useConfirm } from '../../lib/choice'
+const confirmBox=useConfirm()
 import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { api, getUser, clearSession, startRequest, requestTone, clientStage } from '../../lib/api'
@@ -45,7 +48,7 @@ function goNotices(){uni.navigateTo({url:'/pages/notifications/notifications'})}
 function goReports(){uni.navigateTo({url:'/pages/reports/reports'})}
 function goBilling(){uni.navigateTo({url:'/pages/billing/billing'})}
 function goDeadlines(){uni.navigateTo({url:'/pages/deadlines/deadlines'})}
-function logout(){uni.showModal({title:'退出登入',content:'確定要退出嗎？',success:result=>{if(result.confirm){clearSession();uni.navigateTo({url:'/pages/login/login'})}}})}
+async function logout(){if(await confirmBox.ask({title:'退出登入',msg:'確定要退出嗎？',ok:'退出',cancel:'取消'})!=='confirm')return;clearSession();uni.navigateTo({url:'/pages/login/login'})}
 onShow(load)
 </script>
 <style scoped>

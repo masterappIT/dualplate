@@ -24,13 +24,7 @@
     </view>
     <view v-else class="list-card"><text class="list-title">目前不用你做甚麼</text><text class="list-sub">我們負責的事項會按時跟進；需要你提供資料或確認時，會出現在這裏。</text></view>
 
-    <view class="section-head"><text class="section-title">我的牌照</text><text class="link" @click="goPlates('')">全部 ›</text></view>
-    <view v-for="p in data.plates" :key="p.id" class="list-card row" @click="openPlate(p.id)">
-      <view class="grow"><text class="list-title num">{{ [p.mainlandPlate, p.localPlate].filter(Boolean).join(' · ') || '車牌待補' }}</text><text class="list-sub">{{ plateSub(p) }}</text></view>
-      <text class="pill" :class="healthTone[p.health]">{{ plateTodoCount(p.id) ? plateTodoCount(p.id) + ' 項待辦' : healthLabel[p.health] }}</text>
-    </view>
-    <view v-if="!data.plates.length" class="list-card"><text class="list-title">還沒有牌照</text><text class="list-sub">拍下批文卡就能建檔。</text><text class="link add-plate" @click="addPlate">登記批文卡 ›</text></view>
-    <text v-if="data.plates.length" class="link all-deadlines" @click="goDeadlines">查看全部到期日 ›</text>
+    <text class="link all-deadlines" @click="goDeadlines">查看全部到期日 ›</text>
 
     <view v-if="data.activeRequests.length">
       <view class="section-head"><text class="section-title">辦理中</text><text class="link" @click="goMe">全部 ›</text></view>
@@ -42,9 +36,12 @@
     <button class="btn-line new-request" @click="newRequest">請顧問幫我辦</button>
 
     <WelcomeGuide />
+    <wd-message-box />
   </view>
 </template>
 <script setup>
+import { useConfirm } from '../../lib/choice'
+const confirmBox=useConfirm()
 import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { api, getUser, openPlate, startRequest, requestTone, clientStage, checkTerms } from '../../lib/api'
@@ -54,20 +51,18 @@ import WelcomeGuide from '../../components/WelcomeGuide.vue'
 const user=ref(getUser())
 const data=ref({unreadNotifications:0,advisor:null,customerName:'',counts:{pending:0,ok:0,due:0,overdue:0},plates:[],deadlines:[],todos:[],activeRequests:[]})
 const notices=ref([])
-async function load(){user.value=getUser();if(!user.value)return uni.navigateTo({url:'/pages/login/login'});checkTerms();try{const [overview,list]=await Promise.all([api('/my/overview'),api('/my/notifications').catch(()=>({items:[]}))]);data.value=overview;notices.value=list.items||[]}catch(e){uni.showToast({title:e.message,icon:'none'})}}
-// 待辦只放要客戶動手的：要你提供的資料、你自理（或要你過關）而快到期／已逾期的事項、未讀通知（到期通知已在清單內，不重複）
+async function load(){user.value=getUser();if(!user.value)return uni.navigateTo({url:'/pages/login/login'});checkTerms(confirmBox.ask);try{const [overview,list]=await Promise.all([api('/my/overview'),api('/my/notifications').catch(()=>({items:[]}))]);data.value=overview;notices.value=list.items||[]}catch(e){uni.showToast({title:e.message,icon:'none'})}}
+// 待辦只放要客戶動手的：要你提供的資料、你自理（或要你過關）而快到期／已逾期的事項、要你處理的未讀通知
+// 通知只有兩類要客戶動手：文件需重交、自辦更新被顧問退回；辦理進度、到期、改回等只是告知，留在鈴鐺
+const actionNotices=new Set(['attachment','self_handled_returned'])
 const clientAction=item=>['due','overdue'].includes(item.level)&&(item.handledBy==='you'||item.code==='crossing_90')
 const todoList=computed(()=>[
   ...data.value.todos.map((t,i)=>({key:'t'+i,title:t.title,subtitle:t.subtitle,requestId:t.requestId,urgent:true})),
   ...data.value.deadlines.filter(clientAction).map(d=>({key:'d'+d.code+d.ownerId+(d.period||''),title:d.name,subtitle:[d.ownerLabel,d.code==='crossing_90'?'過關後按「今天已過關」':d.markable?'辦好後按「已辦好」':'請你自行辦理'].filter(Boolean).join(' · '),deadline:d,plateId:d.plateId,urgent:d.level==='overdue'})),
-  ...notices.value.filter(n=>!n.read&&n.kind!=='deadline').map(n=>({key:'n'+n.id,title:n.title,subtitle:n.body,notice:n}))
+  ...notices.value.filter(n=>!n.read&&actionNotices.has(n.kind)).map(n=>({key:'n'+n.id,title:n.title,subtitle:n.body,notice:n,urgent:true}))
 ])
-const plateTodoCount=id=>todoList.value.filter(t=>t.plateId===id).length
-const healthLabel={ok:'正常',due:'快到期',overdue:'已逾期',pending:'資料整理中'},healthTone={ok:'',due:'amber',overdue:'red',pending:'gray'}
-// 我們負責的事項不要客戶動手：牌照列只說明下一個到期日
-function plateSub(p){const n=p.next;return n&&n.dueOn?n.name+' · '+n.dueOn:p.health==='pending'?'顧問正在整理資料':'半年內沒有到期'}
 function openTodo(item){if(item.requestId)return openRequest(item.requestId);if(item.notice){const n=item.notice;n.read=true;api('/my/notifications/read','POST',{id:n.id}).catch(()=>{});if(!n.link)return;const tabs=['/pages/index/index','/pages/vehicles/vehicles','/pages/companies/companies','/pages/me/me'];return tabs.includes(n.link)?uni.switchTab({url:n.link}):uni.navigateTo({url:n.link})}openDeadline(item.deadline)}
-function addPlate(){uni.navigateTo({url:'/pages/plate-create/plate-create'})}
+
 function goPlates(filter){uni.setStorageSync('plateFilter',filter||'');uni.switchTab({url:'/pages/vehicles/vehicles'})}
 function goCompanies(){uni.switchTab({url:'/pages/companies/companies'})}
 function goNotices(){uni.navigateTo({url:'/pages/notifications/notifications'})}
@@ -91,7 +86,7 @@ onShow(load)
 .status-tile.ok{color:var(--on-deep-ok)}.status-tile.due{color:var(--on-deep-due)}.status-tile.overdue{color:var(--on-deep-overdue)}
 .status-tile.zero{color:var(--on-deep-2)}
 .pending-note{display:block;margin-top:8px;color:var(--ink-3);font-size:var(--fs-meta);text-align:center}
-.new-request{width:100%;margin-top:16px}.all-deadlines{display:block;text-align:center;padding:8px 0}.add-plate{display:block;margin-top:8px}
+.new-request{width:100%;margin-top:16px}.all-deadlines{display:block;text-align:center;padding:8px 0}
 .req-meta{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:8px}.req-meta .list-sub{margin-top:0}
 .bell{position:relative;flex:none;width:40px;height:40px;border-radius:50%;background:var(--card);display:flex;align-items:center;justify-content:center}.bell-icon{width:20px;height:20px}
 .bell-dot{position:absolute;top:-4px;right:-6px;min-width:20px;height:20px;padding:0 4px;border-radius:99px;background:var(--plate-yellow);color:var(--jade-deep);font-size:var(--fs-cap);font-weight:800;line-height:18px;text-align:center;border:1px solid var(--jade-deep)}

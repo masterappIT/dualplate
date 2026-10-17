@@ -114,9 +114,13 @@
       </view>
       <button class="primary submit" :disabled="submitting||busy" @click="submit">{{ submitting ? '正在提交…' : submitText }}</button>
     </template>
+    <wd-action-sheet custom-class="choice-sheet" v-model="sheet.show" :title="sheet.title" :actions="sheet.actions" cancel-text="取消" @select="onSelect" @close="onClose" />
+    <wd-message-box />
   </view>
 </template>
 <script setup>
+import { useChoice,useConfirm } from '../../lib/choice'
+const { sheet,choose,onSelect,onClose }=useChoice(),confirmBox=useConfirm()
 import { ref,computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { api,cardPhoto,forgetCardOriginal } from '../../lib/api'
@@ -158,7 +162,7 @@ function setMain(index){drivers.value=drivers.value.map((d,i)=>({...d,role:i===i
 function addDriver(){drivers.value.push({name:'',role:drivers.value.some(d=>d.role==='主')?'副':'主',phone:'',dates:{}})}
 function uploadCard(side){uni.chooseImage({count:1,sizeType:['original'],sourceType:['album','camera'],success:async result=>{busy.value=true;try{const image=(await cardPhoto(result)).data;await api('/plate-assets/'+plateId.value+'/card/'+side,'POST',{image});forgetCardOriginal(plateId.value);uploaded.value={...uploaded.value,[side]:true};form.value=await api('/my/plates/'+encodeURIComponent(plateId.value)+'/self-handled/form');fillDefaults();uni.showToast({title:'已上傳，請核對下面的資料',icon:'none'})}catch(e){uni.showToast({title:e.message||'上傳失敗',icon:'none'})}finally{busy.value=false}}})}
 function addPhoto(){uni.chooseImage({count:1,sizeType:['original'],sourceType:['album','camera'],success:async result=>{busy.value=true;try{photos.value.push(await cardPhoto(result))}catch(e){uni.showToast({title:e.message||'相片讀取失敗',icon:'none'})}finally{busy.value=false}}})}
-function viewPhoto(index){uni.showActionSheet({itemList:['放大查看','移除這張'],success:choice=>{if(choice.tapIndex===0)uni.previewImage({urls:photos.value.map(p=>p.path),current:photos.value[index].path});else photos.value.splice(index,1)}})}
+async function viewPhoto(index){const i=await choose('這張相片',['放大查看','移除這張']);if(i===0)uni.previewImage({urls:photos.value.map(p=>p.path),current:photos.value[index].path});else if(i===1)photos.value.splice(index,1)}
 function body(){
   const base={kind:kind.value,handledOn:handledOn.value}
   if(kind.value==='stop_renewal')return{...base,reason:stop.value.reason,note:stop.value.note}
@@ -186,7 +190,7 @@ function problem(){
 }
 async function submit(){
   const message=problem();if(message)return uni.showToast({title:message,icon:'none'})
-  if(kind.value==='stop_renewal'){const ok=await new Promise(resolve=>uni.showModal({title:'確認不再續期？',content:'這個牌照會停止到期提醒，你的顧問會聯絡你確認。',confirmText:'確認',cancelText:'返回',success:r=>resolve(r.confirm)}));if(!ok)return}
+  if(kind.value==='stop_renewal'){const ok=await confirmBox.ask({title:'確認不再續期？',msg:'這個牌照會停止到期提醒，你的顧問會聯絡你確認。',ok:'確認',cancel:'返回'});if(ok!=='confirm')return}
   submitting.value=true
   try{await api('/my/plates/'+encodeURIComponent(plateId.value)+'/self-handled','POST',body());uni.showToast({title:kind.value==='stop_renewal'?'已記錄，顧問會聯絡你':marking.value?'已標記辦好，顧問會再核對':'已更新，顧問會再核對',icon:'none'});setTimeout(()=>uni.navigateBack({fail:()=>uni.redirectTo({url:'/pages/plate-detail/plate-detail?id='+encodeURIComponent(plateId.value)})}),700)}
   catch(e){uni.showToast({title:e.message,icon:'none'})}finally{submitting.value=false}

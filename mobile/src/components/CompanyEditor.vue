@@ -10,9 +10,12 @@
       <picker :range="taxpayerTypes" @change="form.taxpayerType=taxpayerTypes[Number($event.detail.value)]"><view class="field picker"><text>{{ form.taxpayerType || '選擇類型' }}</text><text class="chev">›</text></view></picker></template>
     <text class="subtle editor-note">修改後立即生效，你的顧問會再核對。</text>
     <view class="editor-actions"><button class="btn-sm" @click="emit('close')">取消</button><button class="btn-sm solid" :disabled="saving" @click="save">{{ saving ? '正在儲存…' : '儲存公司資料' }}</button></view>
+    <wd-message-box />
   </view>
 </template>
 <script setup>
+import { useConfirm } from '../lib/choice'
+const confirmBox=useConfirm()
 import { ref,computed } from 'vue'
 import { api } from '../lib/api'
 // 客戶自行修改公司資料：只送出該司法區有的欄位（納稅人類型只屬內地公司）
@@ -26,7 +29,7 @@ const regLabel=computed(()=>c.jurisdiction==='內地'?'統一社會信用代碼'
 function payload(){const f=form.value,body={name:f.name,registrationNo:f.registrationNo,incorporatedOn:f.incorporatedOn};if(c.jurisdiction==='香港')Object.assign(body,{nameEn:f.nameEn,companyNumber:f.companyNumber});if(c.jurisdiction==='內地'&&f.taxpayerType)body.taxpayerType=f.taxpayerType;return body}
 async function save(){if(saving.value)return;saving.value=true;try{await api('/my/companies/'+c.id,'PATCH',payload());uni.showToast({title:'已更新，顧問會再核對',icon:'none'});emit('saved')}catch(e){
   // 內地公司名稱有繁體字時，伺服器給出簡體建議，讓客戶一鍵套用
-  if(e.data?.suggestion)uni.showModal({title:'公司名稱要用簡體字',content:'建議改為：'+e.data.suggestion,confirmText:'套用',success:r=>{if(r.confirm)form.value.name=e.data.suggestion}})
+  if(e.data?.suggestion)confirmBox.ask({title:'公司名稱要用簡體字',msg:'建議改為：'+e.data.suggestion,ok:'套用',cancel:'不用'}).then(r=>{if(r==='confirm')form.value.name=e.data.suggestion})
   else uni.showToast({title:e.message,icon:'none'})
 }finally{saving.value=false}}
 </script>
