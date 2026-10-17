@@ -5,7 +5,8 @@
     <view class="card">
       <text class="step-title">第一步：拍下批文卡</text><text class="subtle">正面和背面各一張，光線充足、四角入鏡，辨識最準。</text>
       <view class="upload-actions"><button class="btn-sm" :disabled="busy" @click="pickCard('front')">{{ images.front?'✓ 已拍正面':'拍正面' }}</button><button class="btn-sm" :disabled="busy" @click="pickCard('back')">{{ images.back?'✓ 已拍背面':'拍背面' }}</button></view>
-      <text v-if="busy" class="subtle upload-note">正在辨識，請稍候…</text>
+      <text v-if="busy" class="subtle upload-note">正在壓縮和辨識照片，請稍候…</text>
+      <text v-else-if="images.front||images.back" class="more" @click="viewPhotos(images.front?'front':'back')">查看已拍的照片 ›</text>
       <text v-if="!images.front&&!images.back&&!showFields" class="more" @click="showFields=true">沒有照片？手動輸入 ›</text>
     </view>
     <view v-if="images.front||images.back||showFields" class="card preview"><text class="step-title">第二步：確認辨識結果</text><ApprovalCard :data="draft"/>
@@ -22,9 +23,9 @@
 </template>
 <script setup>
 import { ref,computed,watch } from 'vue'
-import { api,getUser } from '../../lib/api'
+import { api,getUser,cardPhoto } from '../../lib/api'
 import ApprovalCard from '../../components/ApprovalCard.vue'
-const route=ref('粵港'),draft=ref({}),images=ref({}),busy=ref(false),showFields=ref(false),fieldStatus=ref({})
+const route=ref('粵港'),draft=ref({}),images=ref({}),previews=ref({}),busy=ref(false),showFields=ref(false),fieldStatus=ref({})
 // 持牌公司：按批文卡的商號、內承單位找名下公司；找不到就只用名稱新建，之後在「我的公司」補資料
 const link=ref({groupId:null,groupName:'',companies:[],groups:[]}),groupId=ref('')
 const groupOptions=computed(()=>[{id:'',label:'按批文卡自動判斷'},...link.value.groups.map(g=>({id:g.id,label:g.name}))])
@@ -38,23 +39,12 @@ const holderText=computed(()=>{
 let linkTimer=0
 watch(()=>[route.value,draft.value.company,draft.value.contractor],()=>{clearTimeout(linkTimer);linkTimer=setTimeout(async()=>{try{link.value=await api('/my/plate-companies?route='+encodeURIComponent(route.value)+'&company='+encodeURIComponent(draft.value.company||'')+'&contractor='+encodeURIComponent(draft.value.contractor||''))}catch{}},400)},{immediate:true})
 const fields=[['cardNumber','批文卡編號'],['company','商號'],['contractor','內承單位'],['crossing','通行口岸'],['serial','卡面流水號'],['mainlandPlate','內地車牌號'],['localPlate','港澳車牌號'],['driver1','駕駛人 1'],['driver2','駕駛人 2'],['driver3','駕駛人 3'],['currentApproval','現批文號'],['previousApproval','原批文號'],['color','顏色'],['seats','座位／噸位'],['purpose','請予辦理'],['validFrom','有效期開始'],['validTo','有效期結束'],['notes','備註']].map(([key,label])=>({key,label,placeholder:key==='cardNumber'?'必填，按批文卡編號填寫':''}))
-async function imageData(result){
-  // #ifdef H5
-  const picked=result.tempFiles?.[0]?.file||result.tempFiles?.[0]
-  const blob=picked instanceof Blob?picked:await (await fetch(result.tempFilePaths[0])).blob()
-  if(blob.size>3500000)throw new Error('圖片不可超過 3.5 MB')
-  return await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('讀取圖片失敗'));reader.readAsDataURL(blob)})
-  // #endif
-  // #ifndef H5
-  const file=result.tempFilePaths[0]
-  const base64=await new Promise((resolve,reject)=>uni.getFileSystemManager().readFile({filePath:file,encoding:'base64',success:x=>resolve(x.data),fail:reject}))
-  return `data:${/\.png$/i.test(file)?'image/png':'image/jpeg'};base64,${base64}`
-  // #endif
-}
 function fieldStatusText(status){return status?.status==='uncertain'?'請核對':status?.status==='failed'?'未能辨識，請手動填寫':''}
 function fieldStatusClass(status){return status?.status==='failed'?'failed':'uncertain'}
-function pickCard(side){uni.chooseImage({count:1,sizeType:['original'],sourceType:['album','camera'],success:async result=>{busy.value=true;try{const image=await imageData(result);images.value={...images.value,[side]:image};const recognized=await api('/card-recognize','POST',{side,image});const next={...draft.value};for(const [key,value] of Object.entries(recognized.cardData||{}))if(value&&!next[key])next[key]=value;draft.value=next;fieldStatus.value={...fieldStatus.value,...(recognized.fieldStatus||{})};uni.showToast({title:'已辨識，請確認編號',icon:'none'})}catch(e){uni.showToast({title:e.message||'上傳失敗',icon:'none'})}finally{busy.value=false}}})}
+function pickCard(side){uni.chooseImage({count:1,sizeType:['original'],sourceType:['album','camera'],success:async result=>{busy.value=true;try{const photo=await cardPhoto(result),image=photo.data;images.value={...images.value,[side]:image};previews.value={...previews.value,[side]:photo.path};const recognized=await api('/card-recognize','POST',{side,image});const next={...draft.value};for(const [key,value] of Object.entries(recognized.cardData||{}))if(value&&!next[key])next[key]=value;draft.value=next;fieldStatus.value={...fieldStatus.value,...(recognized.fieldStatus||{})};uni.showToast({title:'已辨識，請確認編號',icon:'none'})}catch(e){uni.showToast({title:e.message||'上傳失敗',icon:'none'})}finally{busy.value=false}}})}
 async function create(){if(busy.value)return;const cardNumber=String(draft.value.cardNumber||'').trim();if(!cardNumber)return uni.showToast({title:images.value.front||images.value.back?'未能辨識編號，請手動填寫':'請先拍下批文卡',icon:'none'});const user=getUser();if(!user?.customerId)return uni.navigateTo({url:'/pages/login/login'});busy.value=true;try{const plate=await api('/plate-assets','POST',{customerId:user.customerId,route:route.value,cardData:{...draft.value,cardNumber},cardImages:images.value,groupId:groupId.value});uni.redirectTo({url:'/pages/plate-detail/plate-detail?id='+encodeURIComponent(plate.id)})}catch(e){uni.showToast({title:e.message||'建檔失敗',icon:'none'})}finally{busy.value=false}}
+// 預覽剛拍的照片，方便對照辨識結果
+function viewPhotos(side){const sides=['front','back'].filter(s=>previews.value[s]);uni.previewImage({urls:sides.map(s=>previews.value[s]),current:previews.value[side]||previews.value[sides[0]]})}
 function goRequests(){uni.navigateTo({url:'/pages/requests/requests?service=new_application'})}
 </script>
 <style scoped>

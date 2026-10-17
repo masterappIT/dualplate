@@ -57,6 +57,64 @@ export function privateImage(path) {
   })
 }
 
+// 批文卡照片：原圖多大都可以，上傳前在手機上壓縮成 JPEG（長邊最多 2400 像素、約 1.5 MB 內；伺服器上限 3.5 MB）。
+// 回傳 { data: 上傳用的 data URL, path: 可直接預覽的地址 }
+const CARD_EDGE = 2400, CARD_TARGET = 1500000
+const dataBytes = dataUrl => Math.floor((dataUrl.length - dataUrl.indexOf(',') - 1) * 3 / 4)
+export async function cardPhoto(result) {
+  // #ifdef H5
+  const picked = result.tempFiles?.[0]?.file || result.tempFiles?.[0]
+  const blob = picked instanceof Blob ? picked : await (await fetch(result.tempFilePaths[0])).blob()
+  const url = URL.createObjectURL(blob)
+  try {
+    const img = await new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = () => reject(new Error('這張照片無法讀取，請改用相機拍攝或選 JPG、PNG 照片')); image.src = url })
+    const longest = Math.max(img.naturalWidth, img.naturalHeight)
+    let edge = Math.min(CARD_EDGE, longest), quality = 0.88, data = ''
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const scale = edge / longest, canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale)); canvas.height = Math.max(1, Math.round(img.naturalHeight * scale))
+      const context = canvas.getContext('2d'); context.fillStyle = '#fff'; context.fillRect(0, 0, canvas.width, canvas.height); context.drawImage(img, 0, 0, canvas.width, canvas.height)
+      data = canvas.toDataURL('image/jpeg', quality)
+      if (dataBytes(data) <= CARD_TARGET) break
+      if (quality > 0.7) quality -= 0.06; else edge = Math.round(edge * 0.8)
+    }
+    return { data, path: data }
+  } finally { URL.revokeObjectURL(url) }
+  // #endif
+  // #ifndef H5
+  const source = result.tempFilePaths[0]
+  const info = await new Promise((resolve, reject) => uni.getImageInfo({ src: source, success: resolve, fail: () => reject(new Error('這張照片無法讀取，請重新拍攝')) }))
+  const wide = info.width >= info.height, longest = Math.max(info.width, info.height)
+  let path = source, data = ''
+  for (const quality of [80, 60, 40]) {
+    path = await new Promise((resolve, reject) => uni.compressImage({ src: source, quality, ...(longest > CARD_EDGE ? (wide ? { compressedWidth: CARD_EDGE } : { compressedHeight: CARD_EDGE }) : {}), success: r => resolve(r.tempFilePath), fail: () => reject(new Error('照片壓縮失敗，請重新拍攝')) }))
+    data = 'data:image/jpeg;base64,' + await readBase64(path)
+    if (dataBytes(data) <= CARD_TARGET) break
+  }
+  return { data, path }
+  // #endif
+}
+// 看上傳的批文卡正本：拿回伺服器存的照片，用系統圖片檢視器打開（可放大、左右滑看正反面）
+export async function viewCardOriginal(plateId, sides, current) {
+  uni.showLoading({ title: '正在載入', mask: true })
+  try {
+    const urls = []
+    for (const side of sides) {
+      const data = await privateImage(`/plate-assets/${encodeURIComponent(plateId)}/image/card-${side}`)
+      // #ifdef H5
+      urls.push(data)
+      // #endif
+      // #ifndef H5
+      const path = `${wx.env.USER_DATA_PATH}/card-${plateId}-${side}.jpg`
+      await new Promise((resolve, reject) => uni.getFileSystemManager().writeFile({ filePath: path, data: data.slice(data.indexOf(',') + 1), encoding: 'base64', success: resolve, fail: () => reject(new Error('圖片載入失敗')) }))
+      urls.push(path)
+      // #endif
+    }
+    uni.hideLoading()
+    uni.previewImage({ urls, current: urls[Math.max(0, sides.indexOf(current))] })
+  } catch (e) { uni.hideLoading(); uni.showToast({ title: e.message || '圖片載入失敗', icon: 'none' }) }
+}
+
 // ── 第 15 輪：上傳文件、顧問、通知 ──
 export const MAX_UPLOAD = 5 * 1024 * 1024
 // 選相片（相機或相簿）；回傳 [{ name, path, size }]

@@ -38,7 +38,7 @@
       <view class="card approval">
         <ApprovalCard :key="p.id" :data="displayCardData(p)" :back="cardBack" :flip-on-tap="false" :tap-label="cardBack ? '翻到批文卡正面' : '翻到批文卡背面'" @card-tap="cardBack=!cardBack"/>
         <view class="segmented flip-switch"><text class="seg" :class="{on:!cardBack}" @click="cardBack=false">正面</text><text class="seg" :class="{on:cardBack}" @click="cardBack=true">背面</text></view>
-        <view class="card-actions"><button class="btn-sm" @click="editCard(p)">修改內容</button><button class="btn-sm" @click="uploadCard(p)">上傳新批文卡</button></view>
+        <view class="card-actions"><button v-if="originalSides(p).length" class="btn-sm" @click="viewOriginal(p)">查看正本</button><button class="btn-sm" @click="editCard(p)">修改內容</button><button class="btn-sm" @click="uploadCard(p)">上傳新批文卡</button></view>
         <view v-if="editingCardId===p.id" class="card-editor">
           <view v-for="field in cardFields" :key="field.key"><text class="field-label">{{ field.label }}<text v-if="fieldStatusText(fieldStatus[field.key])" class="field-status" :class="fieldStatusClass(fieldStatus[field.key])">{{ fieldStatusText(fieldStatus[field.key]) }}</text></text><input class="field" v-model="cardDraft[field.key]" :placeholder="field.label"/></view>
           <view class="editor-actions"><button class="btn-sm" @click="editingCardId=''">取消</button><button class="btn-sm solid" @click="saveCard(p)">儲存批文卡內容</button></view>
@@ -119,7 +119,7 @@
 <script setup>
 import { ref,computed } from 'vue'
 import { onLoad,onShow } from '@dcloudio/uni-app'
-import { api,getUser,startRequest,requestTone,clientStage,detailText,selfHandled,money } from '../../lib/api'
+import { api,getUser,startRequest,requestTone,clientStage,detailText,selfHandled,money,cardPhoto,viewCardOriginal } from '../../lib/api'
 import PlateChip from '../../components/PlateChip.vue'
 import ApprovalCard from '../../components/ApprovalCard.vue'
 import MainlandPlate from '../../components/MainlandPlate.vue'
@@ -155,21 +155,10 @@ function editCard(p){cardDraft.value={...(plateDetail.value[p.id]?.cardData||{})
 function fieldStatusText(status){return status?.status==='uncertain'?'請核對':status?.status==='failed'?'未能辨識，請手動填寫':''}
 function fieldStatusClass(status){return status?.status==='failed'?'failed':'uncertain'}
 async function saveCard(p){try{const updated=await api('/plate-assets/'+p.id,'PUT',{cardData:cardDraft.value});plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editingCardId.value='';summary.value=await api('/my/plates/'+p.id);loadPending();uni.showToast({title:'已更新，顧問會再核對',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}}
-async function selectedImageData(result){
-  // #ifdef H5
-  const picked=result.tempFiles?.[0]?.file||result.tempFiles?.[0]
-  const blob=picked instanceof Blob?picked:await (await fetch(result.tempFilePaths[0])).blob()
-  if(blob.size>3500000)throw new Error('圖片不可超過 3.5 MB')
-  return await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('讀取圖片失敗'));reader.readAsDataURL(blob)})
-  // #endif
-  // #ifndef H5
-  const file=result.tempFilePaths[0]
-  const base64=await new Promise((resolve,reject)=>uni.getFileSystemManager().readFile({filePath:file,encoding:'base64',success:x=>resolve(x.data),fail:reject}))
-  const mime=/\.png$/i.test(file)?'image/png':'image/jpeg'
-  return `data:${mime};base64,${base64}`
-  // #endif
-}
-function uploadCard(p){uni.showActionSheet({itemList:['正面','背面'],success:choice=>{const side=choice.tapIndex===0?'front':'back';uni.chooseImage({count:1,sizeType:['original'],sourceType:['album','camera'],success:async result=>{try{const image=await selectedImageData(result);const response=await api('/plate-assets/'+p.id+'/card/'+side,'POST',{image});fieldStatus.value=response.fieldStatus||{};const updated=await api('/plate-assets/'+p.id);plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editCard(p);summary.value=await api('/my/plates/'+p.id);loadPending();uni.showToast({title:'已辨識，請核對欄位',icon:'none'})}catch(e){uni.showToast({title:e.message||'上傳失敗',icon:'none'})}}})}})}
+function uploadCard(p){uni.showActionSheet({itemList:['正面','背面'],success:choice=>{const side=choice.tapIndex===0?'front':'back';uni.chooseImage({count:1,sizeType:['original'],sourceType:['album','camera'],success:async result=>{uni.showLoading({title:'正在上傳辨識',mask:true});try{const image=(await cardPhoto(result)).data;const response=await api('/plate-assets/'+p.id+'/card/'+side,'POST',{image});fieldStatus.value=response.fieldStatus||{};const updated=await api('/plate-assets/'+p.id);plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editCard(p);summary.value=await api('/my/plates/'+p.id);loadPending();uni.hideLoading();uni.showToast({title:'已辨識，請核對欄位',icon:'none'})}catch(e){uni.hideLoading();uni.showToast({title:e.message||'上傳失敗',icon:'none'})}}})}})}
+// 上傳過的批文卡照片（正本）：有哪一面就看哪一面，預設打開目前翻到的那面
+const originalSides=p=>['front','back'].filter(side=>plateDetail.value[p.id]?.cardImages?.[side])
+function viewOriginal(p){const sides=originalSides(p);viewCardOriginal(p.id,sides,cardBack.value?'back':'front')}
 // 客戶自行修改：立即生效，顧問再核對（docs/v1-plan.md §三）
 const pending=ref([]),drivers=ref([]),driverForm=ref({}),editingDriverId=ref(''),savingDriver=ref(false),vehicleForm=ref({}),editingVehicleId=ref(''),savingVehicle=ref(false)
 const isPending=(type,id,field)=>pending.value.some(x=>x.entityType===type&&x.entityId===id&&(!field||x.field===field))
