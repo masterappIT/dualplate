@@ -48,7 +48,7 @@
           <view v-if="summary.crossing?.enabled"><view class="ticket-rule" /><view class="row"><text class="line-sub">{{ summary.crossing?.lastCrossedOn ? '上次過關 '+summary.crossing.lastCrossedOn : '請記錄最近一次過關日期' }}</text><DueDate v-if="summary.crossing?.nextDueOn" :date="summary.crossing.nextDueOn" /><StampMark v-if="justCrossed" text="已過關" tone="jade" play class="crossing-stamp" /></view><button class="primary crossing-button" :disabled="crossingBusy" @click="markCrossed(todayIso())">{{ crossingBusy ? '記錄中' : '今天已過關' }}</button><picker mode="date" :end="todayIso()" @change="markCrossed($event.detail.value)"><text class="link other-date">其他日期過關 ›</text></picker></view>
         </view>
       </view>
-      <view :id="'fold-card'" class="list-card row fold-head" @click="toggle('card')"><text class="fold-title">批文卡</text><text class="fold-sum grow">{{ (p.card_status || '待核對') + (p.card_expires_on ? ' · 有效期至 ' + p.card_expires_on : '') }}</text><text class="chev">{{ open.card ? '⌃' : '›' }}</text></view>
+      <view :id="'fold-card'" class="list-card row fold-head" @click="toggle('card')"><text class="fold-title">批文卡</text><text class="fold-sum grow">{{ cardSummary(p) }}</text><text class="chev">{{ open.card ? '⌃' : '›' }}</text></view>
       <view v-if="open.card" class="fold-body">
             <view class="card approval">
         <ApprovalCard :key="p.id" :data="displayCardData(p)" :back="cardBack" :flip-on-tap="false" :tap-label="cardBack ? '翻到批文卡正面' : '翻到批文卡背面'" @card-tap="cardBack=!cardBack"/>
@@ -168,7 +168,9 @@
 import { ref,computed,nextTick } from 'vue'
 import { onLoad,onShow } from '@dcloudio/uni-app'
 import { useChoice,useConfirm } from '../../lib/choice'
-import { canEntrust,startEntrust } from '../../lib/api'
+import { canEntrust,startEntrust,isSelfManaged } from '../../lib/api'
+// 自管客戶自己建檔，沒有顧問核對批文卡：不顯示「待核對」，只顯示有效期
+const cardSelfManaged=isSelfManaged()
 import { api,getUser,startRequest,requestTone,clientStage,detailText,selfHandled,money,cardPhoto,viewCardOriginal,forgetCardOriginal,viewVehicleDocument,daysLeft } from '../../lib/api'
 import PlateChip from '../../components/PlateChip.vue'
 import ApprovalCard from '../../components/ApprovalCard.vue'
@@ -189,6 +191,7 @@ async function toggleReminder(on){if(crossingBusy.value)return;crossingBusy.valu
 async function markCrossed(date){if(crossingBusy.value||!date)return;crossingBusy.value=true;try{const result=await api('/my/plates/'+plateId+'/crossings','POST',{crossedOn:date});justCrossed.value=false;setTimeout(()=>{justCrossed.value=true},10);uni.showToast({title:'已記錄，下次請在 '+result.nextDueOn+' 前過關',icon:'none',duration:2600});summary.value=await api('/my/plates/'+plateId)}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{crossingBusy.value=false}}
 const summary=ref({}),showEdit=ref(false),fieldStatus=ref({}),arrangements=ref([])
 // 客戶端不寫「出租」：牌照用途顯示為使用安排
+function cardSummary(p){const status=p.card_status||'待核對',expires=p.card_expires_on?'有效期至 '+p.card_expires_on:'';if(cardSelfManaged&&status==='待核對')return expires||'已建檔';return status+(expires?' · '+expires:'')}
 const usageWord=status=>!status||status==='待核對'?'確認中':status==='出租中'?'使用安排中':status
 const cycleLabel={monthly:'每月',quarterly:'每季',yearly:'每年'},feeTone={已收:'gray',逾期:'red',部分收:'amber',待收:''}
 // 代收的寫「已收到」；直付的由客戶自己收款，寫「已確認收到」
