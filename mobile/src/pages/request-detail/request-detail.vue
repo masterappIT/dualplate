@@ -11,11 +11,11 @@
   <view v-if="waiting.length" class="card warn-card">
     <text class="block-title">需要你提供</text>
     <view v-for="t in waiting" :key="t.id" class="waiting-row"><view class="row"><text class="waiting-item grow">{{ todoTitle(t.title) }}</text><button v-if="canUpload" class="btn-sm solid" :disabled="uploading" @click="chooseUpload(t.id)">上傳</button></view><view v-if="t.documents?.length" class="doc-list"><text v-for="d in t.documents" :key="d" class="pill amber">{{ d }}</text></view><text v-if="filesFor(t.id).length" class="sent-line">已交 {{ filesFor(t.id).length }} 份<text v-if="filesFor(t.id).some(f=>f.status==='需重交')" class="note-red"> · 有文件需要重交</text></text></view>
-    <text class="subtle waiting-note">可直接拍照或上傳 PDF；不方便的話，也可以交給你的顧問。</text>
+    <text class="subtle waiting-note">{{ adv('可直接拍照或上傳 PDF；不方便的話，也可以交給你的顧問。') }}</text>
   </view>
   <view v-if="files.length || canUpload" class="section-head"><text class="section-title">已交文件<text class="num"> · {{ files.length }}</text></text><text v-if="canUpload && !waiting.length" class="link" @click="chooseUpload(null)">上傳文件 ›</text></view>
   <view v-if="files.length" class="card list"><view v-for="f in files" :key="f.id" class="file-row"><view class="file-mark" :class="f.mime==='application/pdf'?'pdf':''">{{ f.mime==='application/pdf' ? 'PDF' : '相' }}</view><view class="grow"><text class="file-name">{{ f.fileName }}</text><text class="line-sub">{{ taskTitle(f.taskId) }}{{ friendlyDate(f.createdAt) }} · {{ sizeText(f.size) }}</text><text v-if="f.status==='需重交' && f.reviewNote" class="review-note">{{ f.reviewNote }}</text></view><text class="pill" :class="attachmentTone[f.status]">{{ attachmentLabel[f.status] }}</text></view></view>
-  <view v-else-if="canUpload" class="card empty">還沒有上傳文件。顧問收妥後會在這裡標示「已收妥」。</view>
+  <view v-else-if="canUpload" class="card empty">{{ adv('還沒有上傳文件。顧問收妥後會在這裡標示「已收妥」。') }}</view>
   <text class="section-title">更新紀錄</text><view class="card list"><view v-for="activity in item.activities" :key="activity.id" class="activity"><view class="activity-dot"></view><view class="grow"><text class="activity-text">{{ activity.detail }}</text><text class="line-sub num">{{ friendlyDate(activity.created_at) }}</text></view></view><text v-if="!item.activities?.length" class="line-sub empty-line">暫時沒有更新</text></view>
   <view class="more" @click="showDetail=!showDetail">{{ showDetail ? '收起辦理步驟' : '查看辦理步驟 ›' }}</view>
   <view v-if="showDetail">
@@ -30,7 +30,7 @@ import { useChoice,useConfirm } from '../../lib/choice'
 const { sheet,choose,onSelect,onClose }=useChoice(),confirmBox=useConfirm()
 import { ref,computed } from 'vue'
 import { onLoad,onShow } from '@dcloudio/uni-app'
-import { api,friendlyDate,pickPhotos,pickPdf,uploadAttachment,attachmentTone,attachmentLabel,requestTone,clientStage } from '../../lib/api'
+import { api,friendlyDate,pickPhotos,pickPdf,uploadAttachment,attachmentTone,attachmentLabel,requestTone,clientStage,isSelfManaged } from '../../lib/api'
 import PlateChip from '../../components/PlateChip.vue'
 const item=ref(null),sources=ref([]),files=ref([]),uploading=ref(false)
 // Customer-facing four-step progress derived from the internal case status.
@@ -38,7 +38,9 @@ const steps=['已提交','收集資料','辦理中','完成'],showDetail=ref(fal
 // 伺服器已把內部狀態換成客戶看得懂的文字：已收到／需要你提供資料／辦理中／已完成／已取消
 const stepIndex=computed(()=>{const status=item.value?.status;return status==='已完成'?3:status==='辦理中'?2:status==='需要你提供資料'?1:0})
 const waiting=computed(()=>item.value?.clientTodos||(item.value?.tasks||[]).filter(t=>t.status==='待客戶配合'))
-const nextText=computed(()=>item.value?.status==='已取消'?'這張工單已取消。如有疑問請聯絡你的顧問。':stepIndex.value===0?'顧問會盡快受理，並告訴你需要準備的資料。':stepIndex.value===1?(waiting.value.length?'資料齊全後就會開始辦理。':'顧問正在整理資料。'):stepIndex.value===2?'正在辦理，有結果會通知你。':'已辦理完成。')
+// 自管客戶沒有顧問：用語改為「我們」
+const selfManaged=isSelfManaged(),adv=text=>selfManaged?text.replace(/你的顧問/g,'我們').replace(/顧問/g,'我們'):text
+const nextText=computed(()=>adv(item.value?.status==='已取消'?'這張工單已取消。如有疑問請聯絡你的顧問。':stepIndex.value===0?'顧問會盡快受理，並告訴你需要準備的資料。':stepIndex.value===1?(waiting.value.length?'資料齊全後就會開始辦理。':'顧問正在整理資料。'):stepIndex.value===2?'正在辦理，有結果會通知你。':'已辦理完成。'))
 const selectedSources=computed(()=>sources.value.filter(s=>item.value?.plan?.sourceIds?.includes(s.id)))
 // 待辦標題去掉「客戶」二字，直接對客戶說要提供甚麼
 const todoTitle=title=>String(title||'').replace(/^客戶/,'')

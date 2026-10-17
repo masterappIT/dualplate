@@ -17,6 +17,13 @@
     </view>
     <view v-if="loaded && !requests.length && !selfManaged" class="card empty">還沒有辦理記錄</view>
     <AdvisorCard v-if="loaded && !selfManaged" :advisor="advisor" placeholder />
+    <!-- 自管客戶：委託我們辦理（按次或長期委託），取代顧問卡 -->
+    <view v-if="loaded && selfManaged" class="card entrust-card">
+      <text class="entrust-title">委託我們辦理</text>
+      <text class="subtle">不想自己跑？交給我們辦，省時省心。</text>
+      <button class="btn-line entrust-btn" @click="entrustOne">委託我們辦一項</button>
+      <button class="btn-line entrust-btn" @click="startLongTerm">長期委託（談代理方案）</button>
+    </view>
     <view class="card menu">
       <view class="menu-row" @click="guide=true"><text class="menu-name">使用導覽</text><text class="chev">›</text></view>
       <view class="menu-row" @click="goTerms"><text class="menu-name">服務條款及私隱聲明</text><text class="chev">›</text></view>
@@ -31,7 +38,7 @@ import { useConfirm } from '../../lib/choice'
 const confirmBox=useConfirm()
 import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { api, getUser, clearSession, startRequest, requestTone, clientStage, rememberMode } from '../../lib/api'
+import { api, getUser, clearSession, startRequest, requestTone, clientStage, rememberMode, startLongTerm } from '../../lib/api'
 import PlateChip from '../../components/PlateChip.vue'
 import AdvisorCard from '../../components/AdvisorCard.vue'
 import WelcomeGuide from '../../components/WelcomeGuide.vue'
@@ -45,6 +52,7 @@ function goProfile(){uni.navigateTo({url:'/pages/profile/profile'})}
 function goTerms(){uni.navigateTo({url:'/pages/terms/terms'})}
 function openRequest(id){uni.navigateTo({url:'/pages/request-detail/request-detail?id='+id})}
 function newRequest(){startRequest('')}
+function entrustOne(){uni.navigateTo({url:'/pages/requests/requests?entrust=one'})}
 function goNotices(){uni.navigateTo({url:'/pages/notifications/notifications'})}
 function goReports(){uni.navigateTo({url:'/pages/reports/reports'})}
 function goBilling(){uni.navigateTo({url:'/pages/billing/billing'})}
@@ -55,6 +63,7 @@ onShow(load)
 <style scoped>
 .profile-head{display:flex;align-items:center;gap:12px}
 .menu{margin-top:16px;padding:0 16px}
+.entrust-card{margin-top:16px;padding:16px}.entrust-title{display:block;font-size:var(--fs-h);font-weight:800;color:var(--jade-deep)}.entrust-btn{width:100%;margin-top:12px}
 .menu-row{display:flex;align-items:center;gap:8px;min-height:52px;border-bottom:1px solid var(--rule)}.menu-row:last-child{border-bottom:0}
 .menu-name{flex:1;font-size:var(--fs-h);font-weight:700;color:var(--ink)}
 .list{padding:4px 16px}

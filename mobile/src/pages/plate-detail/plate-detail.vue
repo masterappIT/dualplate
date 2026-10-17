@@ -32,7 +32,7 @@
       <view v-if="open.deadlines" class="fold-body">
         <view class="card list">
           <view v-for="(item,index) in shownDeadlines" :key="index" class="line">
-            <view class="grow"><text class="line-title">{{ item.name }}</text><text v-if="item.handledBy==='you'" class="who">{{ selfHandled }}</text><text v-if="isPending(item.ownerType,item.ownerId,'date:'+item.code)" class="pill amber pending-tag">已修改，待核對</text><text v-if="deadlineSub(item)" class="line-sub">{{ deadlineSub(item) }}</text></view>
+            <view class="grow"><text class="line-title">{{ item.name }}</text><text v-if="item.handledBy==='you'" class="who">{{ selfHandled }}</text><text v-if="isPending(item.ownerType,item.ownerId,'date:'+item.code)" class="pill amber pending-tag">已修改，待核對</text><text v-if="deadlineSub(item)" class="line-sub">{{ deadlineSub(item) }}</text><text v-if="canEntrust(item)" class="link entrust" @click.stop="startEntrust(item)">委託我們辦 ›</text></view>
             <picker v-if="item.editable" mode="date" :value="item.dueOn" @change="saveDate(item,$event.detail.value)"><view class="date-edit"><DueDate :date="item.dueOn" :days="item.daysLeft" :level="item.level" /><text class="link">修改</text></view></picker>
             <view v-else-if="item.markable" class="date-edit" @click="markDone(item)"><DueDate :date="item.dueOn" :days="item.daysLeft" :level="item.level" /><text class="link">已辦好</text></view>
             <view v-else class="date-edit"><DueDate :date="item.dueOn" :days="item.daysLeft" :level="item.level" /><text class="link date-spacer" aria-hidden="true">已辦好</text></view>
@@ -168,6 +168,7 @@
 import { ref,computed,nextTick } from 'vue'
 import { onLoad,onShow } from '@dcloudio/uni-app'
 import { useChoice,useConfirm } from '../../lib/choice'
+import { canEntrust,startEntrust } from '../../lib/api'
 import { api,getUser,startRequest,requestTone,clientStage,detailText,selfHandled,money,cardPhoto,viewCardOriginal,forgetCardOriginal,viewVehicleDocument,daysLeft } from '../../lib/api'
 import PlateChip from '../../components/PlateChip.vue'
 import ApprovalCard from '../../components/ApprovalCard.vue'
@@ -318,6 +319,8 @@ import StampMark from '../../components/StampMark.vue'
 .card-editor{margin-top:16px;padding:0 12px 12px;border-radius:var(--r-card);background:var(--paper)}
 .editor-actions{display:flex;gap:8px;margin-top:16px}.editor-actions .btn-sm{flex:1}
 .date-edit{display:flex;align-items:center;gap:8px}.date-spacer{visibility:hidden}
+/* 自管客戶的「委託我們辦」 */
+.entrust{display:block;margin-top:6px}
 /* 「修改」「已辦好」和佔位一樣寬，日期才對齊 */
 .date-edit .link{min-width:3em;text-align:right}
 .fill-link{display:block;margin-top:8px}

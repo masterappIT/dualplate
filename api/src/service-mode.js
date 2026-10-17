@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { db } from './db.js'
 import { businessToday } from './rules.js'
 import { customerScope } from './entrustment.js'
+import { priceFor } from './pricing.js'
+import { services } from './catalog.js'
 
 // 自管／托管（docs/requirements.md 5.6.2，2026-10-18 管理者決定）：管理者人手切換，記生效日和操作人；托管可填合約結束日，
 // 到期前 30 天提醒管理者；標記和代理範圍對不上時提示。自管客戶的事項一律客戶自理（entrustment.js selfManaged），不產生年費。
@@ -63,7 +65,18 @@ export function contractEndings(tenantId) {
 export async function serviceModeRoutes(req, res, url, user, { json, fail, parseBody }) {
   const path = url.pathname, method = req.method, tenant = user.tenant_id
   const match = path.match(/^\/api\/customers\/([^/]+)\/service-mode$/)
-  if (!match && path !== '/api/service-mode/contract-endings') return false
+  if (!match && path !== '/api/service-mode/contract-endings' && path !== '/api/my/entrust-price') return false
+  // 按次委託的參考價（docs/requirements.md 5.6.2）：按通用價目表或這位客戶的收費，按次收費且有金額才回傳「由 X 起」，否則由顧問報價
+  if (path === '/api/my/entrust-price') {
+    if (user.role !== 'customer') return fail(res, 403, '此功能只供客戶使用'), true
+    if (method !== 'GET') return fail(res, 405, '不支援此操作'), true
+    const code = url.searchParams.get('service'), route = url.searchParams.get('route') || ''
+    const service = services.find(item => item.code === code)
+    if (!service || route && !service.routes.includes(route)) return fail(res, 400, '服務類型與路線不相符'), true
+    const price = priceFor(tenant, user.customer_id, `job:${service.code}`, route || service.routes[0])
+    const from = price?.billing === 'per_time' && price.amount ? { amount: price.amount, currency: price.currency } : null
+    return json(res, 200, { service: service.code, name: service.name, from }), true
+  }
   if (path === '/api/service-mode/contract-endings') {
     if (user.role !== 'admin') return fail(res, 403, '無權限'), true
     if (method !== 'GET') return fail(res, 405, '不支援此操作'), true

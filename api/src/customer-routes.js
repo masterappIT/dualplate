@@ -62,6 +62,8 @@ export async function customerRoutes(req, res, url, user, h) {
     const tracked = new Map(query('SELECT * FROM tracked_items WHERE tenant_id=?', customer.tenant_id).map(item => [`${item.owner_type}:${item.owner_id}:${item.code}`, item]))
     const completions = new Set(query('SELECT * FROM rule_completions WHERE tenant_id=?', customer.tenant_id).map(item => `${item.code}:${item.owner_id}:${item.period}`))
     const editable = new Set(rules.filter(rule => rule.method === 'expiry' && !rule.params?.field).map(rule => rule.code))
+    // 帶上客戶編號，委託範圍才按這位客戶判斷（自管客戶一律自理、客戶的事項清單）
+    for (const owner of owners) owner.customerId ||= customer.id
     return computeDeadlines({ rules, owners, tracked, completions, scopes: scopeMap(customer.tenant_id), windowDays: 180 }).map(item => ({ ...publicDeadline(item, editable.has(item.ruleCode)), plateId: plateOf(item) || null }))
   }
   // Vehicle deadlines belong to the plate the vehicle is mounted on.

@@ -5,6 +5,11 @@ export function clearSession() { uni.removeStorageSync('token'); uni.removeStora
 // 自管客戶（docs/requirements.md 5.6.2）：首頁、我的資料載入時記下，其他頁面據此改寫用語、隱藏用不到的區塊
 export function rememberMode(mode) { try { uni.setStorageSync('serviceMode', mode || '托管') } catch {} }
 export function isSelfManaged() { try { return (uni.getStorageSync('serviceMode') || uni.getStorageSync('user')?.serviceMode) === '自管' } catch { return false } }
+// 自管客戶按次委託：到期項目對應的代辦服務；沒有對應的用「其他代辦要求」
+const entrustServices = { approval: 'renewal', hk_crp: 'renewal', mo_permit: 'renewal', inspection: 'inspection', mo_inspection: 'inspection', customs_filing: 'filing', new_card_filing: 'filing' }
+export const canEntrust = item => isSelfManaged() && item.handledBy === 'you' && item.code !== 'crossing_90'
+export function startEntrust(item) { uni.navigateTo({ url: '/pages/requests/requests?entrust=item&service=' + (entrustServices[item.code] || 'other') + '&item=' + encodeURIComponent(item.name) + (item.plateId ? '&plate=' + encodeURIComponent(item.plateId) : '') }) }
+export function startLongTerm() { uni.navigateTo({ url: '/pages/requests/requests?entrust=long' }) }
 export function getUser() { return uni.getStorageSync('user') || null }
 export function api(path, method = 'GET', data) {
   return new Promise((resolve, reject) => {
@@ -57,7 +62,7 @@ export const requestTone = status => ({ 需要你提供資料: 'amber', 辦理�
 // 工單步驟名是寫給員工看的（「客戶提供……」），客戶端改成對客戶說話
 export function clientStage(stage) {
   const text = String(stage || '')
-  if (!text || text === '待內部受理') return '等待顧問受理'
+  if (!text || text === '待內部受理') return isSelfManaged() ? '等待我們受理' : '等待顧問受理'
   return text.replace(/^客戶/, '等你')
 }
 // 到期項目的補充說明：把規則用語改成白話
