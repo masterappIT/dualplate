@@ -88,7 +88,8 @@ const versionView = (row, tenantId) => row ? { version: row.version, terms: fill
 const accepted = (userId, version) => one('SELECT accepted_at FROM terms_acceptances WHERE user_id=? AND version=?', userId, version)?.accepted_at || null
 
 // 強制模式下，未同意最新版本的客戶帳戶只能用這些接口
-const openPaths = new Set(['/api/me', '/api/me/password', '/api/my/terms', '/api/my/terms/accept'])
+// 不同意新條款的客戶也可以注銷帳號
+const openPaths = new Set(['/api/me', '/api/me/password', '/api/my/terms', '/api/my/terms/accept', '/api/my/account/close'])
 export function termsGate(user, path) {
   if (user.role !== 'customer' || openPaths.has(path) || modeOf(user.tenant_id) !== 'force') return null
   const latest = current(user.tenant_id)

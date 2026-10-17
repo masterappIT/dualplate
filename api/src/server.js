@@ -31,6 +31,7 @@ import { serviceModeRoutes, modes, startSelfManaged } from './service-mode.js'
 import { seal } from './password-vault.js'
 import { supportRoutes } from './support.js'
 import { signupPublicRoutes, signupRoutes, applicationLogin } from './signup.js'
+import { accountClosureRoutes } from './account-closure.js'
 import { passwordProblem, authenticate, createSession, lockedMinutes, recordFailure, clearFailures, loginPhone, PHONE_RULE, clientIp, audit, auditRoutes, logError, health } from './security.js'
 
 const port = Number(process.env.PORT || 4100)
@@ -184,6 +185,7 @@ export const server = http.createServer(async (req, res) => {
     if (await serviceModeRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await supportRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await signupRoutes(req, res, url, user, { json, fail, parseBody })) return
+    if (await accountClosureRoutes(req, res, url, user, { json, fail, parseBody, clientIp })) return
     if (await workOrderRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await driverRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await vehicleDocumentRoutes(req, res, url, user, { json, fail, parseBody })) return
@@ -620,6 +622,7 @@ export const server = http.createServer(async (req, res) => {
       if (body.email && one('SELECT id FROM users WHERE email=?', clean(body.email, 160).toLowerCase())) return fail(res, 409, '這個電郵已被使用')
       if (!canAccessCustomer(user, body.customerId)) return fail(res, 404, '客戶不存在')
       if (one('SELECT is_self FROM customers WHERE id=?', body.customerId)?.is_self) return fail(res, 409, '本公司（自有）不開通客戶端登入')
+      if (one('SELECT closed_on FROM customers WHERE id=?', body.customerId)?.closed_on) return fail(res, 409, '這位客戶已自行注銷，不能再開通登入')
       { const problem = passwordProblem(body.password, { email: body.email, phone: body.phone }); if (problem) return fail(res, 400, problem) }
       const userId = id()
       db.prepare('INSERT INTO users(id,role,name,email,password_hash,password_enc,customer_id,tenant_id,phone) VALUES (?,?,?,?,?,?,?,?,?)').run(userId, 'customer', clean(body.name, 100), body.email ? clean(body.email, 160).toLowerCase() : `${phone}@phone.invalid`, hashPassword(body.password), seal(body.password), body.customerId, user.tenant_id, phone)

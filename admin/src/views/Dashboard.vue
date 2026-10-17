@@ -8,6 +8,7 @@
   </div>
   <ContractEndings />
   <SignupApplications />
+  <AccountClosures />
   <SupportInbox />
   <SelfHandledChanges />
   <CustomerChanges />
@@ -60,6 +61,7 @@ import SelfHandledChanges from '../components/business/SelfHandledChanges.vue'
 import ContractEndings from '../components/business/ContractEndings.vue'
 import SupportInbox from '../components/business/SupportInbox.vue'
 import SignupApplications from '../components/business/SignupApplications.vue'
+import AccountClosures from '../components/business/AccountClosures.vue'
 import { useAdminStore } from '../store'
 import { api, rentMoney } from '../api'
 import { offerFee, offerFees } from '../composables/fee-suggestion'

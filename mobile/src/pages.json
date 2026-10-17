@@ -92,6 +92,12 @@
       }
     },
     {
+      "path": "pages/close-account/close-account",
+      "style": {
+        "navigationBarTitleText": "注銷帳號"
+      }
+    },
+    {
       "path": "pages/signup/signup",
       "style": {
         "navigationBarTitleText": "申請使用"

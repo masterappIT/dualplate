@@ -50,6 +50,13 @@
       <view class="card list"><view v-for="name in profile.otherLogins" :key="name" class="line"><text class="line-title">{{ name }}</text></view></view>
       <text class="subtle note">要新增或停用登入，請聯絡你的顧問。</text>
     </view>
+
+    <!-- 注銷帳號：只限自管客戶；托管客戶要經顧問終止合約 -->
+    <text class="section-title">注銷帳號</text>
+    <view class="card">
+      <text class="line-sub">{{ selfManaged ? '不再使用的話，可以注銷帳號。帳號和全部資料會即時刪除，不能復原。' : '托管客戶要終止服務和注銷帳號，請聯絡你的顧問。' }}</text>
+      <button v-if="selfManaged" class="btn-line close-btn" @click="goClose">注銷帳號</button>
+    </view>
   </view>
 </template>
 <script setup>
@@ -69,6 +76,7 @@ async function load() {
     customerPending.value = pending.some(item => item.entityType === 'customer')
   } catch (e) { uni.showToast({ title: e.message, icon: 'none' }) }
 }
+function goClose() { uni.navigateTo({ url: '/pages/close-account/close-account' }) }
 async function saveName() {
   if (savingName.value) return
   savingName.value = true
@@ -112,6 +120,7 @@ onShow(load)
 .kind{margin-top:0}
 .error{display:block;margin-top:8px;color:var(--overdue);font-size:var(--fs-body)}
 .list{padding:4px 16px}
+.close-btn{width:100%;margin-top:12px}
 .line{padding:12px 0;border-bottom:1px solid var(--rule)}.line:last-child{border-bottom:0}
 .line-title{display:block;font-size:var(--fs-h);font-weight:700;color:var(--ink)}
 .line-sub{display:block;font-size:var(--fs-body);line-height:1.5;color:var(--ink-2)}

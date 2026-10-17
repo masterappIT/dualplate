@@ -68,6 +68,7 @@ button::after{border:0}
 .secondary{background:var(--jade-soft);color:var(--jade);font-size:var(--fs-h);height:44px;line-height:44px}
 .btn-sm{background:var(--jade-soft);color:var(--jade);font-size:var(--fs-body);height:40px;line-height:40px}
 .btn-sm.solid{background:var(--jade);color:#fff}
+.primary.danger{background:var(--overdue)}
 .btn-line{background:var(--card);color:var(--jade);border:1px solid var(--rule);font-size:var(--fs-body);height:44px;line-height:42px}
 .primary[disabled],.secondary[disabled],.btn-sm[disabled],.btn-line[disabled]{opacity:.55}
 .field-label{display:block;color:var(--ink-2);font-size:var(--fs-body);font-weight:700;margin:16px 0 8px}
