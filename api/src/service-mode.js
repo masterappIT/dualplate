@@ -36,10 +36,18 @@ function warnings(tenantId, customer) {
   return list
 }
 
+// 新增客戶時直接定為自管（source：邀請；自行申請在第 6 步用「申請」）。在呼叫者的交易內
+export function startSelfManaged(user, customerId, source) {
+  const day = today()
+  db.prepare("UPDATE customers SET service_mode='自管', mode_since=?, mode_by=?, signup_source=? WHERE id=?").run(day, user.name, source, customerId)
+  db.prepare('INSERT INTO customer_mode_changes(id,tenant_id,customer_id,from_mode,to_mode,effective_on,contract_ends_on,changed_by,changed_by_name,changed_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
+    .run(randomUUID(), user.tenant_id, customerId, null, '自管', day, null, user.id, user.name, new Date().toISOString())
+}
+
 export function modeView(tenantId, customer) {
   const history = db.prepare('SELECT * FROM customer_mode_changes WHERE customer_id=? AND tenant_id=? ORDER BY changed_at DESC').all(customer.id, tenantId)
   return {
-    mode: modeOf(customer), since: customer.mode_since || null, by: customer.mode_by || null, contractEndsOn: customer.contract_ends_on || null,
+    mode: modeOf(customer), since: customer.mode_since || null, by: customer.mode_by || null, contractEndsOn: customer.contract_ends_on || null, source: customer.signup_source || null,
     warnings: warnings(tenantId, customer),
     history: history.map(row => ({ fromMode: row.from_mode, toMode: row.to_mode, effectiveOn: row.effective_on, contractEndsOn: row.contract_ends_on, changedByName: row.changed_by_name, changedAt: row.changed_at }))
   }

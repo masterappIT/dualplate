@@ -27,7 +27,8 @@ import { vehicleDocumentRoutes } from './vehicle-documents.js'
 import { publicTermsRoutes, termsGate, termsRoutes } from './terms.js'
 import { plateCompanyRoutes, linkPlateCompanies } from './plate-companies.js'
 import { seedDemo } from './demo-seed.js'
-import { serviceModeRoutes } from './service-mode.js'
+import { serviceModeRoutes, modes, startSelfManaged } from './service-mode.js'
+import { seal } from './password-vault.js'
 import { passwordProblem, authenticate, createSession, lockedMinutes, recordFailure, clearFailures, loginPhone, PHONE_RULE, clientIp, audit, auditRoutes, logError, health } from './security.js'
 
 const port = Number(process.env.PORT || 4100)
@@ -542,8 +543,15 @@ export const server = http.createServer(async (req, res) => {
       if (user.role !== 'admin') return fail(res, 403, '無權限')
       const body = await parseBody(req)
       if (!required(body, ['name', 'kind'])) return fail(res, 400, '請填寫客戶名稱和類型')
+      // 新增時可直接定為自管（管理員邀請，docs/requirements.md 5.6.2）；不填即托管
+      if (body.serviceMode !== undefined && !modes.includes(body.serviceMode)) return fail(res, 400, '委託方式只可以是托管或自管')
       const customerId = id()
-      db.prepare('INSERT INTO customers(id,name,kind,phone,owner_id,notes,tenant_id) VALUES (?,?,?,?,?,?,?)').run(customerId, clean(body.name, 120), clean(body.kind, 20), clean(body.phone, 40), user.id, clean(body.notes, 2000), user.tenant_id)
+      db.exec('BEGIN IMMEDIATE')
+      try {
+        db.prepare('INSERT INTO customers(id,name,kind,phone,owner_id,notes,tenant_id) VALUES (?,?,?,?,?,?,?)').run(customerId, clean(body.name, 120), clean(body.kind, 20), clean(body.phone, 40), user.id, clean(body.notes, 2000), user.tenant_id)
+        if (body.serviceMode === '自管') startSelfManaged(user, customerId, '邀請')
+        db.exec('COMMIT')
+      } catch (error) { db.exec('ROLLBACK'); throw error }
       return json(res, 201, one('SELECT * FROM customers WHERE id=?', customerId))
     }
     const customerMatch = path.match(/^\/api\/customers\/([^/]+)$/)
@@ -604,7 +612,7 @@ export const server = http.createServer(async (req, res) => {
       if (one('SELECT is_self FROM customers WHERE id=?', body.customerId)?.is_self) return fail(res, 409, '本公司（自有）不開通客戶端登入')
       { const problem = passwordProblem(body.password, { email: body.email, phone: body.phone }); if (problem) return fail(res, 400, problem) }
       const userId = id()
-      db.prepare('INSERT INTO users(id,role,name,email,password_hash,customer_id,tenant_id,phone) VALUES (?,?,?,?,?,?,?,?)').run(userId, 'customer', clean(body.name, 100), body.email ? clean(body.email, 160).toLowerCase() : `${phone}@phone.invalid`, hashPassword(body.password), body.customerId, user.tenant_id, phone)
+      db.prepare('INSERT INTO users(id,role,name,email,password_hash,password_enc,customer_id,tenant_id,phone) VALUES (?,?,?,?,?,?,?,?,?)').run(userId, 'customer', clean(body.name, 100), body.email ? clean(body.email, 160).toLowerCase() : `${phone}@phone.invalid`, hashPassword(body.password), seal(body.password), body.customerId, user.tenant_id, phone)
       return json(res, 201, { id: userId })
     }
     if (path === '/api/vehicles' && req.method === 'GET') {

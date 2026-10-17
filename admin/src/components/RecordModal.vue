@@ -47,6 +47,7 @@ async function copyWelcome() { try { await navigator.clipboard.writeText(welcome
       <Field label="客戶名稱" required><TextInput v-model="form.name" placeholder="姓名或公司名稱" /></Field>
       <Field label="類型"><Select v-model="form.kind" :options="['個人', '公司']" /></Field>
       <Field label="聯絡電話"><TextInput v-model="form.phone" type="tel" /></Field>
+      <Field label="委託方式" hint="自管：客戶自己用系統管理，全部事項由客戶自理，免費；開通登入後即可使用。不選即托管。"><Select v-model="form.serviceMode" :options="[{ value: '托管', label: '托管（按合約由我們負責）' }, { value: '自管', label: '自管（邀請客戶自己管理）' }]" placeholder="托管" /></Field>
     </template>
     <template v-else-if="modal === 'customer-user'">
       <p class="dialog-note">為 {{ selectedCustomer?.name }} 開通客戶端登入。密碼至少 10 個字元，不可與帳號相同。</p>
@@ -91,5 +92,5 @@ async function copyWelcome() { try { await navigator.clipboard.writeText(welcome
     </template>
     <div v-if="error" class="error" role="alert">{{ error }}</div>
   </FormDialog>
-  <Modal :open="!!welcome" title="客戶登入已開通" sub="請以安全渠道轉發，關閉後不會再顯示初始密碼。" @close="welcome = ''"><Field label="轉發給客戶的文字"><TextInput :model-value="welcome" multiline readonly :rows="8" /></Field><p v-if="copyError" class="error" role="alert">{{ copyError }}</p><template #footer><Button @click="welcome = ''">完成</Button><Button variant="primary" @click="copyWelcome">複製轉發文字</Button></template></Modal>
+  <Modal :open="!!welcome" title="客戶登入已開通" sub="請以安全渠道轉發；之後可在客戶帳號按「查看密碼」再看。" @close="welcome = ''"><Field label="轉發給客戶的文字"><TextInput :model-value="welcome" multiline readonly :rows="8" /></Field><p v-if="copyError" class="error" role="alert">{{ copyError }}</p><template #footer><Button @click="welcome = ''">完成</Button><Button variant="primary" @click="copyWelcome">複製轉發文字</Button></template></Modal>
 </template>

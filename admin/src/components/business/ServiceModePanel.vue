@@ -20,6 +20,7 @@ const other = computed(() => info.value?.mode === '自管' ? '托管' : '自管'
 const items = computed(() => info.value ? [
   { label: '切換日期', value: info.value.since || '未有記錄' },
   { label: '切換人', value: info.value.by || '未有記錄' },
+  ...(info.value.source ? [{ label: '來源', value: info.value.source === '邀請' ? '管理員邀請' : '客戶自行申請' }] : []),
   ...(info.value.mode === '托管' ? [{ label: '合約結束日', value: info.value.contractEndsOn || '未填寫' }] : [])
 ] : [])
 
@@ -60,7 +61,7 @@ async function save() {
       </div>
       <details v-if="info.history.length" class="mode-history">
         <summary>切換記錄（{{ info.history.length }}）</summary>
-        <p v-for="row in info.history" :key="row.changedAt" class="cell-sub">{{ row.effectiveOn }}：{{ row.fromMode === row.toMode ? `合約結束日改為 ${row.contractEndsOn || '未填寫'}` : `${row.fromMode} → ${row.toMode}` }} · {{ row.changedByName }}</p>
+        <p v-for="row in info.history" :key="row.changedAt" class="cell-sub">{{ row.effectiveOn }}：{{ !row.fromMode ? `新增為${row.toMode}` : row.fromMode === row.toMode ? `合約結束日改為 ${row.contractEndsOn || '未填寫'}` : `${row.fromMode} → ${row.toMode}` }} · {{ row.changedByName }}</p>
       </details>
     </template>
   </section>

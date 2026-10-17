@@ -143,7 +143,7 @@ export async function portalRoutes(req, res, url, user, h) {
     return json(res, 200, { name: text(body.name, 60), phone: text(body.phone, 30), wechat: text(body.wechat, 60) }), true
   }
   // 客戶的登入帳號：管理者查看、停用或重新啟用（停用即時失效所有登入）
-  const accountView = row => ({ id: row.id, name: row.name, email: row.email?.endsWith('@phone.invalid') ? '' : row.email || '', phone: row.phone || '', wechatBound: Boolean(row.wechat_openid), active: Boolean(row.active), lastLoginAt: row.last_login_at || null })
+  const accountView = row => ({ id: row.id, name: row.name, email: row.email?.endsWith('@phone.invalid') ? '' : row.email || '', phone: row.phone || '', wechatBound: Boolean(row.wechat_openid), active: Boolean(row.active), lastLoginAt: row.last_login_at || null, passwordViewable: Boolean(row.password_enc) })
   if (accounts) {
     if (method !== 'GET') return fail(res, 405, '不支援此操作'), true
     if (!db.prepare('SELECT id FROM customers WHERE id=? AND tenant_id=?').get(accounts[1], tenant)) return fail(res, 404, '客戶不存在'), true

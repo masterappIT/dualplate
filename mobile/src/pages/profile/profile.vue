@@ -28,7 +28,7 @@
       <input class="field" v-model="pw.again" password placeholder="再輸入一次" />
       <text v-if="pwError" class="error">{{ pwError }}</text>
       <button class="btn-sm solid save" :disabled="savingPw" @click="savePassword">{{ savingPw ? '正在更改…' : '更改密碼' }}</button>
-      <text class="line-sub note">更改後，其他手機或電腦上的登入會自動登出。</text>
+      <text class="line-sub note">更改後，其他手機或電腦上的登入會自動登出。請不要使用你在其他網站或服務用的密碼。</text>
     </view>
 
     <!-- 委託人資料：個人或公司本身，改動由管理者核對 -->

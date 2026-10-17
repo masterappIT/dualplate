@@ -177,6 +177,10 @@ addColumn('customers', 'service_mode', "TEXT NOT NULL DEFAULT '托管'")
 addColumn('customers', 'mode_since', 'TEXT')
 addColumn('customers', 'mode_by', 'TEXT')
 addColumn('customers', 'contract_ends_on', 'TEXT')
+// 自管客戶的來源：邀請（管理員新增）或申請（客戶自行申請，第 6 步）；托管客戶不填
+addColumn('customers', 'signup_source', 'TEXT')
+// 客戶密碼的加密副本，供管理者查看（password-vault.js）
+addColumn('users', 'password_enc', 'TEXT')
 // Per-customer item list (docs/tasks/scope-items-design.md §2): 0 = every active item; 1 = the rows in customer_items.
 addColumn('customers', 'items_customized', 'INTEGER NOT NULL DEFAULT 0')
 addColumn('customers', 'scope_template', 'TEXT')

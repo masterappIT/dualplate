@@ -3,6 +3,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomBytes } from 'node:crypto'
 import { db, id, now, hashPassword, verifyPassword } from './db.js'
+import { seal, unseal, vaultReady } from './password-vault.js'
 
 // 上線準備（docs/tasks/production-brief.md）：登入鎖定、會話期限、修改密碼、操作記錄、錯誤記錄、健康檢查。
 db.exec(`CREATE TABLE IF NOT EXISTS login_attempts(key TEXT PRIMARY KEY, failures INTEGER NOT NULL DEFAULT 0, locked_until TEXT, updated_at TEXT NOT NULL);
@@ -88,7 +89,7 @@ export function audit(req, res, user, path) {
 }
 const entityLabels = { customers: '客戶', companies: '公司', 'company-groups': '公司組', 'plate-assets': '牌照', plates: '牌照', vehicles: '車輛', 'tracked-items': '到期日', 'service-scopes': '委託範圍', 'plate-transfers': '轉讓', requests: '工單', 'work-orders': '工單', tasks: '工單步驟', fees: '收費', 'rental-contracts': '出租合約', 'rent-invoices': '租金', reports: '月報', filings: '報帳', 'accounting-firms': '會計公司', drivers: '司機', staff: '員工', 'customer-users': '客戶帳號', me: '本人帳號', rules: '到期規則', 'rule-completions': '完成記錄', quotes: '報價', 'installment-plans': '分期' }
 // 操作名稱：路徑最後一段是動作時用動作名，否則按方法
-const actionWords = { confirm: '確認', recalculate: '重算', correct: '產生更正版', send: '發出', accept: '接受', terminate: '終止', receive: '登記收款', unreceive: '撤銷收款', void: '作廢', payments: '記收款', 'reset-password': '重設密碼', link: '產生連結', attachments: '上傳文件', receipt: '上傳回執', 'wechat-bind-code': '產生綁定碼', 'sync-from-card': '按批文卡同步', crossings: '記錄過關', 'crossing-reminder': '過關提醒設定', password: '修改密碼', billing: '年費設定', advisor: '顧問設定', 'filing-setup': '報帳設定', batch: '批量設定', bulk: '批量更新', login: '登入' }
+const actionWords = { confirm: '確認', recalculate: '重算', correct: '產生更正版', send: '發出', accept: '接受', terminate: '終止', receive: '登記收款', unreceive: '撤銷收款', void: '作廢', payments: '記收款', 'password-view': '查看密碼', 'reset-password': '重設密碼', link: '產生連結', attachments: '上傳文件', receipt: '上傳回執', 'wechat-bind-code': '產生綁定碼', 'sync-from-card': '按批文卡同步', crossings: '記錄過關', 'crossing-reminder': '過關提醒設定', password: '修改密碼', billing: '年費設定', advisor: '顧問設定', 'filing-setup': '報帳設定', batch: '批量設定', bulk: '批量更新', login: '登入' }
 function actionOf(row) {
   const parts = row.path.replace(/^\/api\//, '').split('/').filter(part => !/^[0-9a-f-]{20,}$/i.test(part))
   const tail = parts.length > 1 ? parts.at(-1) : null
@@ -126,12 +127,24 @@ export function auditRoutes(req, res, url, user, { json, fail, parseBody }) {
       if (!body || typeof body !== 'object' || !verifyPassword(String(body.currentPassword || ''), account.password_hash)) return fail(res, 400, '目前密碼不正確'), true
       const problem = passwordProblem(body.newPassword, account); if (problem) return fail(res, 400, problem), true
       if (verifyPassword(body.newPassword, account.password_hash)) return fail(res, 400, '新密碼不可與目前密碼相同'), true
-      db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hashPassword(body.newPassword), account.id)
+      // 客戶帳號同時更新加密副本，管理者才看得到新密碼
+      db.prepare('UPDATE users SET password_hash=?, password_enc=? WHERE id=?').run(hashPassword(body.newPassword), account.role === 'customer' ? seal(body.newPassword) : null, account.id)
       // 改密碼後，其他裝置的登入全部失效，目前這個保留
       const current = (req.headers.authorization || '').replace(/^Bearer /, '')
       db.prepare('DELETE FROM sessions WHERE user_id=? AND token<>?').run(account.id, current)
       return json(res, 200, { ok: true }), true
     })()
+  }
+  // 管理者查看客戶密碼（2026-10-18 管理者決定）：用 POST 以便每次查看都寫入操作記錄（查看人、時間、帳號）
+  const view = path.match(/^\/api\/customer-users\/([^/]+)\/password-view$/)
+  if (view) {
+    if (user.role !== 'admin') return fail(res, 403, '只限管理者查看客戶密碼'), true
+    if (req.method !== 'POST') return fail(res, 405, '不支援此操作'), true
+    const account = db.prepare("SELECT u.* FROM users u JOIN customers c ON c.id=u.customer_id WHERE u.id=? AND u.role='customer' AND c.tenant_id=?").get(view[1], user.tenant_id)
+    if (!account) return fail(res, 404, '客戶帳號不存在'), true
+    const password = unseal(account.password_enc)
+    if (password) return json(res, 200, { password }), true
+    return json(res, 200, { password: null, reason: !vaultReady() ? '伺服器未設定密碼查看金鑰，暫時無法查看' : account.password_enc ? '密碼副本無法解開（金鑰已更換），請重設密碼' : '這個密碼在功能上線前設定，無法還原；重設密碼後就看得到' }), true
   }
   const reset = path.match(/^\/api\/customer-users\/([^/]+)\/reset-password$/)
   if (reset) {
@@ -142,7 +155,7 @@ export function auditRoutes(req, res, url, user, { json, fail, parseBody }) {
       if (!account) return fail(res, 404, '客戶帳號不存在'), true
       const body = await parseBody(req)
       const problem = passwordProblem(body?.password, account); if (problem) return fail(res, 400, problem), true
-      db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hashPassword(body.password), account.id)
+      db.prepare('UPDATE users SET password_hash=?, password_enc=? WHERE id=?').run(hashPassword(body.password), seal(body.password), account.id)
       db.prepare('DELETE FROM sessions WHERE user_id=?').run(account.id)
       if (account.email) clearFailures('customer', account.email)
       if (account.phone) clearFailures('customer', account.phone)
