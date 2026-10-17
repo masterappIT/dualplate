@@ -17,6 +17,7 @@ import { viewRoutes } from './view-routes.js'
 import { driverRoutes } from './drivers.js'
 import { rentalRoutes, legacyStart, legacyEnd, activeContract } from './rentals.js'
 import { feeRoutes } from './fees.js'
+import { pricingRoutes } from './pricing.js'
 import { bookkeepingRoutes } from './bookkeeping.js'
 import { reportRoutes } from './reports.js'
 import { renterPublicRoutes, renterAdminRoutes } from './renter-portal.js'
@@ -161,6 +162,7 @@ export const server = http.createServer(async (req, res) => {
     if (await renterAdminRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await rentalRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await feeRoutes(req, res, url, user, { json, fail, parseBody })) return
+    if (await pricingRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await bookkeepingRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await reportRoutes(req, res, url, user, { json, fail })) return
     if (await portalRoutes(req, res, url, user, { json, fail, parseBody })) return

@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { randomUUID, scryptSync, timingSafeEqual } from 'node:crypto'
-import { defaultRules } from './rules.js'
+import { defaultRules, defaultGroup, ruleScopes } from './rules.js'
 import { services, planFor } from './catalog.js'
 
 const file = resolve(process.env.DB_PATH || './data/app.sqlite')
@@ -167,9 +167,14 @@ CREATE TABLE IF NOT EXISTS request_attachments(id TEXT PRIMARY KEY, tenant_id TE
 CREATE TABLE IF NOT EXISTS notifications(id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, customer_id TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT, link TEXT, dedupe_key TEXT, read_at TEXT, created_at TEXT NOT NULL);
 CREATE UNIQUE INDEX IF NOT EXISTS notifications_dedupe ON notifications(customer_id, dedupe_key) WHERE dedupe_key IS NOT NULL`)
 addColumn('customers', 'is_self', 'INTEGER NOT NULL DEFAULT 0')
+// Per-customer item list (docs/tasks/scope-items-design.md §2): 0 = every active item; 1 = the rows in customer_items.
+addColumn('customers', 'items_customized', 'INTEGER NOT NULL DEFAULT 0')
+addColumn('customers', 'scope_template', 'TEXT')
+addColumn('rules', 'item_group', 'TEXT')
 // Entrustment per company / plate and service, with history: a change ends the current row and adds a new one.
 db.exec(`CREATE TABLE IF NOT EXISTS service_scopes(id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, owner_type TEXT NOT NULL, owner_id TEXT NOT NULL, service TEXT NOT NULL, handler TEXT NOT NULL, provider_name TEXT, started_on TEXT NOT NULL, ended_on TEXT, notes TEXT, updated_by TEXT, updated_at TEXT NOT NULL);
 CREATE UNIQUE INDEX IF NOT EXISTS service_scopes_current ON service_scopes(owner_type, owner_id, service) WHERE ended_on IS NULL;
+CREATE TABLE IF NOT EXISTS customer_items(customer_id TEXT NOT NULL, tenant_id TEXT NOT NULL, item_code TEXT NOT NULL, added_by TEXT, added_at TEXT NOT NULL, PRIMARY KEY(customer_id, item_code));
 CREATE TABLE IF NOT EXISTS plate_transfers(id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, plate_asset_id TEXT NOT NULL, from_customer_id TEXT NOT NULL, to_customer_id TEXT NOT NULL, transferred_on TEXT NOT NULL, notes TEXT, created_by TEXT, created_at TEXT NOT NULL)`)
 // Border crossings per plate (two-way plates must cross about every 90 days); kept on the plate so a vehicle change does not reset it.
 db.exec('CREATE TABLE IF NOT EXISTS plate_crossings(id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, plate_asset_id TEXT NOT NULL, crossed_on TEXT NOT NULL, source TEXT NOT NULL, created_by TEXT, created_at TEXT NOT NULL, UNIQUE(plate_asset_id,crossed_on), FOREIGN KEY(plate_asset_id) REFERENCES plate_assets(id))')
@@ -204,8 +209,10 @@ db.prepare('UPDATE users SET tenant_id=? WHERE tenant_id IS NULL').run(DEFAULT_T
 db.prepare('UPDATE customers SET tenant_id=? WHERE tenant_id IS NULL').run(DEFAULT_TENANT)
 // Every tenant gets any default rule it does not have yet; edited rules are left alone.
 export function seedRules(tenantId) {
-  defaultRules.forEach((rule, index) => db.prepare('INSERT OR IGNORE INTO rules(id,tenant_id,code,name,scope,method,match_json,params_json,remind_days,active,customer_visible,sort,service) VALUES (?,?,?,?,?,?,?,?,?,1,?,?,?)')
-    .run(randomUUID(), tenantId, rule.code, rule.name, rule.scope, rule.method, JSON.stringify(rule.match), JSON.stringify(rule.params), rule.remindDays, Number(rule.customerVisible), index, rule.service))
+  defaultRules.forEach((rule, index) => db.prepare('INSERT OR IGNORE INTO rules(id,tenant_id,code,name,scope,method,match_json,params_json,remind_days,active,customer_visible,sort,service,item_group) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(randomUUID(), tenantId, rule.code, rule.name, rule.scope, rule.method, JSON.stringify(rule.match), JSON.stringify(rule.params), rule.remindDays, rule.active === false ? 0 : 1, Number(rule.customerVisible), index, rule.service, rule.group || defaultGroup(rule.scope)))
+  for (const rule of defaultRules) db.prepare('UPDATE rules SET item_group=? WHERE tenant_id=? AND code=? AND item_group IS NULL').run(rule.group || defaultGroup(rule.scope), tenantId, rule.code)
+  for (const scope of ruleScopes) db.prepare('UPDATE rules SET item_group=? WHERE tenant_id=? AND scope=? AND item_group IS NULL').run(defaultGroup(scope), tenantId, scope)
   // Rules created before services existed take the default service of their code, or of their scope.
   for (const rule of defaultRules) db.prepare('UPDATE rules SET service=? WHERE tenant_id=? AND code=? AND service IS NULL').run(rule.service, tenantId, rule.code)
   db.prepare("UPDATE rules SET service=CASE scope WHEN 'company' THEN 'company_upkeep' ELSE 'plate_service' END WHERE tenant_id=? AND service IS NULL").run(tenantId)
@@ -229,6 +236,42 @@ export function ensureWorkTemplates(tenantId) {
   }
 }
 for (const tenant of db.prepare('SELECT id FROM tenants').all()) seedRules(tenant.id)
+// Entrustment moves from six broad services to one row per item (rule code), docs/tasks/scope-items-design.md §7.
+// Each current broad row becomes rows for the items under it that apply to the owner, keeping handler, provider and
+// start date; the broad row is ended so it stays as history. Customers keep the default list, so nothing disappears.
+const scopeItemsMigration = 'scope-items-v1'
+if (!db.prepare('SELECT name FROM schema_migrations WHERE name=?').get(scopeItemsMigration)) {
+  const legacy = ['company_upkeep', 'bookkeeping', 'audit_tax', 'secretary', 'plate_service', 'rental_management']
+  const jurisdictions = rule => { const value = JSON.parse(rule.match_json).jurisdiction; return value ? [].concat(value) : null }
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    const day = new Date().toISOString().slice(0, 10), stamp = new Date().toISOString()
+    db.exec("UPDATE rules SET active=0 WHERE code='hk_audit_tax'")
+    const rows = db.prepare(`SELECT * FROM service_scopes WHERE ended_on IS NULL AND service IN (${legacy.map(() => '?').join(',')})`).all(...legacy)
+    for (const row of rows) {
+      const rules = db.prepare('SELECT * FROM rules WHERE tenant_id=? AND service=?').all(row.tenant_id, row.service)
+      let codes = []
+      if (row.owner_type === 'company') {
+        const company = db.prepare('SELECT jurisdiction FROM companies WHERE id=?').get(row.owner_id)
+        if (company) {
+          codes = rules.filter(rule => rule.scope === 'company' && (!jurisdictions(rule) || jurisdictions(rule).includes(company.jurisdiction))).map(rule => rule.code)
+          if (row.service === 'bookkeeping' && company.jurisdiction === '內地') codes.push('monthly_filing')
+        }
+      } else {
+        codes = rules.filter(rule => rule.scope !== 'company').map(rule => rule.code)
+        if (row.service === 'rental_management') codes.push('rent_overdue')
+      }
+      for (const code of codes) {
+        if (db.prepare('SELECT id FROM service_scopes WHERE owner_type=? AND owner_id=? AND service=? AND ended_on IS NULL').get(row.owner_type, row.owner_id, code)) continue
+        db.prepare('INSERT INTO service_scopes(id,tenant_id,owner_type,owner_id,service,handler,provider_name,started_on,ended_on,notes,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?,NULL,?,?,?)')
+          .run(randomUUID(), row.tenant_id, row.owner_type, row.owner_id, code, row.handler, row.provider_name || '', row.started_on, '由大項改為逐件設定', row.updated_by, stamp)
+      }
+      db.prepare('UPDATE service_scopes SET ended_on=?, updated_at=? WHERE id=?').run(day, stamp, row.id)
+    }
+    db.prepare('INSERT INTO schema_migrations(name,applied_at) VALUES (?,?)').run(scopeItemsMigration, stamp)
+    db.exec('COMMIT')
+  } catch (error) { db.exec('ROLLBACK'); throw error }
+}
 const approvalRuleMigration = 'approval-rule-card-expires-on'
 if (!db.prepare('SELECT name FROM schema_migrations WHERE name=?').get(approvalRuleMigration)) {
   db.exec('BEGIN IMMEDIATE')

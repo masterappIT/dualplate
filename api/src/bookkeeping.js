@@ -1,6 +1,6 @@
 import { db, id, now } from './db.js'
 import { businessToday } from './rules.js'
-import { scopeMap } from './entrustment.js'
+import { scopeMap, syncFilingFirm } from './entrustment.js'
 import { sniff } from './client-portal.js'
 
 // 內地公司每月報帳報稅追蹤（docs/tasks/bookkeeping-brief.md）。做帳外包給會計公司，系統只追蹤進度、回執與截止日。
@@ -34,7 +34,7 @@ export function ensureFilings(tenantId) {
       db.prepare("UPDATE filing_periods SET closed_reason='公司已註銷', updated_at=? WHERE company_id=? AND filed_on IS NULL AND closed_reason IS NULL").run(now(), company.id)
       continue
     }
-    if (scopes.get(`company:${company.id}:bookkeeping`)?.handler === 'client') continue
+    if ((scopes.handling('company', company.id, 'monthly_filing', company.customer_id)?.handler ?? 'client') === 'client') continue
     for (let back = 2; back >= 0; back--) {
       const period = addMonths(month, -back)
       if (company.filing_cycle === 'quarterly' && (Number(period.slice(5)) - 1) % 3 !== 0) continue
@@ -73,7 +73,8 @@ export function filingDeadlines(tenantId) {
   const scopes = scopeMap(tenantId)
   return db.prepare('SELECT p.*, co.name company_name, co.customer_id, c.name customer_name FROM filing_periods p JOIN companies co ON co.id=p.company_id JOIN customers c ON c.id=co.customer_id WHERE p.tenant_id=? AND p.filed_on IS NULL AND p.closed_reason IS NULL').all(tenantId)
     .filter(row => ['due', 'overdue'].includes(filingLevel(row)))
-    .map(row => { const scope = scopes.get(`company:${row.company_id}:bookkeeping`); return { ruleCode: 'monthly_filing', name: `報稅：${row.company_name} ${row.period}`, method: 'filing', service: 'bookkeeping', handler: scope?.handler || 'us', providerName: scope?.provider_name || '', ownerType: 'company', ownerId: row.company_id, ownerLabel: row.company_name, customerId: row.customer_id, customerName: row.customer_name, dueOn: row.due_on, daysLeft: daysBetween(today(), row.due_on), level: filingLevel(row), period: row.period, detail: filingStatus(row), filingId: row.id } })
+    .map(row => ({ row, scope: scopes.handling('company', row.company_id, 'monthly_filing', row.customer_id) })).filter(entry => entry.scope)
+    .map(({ row, scope }) => { return { ruleCode: 'monthly_filing', name: `報稅：${row.company_name} ${row.period}`, method: 'filing', service: 'bookkeeping', item: 'monthly_filing', handler: scope.handler, providerName: scope.providerName, ownerType: 'company', ownerId: row.company_id, ownerLabel: row.company_name, customerId: row.customer_id, customerName: row.customer_name, dueOn: row.due_on, daysLeft: daysBetween(today(), row.due_on), level: filingLevel(row), period: row.period, detail: filingStatus(row), filingId: row.id } })
 }
 
 export async function bookkeepingRoutes(req, res, url, user, { json, fail, parseBody }) {
@@ -130,7 +131,7 @@ export async function bookkeepingRoutes(req, res, url, user, { json, fail, parse
     if (body.filingCycle === 'quarterly' && companies.some(company => company.taxpayer_type === '一般納稅人')) return fail(res, 400, '一般納稅人須按月申報'), true
     const update = db.prepare('UPDATE companies SET accounting_firm_id=?, filing_cycle=?, updated_at=? WHERE id=? AND tenant_id=?')
     db.exec('BEGIN')
-    try { for (const company of companies) update.run(body.accountingFirmId, body.filingCycle, now(), company.id, tenant); db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
+    try { for (const company of companies) { update.run(body.accountingFirmId, body.filingCycle, now(), company.id, tenant); syncFilingFirm(tenant, company.id, user.id) } db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
     return json(res, 200, { updated: body.companyIds }), true
   }
   if (setupMatch) {
@@ -142,7 +143,12 @@ export async function bookkeepingRoutes(req, res, url, user, { json, fail, parse
     if (!isObject(body) || (body.filingCycle !== undefined && !['monthly', 'quarterly'].includes(body.filingCycle))) return fail(res, 400, '申報週期須為每月或每季'), true
     if (body.filingCycle === 'quarterly' && (company.taxpayer_type || '') === '一般納稅人') return fail(res, 400, '一般納稅人須按月申報'), true
     if (body.accountingFirmId !== undefined && body.accountingFirmId !== null && !db.prepare('SELECT id FROM accounting_firms WHERE id=? AND tenant_id=?').get(body.accountingFirmId, tenant)) return fail(res, 404, '會計公司不存在'), true
-    db.prepare('UPDATE companies SET accounting_firm_id=?, filing_cycle=?, updated_at=? WHERE id=?').run(body.accountingFirmId === undefined ? company.accounting_firm_id : body.accountingFirmId, body.filingCycle || company.filing_cycle || 'monthly', now(), company.id)
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      db.prepare('UPDATE companies SET accounting_firm_id=?, filing_cycle=?, updated_at=? WHERE id=?').run(body.accountingFirmId === undefined ? company.accounting_firm_id : body.accountingFirmId, body.filingCycle || company.filing_cycle || 'monthly', now(), company.id)
+      syncFilingFirm(tenant, company.id, user.id)
+      db.exec('COMMIT')
+    } catch (error) { db.exec('ROLLBACK'); throw error }
     const updated = db.prepare('SELECT accounting_firm_id, filing_cycle FROM companies WHERE id=?').get(company.id)
     return json(res, 200, { companyId: company.id, accountingFirmId: updated.accounting_firm_id, filingCycle: updated.filing_cycle }), true
   }

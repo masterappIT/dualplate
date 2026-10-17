@@ -1,63 +1,101 @@
 import { randomUUID } from 'node:crypto'
 import { db } from './db.js'
-import { checkScope, loadOwner, scopesFor, templateChanges, templates, writeScope } from './entrustment.js'
+import { applyTemplate, changeItems, checkScope, customerScope, expandChange, loadOwner, scopeImpact, scopesFor, templateChanges, templates, writeScope } from './entrustment.js'
 
-// Entrustment scope, templates and plate transfers (docs/tasks/entrustment-brief.md §1, §4, §6). Admin only.
+// Entrustment per item, customer item lists, templates and plate transfers (docs/tasks/scope-items-design.md,
+// docs/tasks/entrustment-brief.md §6). Admin only.
 const validDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value + 'T00:00:00Z')) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value
 const isObject = value => value && typeof value === 'object' && !Array.isArray(value)
+const codeList = value => value === undefined ? [] : Array.isArray(value) && value.length <= 200 && value.every(item => typeof item === 'string') ? value : null
 
 export async function entrustmentRoutes(req, res, url, user, h) {
   const { json, fail, parseBody } = h
   const path = url.pathname, method = req.method, tenant = user.tenant_id
   const templateMatch = path.match(/^\/api\/customers\/([^/]+)\/apply-template$/)
+  const customerScopeMatch = path.match(/^\/api\/customers\/([^/]+)\/(scope|items)$/)
   const transferMatch = path.match(/^\/api\/plates\/([^/]+)\/transfers?$/)
-  if (path !== '/api/service-scopes' && path !== '/api/service-scopes/batch' && !templateMatch && !transferMatch) return false
+  if (path !== '/api/service-scopes' && path !== '/api/service-scopes/batch' && !templateMatch && !customerScopeMatch && !transferMatch) return false
   if (user.role !== 'admin') return fail(res, 403, '無權限'), true
+  // Checks one change and expands it to item level; returns { changes } or { status, error }.
+  const resolve = change => {
+    if (!isObject(change) || !['company', 'plate'].includes(change.ownerType) || typeof change.ownerId !== 'string' || !change.ownerId.trim() || typeof change.handler !== 'string' || !change.handler.trim() || change.item !== undefined && (typeof change.item !== 'string' || !change.item.trim()) || change.service !== undefined && (typeof change.service !== 'string' || !change.service.trim()) || change.item === undefined && change.service === undefined) return { status: 400, error: '內容無效' }
+    const owner = loadOwner(tenant, change.ownerType, change.ownerId)
+    if (!owner) return { status: 404, error: '對象不存在' }
+    const problem = checkScope(owner, change)
+    if (problem) return { status: 400, error: problem }
+    const expanded = expandChange(tenant, change.ownerType, owner, change)
+    if (expanded.error) return { status: 400, error: expanded.error }
+    // Outsourced monthly filings go to a firm from the accounting-firm list, shared with the filings page.
+    let firm = null
+    if (change.providerId !== undefined && (typeof change.providerId !== 'string' || !change.providerId.trim())) return { status: 400, error: '會計公司無效' }
+    if (change.handler === 'outsourced' && expanded.changes.some(item => item.item === 'monthly_filing')) {
+      firm = change.providerId ? db.prepare('SELECT id, name FROM accounting_firms WHERE id=? AND tenant_id=?').get(change.providerId, tenant) : db.prepare('SELECT id, name FROM accounting_firms WHERE name=? AND tenant_id=?').get(String(change.providerName || '').trim(), tenant)
+      if (!firm) return { status: 400, error: '每月報帳外包須從會計公司名單選擇' }
+    }
+    return { changes: expanded.changes.map(item => ({ ...item, ownerId: owner.id, customerId: owner.customer_id, ...(firm && item.item === 'monthly_filing' ? { providerName: firm.name, firmId: firm.id } : {}) })) }
+  }
+  const write = change => {
+    writeScope({ tenantId: tenant, ownerType: change.ownerType, ownerId: change.ownerId, item: change.item, handler: change.handler, providerName: change.providerName, notes: change.notes, userId: user.id })
+    if (change.firmId) db.prepare('UPDATE companies SET accounting_firm_id=?, updated_at=? WHERE id=? AND tenant_id=?').run(change.firmId, new Date().toISOString(), change.ownerId, tenant)
+  }
 
   if (path === '/api/service-scopes' && method === 'GET') {
     const result = scopesFor(tenant, url.searchParams.get('ownerType'), url.searchParams.get('ownerId'))
     return (result ? json(res, 200, result) : fail(res, 404, '對象不存在')), true
   }
   if (path === '/api/service-scopes' && method === 'PUT') {
-    const body = await parseBody(req)
-    if (!isObject(body) || !['company', 'plate'].includes(body.ownerType) || typeof body.ownerId !== 'string' || !body.ownerId.trim() || typeof body.service !== 'string' || !body.service.trim() || typeof body.handler !== 'string' || !body.handler.trim()) return fail(res, 400, '內容無效'), true
-    const owner = loadOwner(tenant, body.ownerType, body.ownerId)
-    if (!owner) return fail(res, 404, '對象不存在'), true
-    const problem = checkScope(owner, body.ownerType, body)
-    if (problem) return fail(res, 400, problem), true
+    const resolved = resolve(await parseBody(req))
+    if (resolved.error) return fail(res, resolved.status, resolved.error), true
     db.exec('BEGIN IMMEDIATE')
-    try { writeScope({ tenantId: tenant, ownerType: body.ownerType, ownerId: owner.id, service: body.service, handler: body.handler, providerName: body.providerName, notes: body.notes, userId: user.id }); db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
-    return json(res, 200, scopesFor(tenant, body.ownerType, owner.id)), true
+    try { resolved.changes.forEach(write); db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
+    return json(res, 200, scopesFor(tenant, resolved.changes[0].ownerType, resolved.changes[0].ownerId)), true
   }
   if (path === '/api/service-scopes/batch' && method === 'PUT') {
-    // 委託範圍矩陣一次提交：先逐項驗證，全部合格才在同一交易內寫入，任何一項不合格就全部不改
+    // 委託範圍矩陣一次提交：先逐項驗證，全部合格才在同一交易內寫入，任何一項不合格就全部不改；dryRun 只回傳影響
     const body = await parseBody(req)
-    if (!isObject(body) || !Array.isArray(body.changes) || !body.changes.length || body.changes.length > 500) return fail(res, 400, '請提供要修改的項目'), true
+    if (!isObject(body) || !Array.isArray(body.changes) || !body.changes.length || body.changes.length > 2000 || body.dryRun !== undefined && typeof body.dryRun !== 'boolean') return fail(res, 400, '請提供要修改的項目'), true
     const checked = []
     for (const [index, change] of body.changes.entries()) {
-      if (!isObject(change) || !['company', 'plate'].includes(change.ownerType) || typeof change.ownerId !== 'string' || typeof change.service !== 'string' || typeof change.handler !== 'string') return fail(res, 400, `第 ${index + 1} 項內容無效`), true
-      const owner = loadOwner(tenant, change.ownerType, change.ownerId)
-      if (!owner) return fail(res, 404, `第 ${index + 1} 項的對象不存在`), true
-      const problem = checkScope(owner, change.ownerType, change)
-      if (problem) return fail(res, 400, `第 ${index + 1} 項：${problem}`), true
-      if (checked.some(item => item.ownerType === change.ownerType && item.ownerId === owner.id && item.service === change.service)) return fail(res, 400, `第 ${index + 1} 項重複`), true
-      checked.push({ ...change, ownerId: owner.id })
+      const resolved = resolve(change)
+      if (resolved.error) return fail(res, resolved.status, `第 ${index + 1} 項：${resolved.error}`), true
+      for (const item of resolved.changes) {
+        if (checked.some(entry => entry.ownerType === item.ownerType && entry.ownerId === item.ownerId && entry.item === item.item)) return fail(res, 400, `第 ${index + 1} 項重複`), true
+        checked.push(item)
+      }
+    }
+    const impact = scopeImpact(tenant, checked)
+    if (body.dryRun) return json(res, 200, { updated: 0, impact }), true
+    db.exec('BEGIN IMMEDIATE')
+    try { checked.forEach(write); db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
+    return json(res, 200, { updated: checked.length, impact }), true
+  }
+  if (customerScopeMatch && customerScopeMatch[2] === 'scope' && method === 'GET') {
+    const result = customerScope(tenant, customerScopeMatch[1])
+    return (result ? json(res, 200, result) : fail(res, 404, '客戶不存在')), true
+  }
+  if (customerScopeMatch && customerScopeMatch[2] === 'items' && method === 'PUT') {
+    const body = await parseBody(req)
+    const add = isObject(body) ? codeList(body.add) : null, remove = isObject(body) ? codeList(body.remove) : null
+    if (!add || !remove || !add.length && !remove.length || body.dryRun !== undefined && typeof body.dryRun !== 'boolean') return fail(res, 400, '請提供要加入或移除的事項'), true
+    const customer = db.prepare('SELECT * FROM customers WHERE id=? AND tenant_id=?').get(customerScopeMatch[1], tenant)
+    if (!customer) return fail(res, 404, '客戶不存在'), true
+    if (body.dryRun !== false) {
+      const preview = changeItems(tenant, customer, { add, remove }, user.id, false)
+      return (preview.error ? fail(res, 400, preview.error) : json(res, 200, { ...preview, applied: false })), true
     }
     db.exec('BEGIN IMMEDIATE')
-    try { for (const change of checked) writeScope({ tenantId: tenant, ownerType: change.ownerType, ownerId: change.ownerId, service: change.service, handler: change.handler, providerName: change.providerName, notes: change.notes, userId: user.id }); db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
-    return json(res, 200, { updated: checked.length }), true
+    let result
+    try { result = changeItems(tenant, customer, { add, remove }, user.id, true); if (result.error) db.exec('ROLLBACK'); else db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
+    return (result.error ? fail(res, 400, result.error) : json(res, 200, { ...result, applied: true })), true
   }
   if (templateMatch && method === 'POST') {
     const body = await parseBody(req)
-    if (!isObject(body) || !Object.hasOwn(templates, body.template)) return fail(res, 400, '委託範本無效'), true
+    if (!isObject(body) || !Object.hasOwn(templates, body.template) || body.dryRun !== undefined && typeof body.dryRun !== 'boolean') return fail(res, 400, '委託範本無效'), true
     const preview = templateChanges(tenant, templateMatch[1], body.template)
     if (!preview) return fail(res, 404, '客戶不存在'), true
     if (body.dryRun !== false) return json(res, 200, { ...preview, applied: false }), true
     db.exec('BEGIN IMMEDIATE')
-    try {
-      for (const change of preview.changes) writeScope({ tenantId: tenant, ownerType: change.ownerType, ownerId: change.ownerId, service: change.service, handler: change.to, providerName: '', notes: `套用範本：${preview.label}`, userId: user.id })
-      db.exec('COMMIT')
-    } catch (error) { db.exec('ROLLBACK'); throw error }
+    try { applyTemplate(tenant, templateMatch[1], preview, user.id); db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
     return json(res, 200, { ...preview, applied: true }), true
   }
   if (transferMatch && method === 'GET' && path.endsWith('/transfers')) {
@@ -95,7 +133,7 @@ export async function entrustmentRoutes(req, res, url, user, h) {
       // Moving into our own stock cannot keep 'client' items; they become ours.
       if (target.is_self) {
         const owners = [...plateIds.map(id => ['plate', id]), ...(plate.group_id ? db.prepare('SELECT id FROM companies WHERE group_id=?').all(plate.group_id).map(item => ['company', item.id]) : [])]
-        for (const [ownerType, ownerId] of owners) for (const row of db.prepare("SELECT * FROM service_scopes WHERE owner_type=? AND owner_id=? AND ended_on IS NULL AND handler='client'").all(ownerType, ownerId)) writeScope({ tenantId: tenant, ownerType, ownerId, service: row.service, handler: 'us', providerName: '', notes: '轉入本公司自有', userId: user.id })
+        for (const [ownerType, ownerId] of owners) for (const row of db.prepare("SELECT * FROM service_scopes WHERE owner_type=? AND owner_id=? AND ended_on IS NULL AND handler='client'").all(ownerType, ownerId)) writeScope({ tenantId: tenant, ownerType, ownerId, item: row.service, handler: 'us', providerName: '', notes: '轉入本公司自有', userId: user.id })
       }
       db.exec('COMMIT')
     } catch (error) { db.exec('ROLLBACK'); throw error }

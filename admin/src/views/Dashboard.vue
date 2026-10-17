@@ -50,6 +50,7 @@ import Tag from '../components/ui/Tag.vue'
 import FilterBar from '../components/business/FilterBar.vue'
 import { useAdminStore } from '../store'
 import { api, rentMoney } from '../api'
+import { offerFee } from '../composables/fee-suggestion'
 const { view, customers, customerTab, openCustomer, todayTab, todayCustomerId, todayOwnership, todayCounts, todayDeadlines, overviewData, saveTrackedItem, createRequestFromDeadline, openPlateById, openRequest, showSuccess, showError } = useAdminStore()
 const router = useRouter()
 const moneyByCurrency = amounts => Object.entries(amounts || {}).filter(([, amount]) => amount).map(([currency, amount]) => rentMoney(amount, currency)).join(' · ') || '—'
@@ -95,5 +96,5 @@ async function saveDate(item, expiresOn) { return saveTrackedItem({ ...item, cod
 // 蓋章回饋：在按下的位置蓋「已辦好」章，0.9 秒後消失（列表隨即重新整理，該項會離開清單）。
 const stamp = ref(null)
 function stampAt(event) { const rect = event?.target?.getBoundingClientRect?.(); stamp.value = rect ? { x: rect.left + rect.width / 2 - 28, y: rect.top - 20, key: Date.now() } : null; setTimeout(() => { stamp.value = null }, 900) }
-async function complete(item, event) { try { await api('/rule-completions', 'POST', { ruleCode: item.ruleCode, ownerId: item.ownerId, period: item.period }); stampAt(event); await useAdminStore().refresh(); showSuccess('本期已標記完成') } catch (error) { showError(error) } }
+async function complete(item, event) { try { const result = await api('/rule-completions', 'POST', { ruleCode: item.ruleCode, ownerId: item.ownerId, period: item.period }); stampAt(event); await useAdminStore().refresh(); showSuccess('本期已標記完成'); if (await offerFee(result)) showSuccess('已記一筆未收代辦費') } catch (error) { showError(error) } }
 </script>

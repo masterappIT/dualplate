@@ -34,7 +34,7 @@ function feeView(row) {
     incurredOn: row.incurred_on, dueOn: row.due_on, status, overdue: ['未收', '部分收'].includes(status) && Boolean(row.due_on) && row.due_on < today(), voidReason: row.void_reason || '', installmentPlanId: row.installment_plan_id, installmentSeq: row.installment_seq, customerConfirmedAt: row.customer_confirmed_at, notes: row.notes || '',
     payments: payments.map(item => ({ id: item.id, paidOn: item.paid_on, amount: item.amount, method: item.method, hasProof: Boolean(item.has_proof) })) }
 }
-function insertFee(tenantId, fields, userId) {
+export function insertFee(tenantId, fields, userId) {
   const feeId = id()
   const result = db.prepare('INSERT OR IGNORE INTO fee_items(id,tenant_id,customer_id,kind,request_id,plate_asset_id,description,currency,amount,incurred_on,due_on,installment_plan_id,installment_seq,period_key,notes,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
     .run(feeId, tenantId, fields.customerId, fields.kind, fields.requestId || null, fields.plateId || null, fields.description, fields.currency, fields.amount, fields.incurredOn || today(), fields.dueOn || null, fields.planId || null, fields.seq || null, fields.periodKey || null, fields.notes || null, userId || null, now(), now())

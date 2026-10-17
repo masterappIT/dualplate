@@ -3,6 +3,7 @@ import { services, planFor } from './catalog.js'
 import { notify } from './client-portal.js'
 import { passwordProblem } from './security.js'
 import { checkRequestFees, recordRequestFees, expectedFees } from './fees.js'
+import { priceSuggestion, staffCloseFee } from './pricing.js'
 
 const statuses = ['待開始', '進行中', '待客戶提供', '已完成', '已取消']
 const taskStatuses = ['待辦', '進行中', '已完成', '不適用']
@@ -16,6 +17,13 @@ const parseDocuments = value => Array.isArray(value) && value.every(item => type
 const validSteps = value => Array.isArray(value) && value.length > 0 && value.every(step => isObject(step) && typeof step.title === 'string' && step.title.trim() && ['us', 'client'].includes(step.owner) && parseDocuments(step.documents || []) && (step.days === null || step.days === undefined || Number.isInteger(step.days) && step.days >= 0 && step.days <= 365))
 
 export function canManage(user) { return user.role === 'admin' }
+// 結案收費的預設：已接受的報價優先，否則按客戶價目（年費內、不收或未定價時不預填）
+function feeHints(tenantId, request) {
+  const quoted = expectedFees(request.id)
+  if (quoted.length) return { expectedFees: quoted, feeBasis: 'quote' }
+  const suggestion = priceSuggestion(tenantId, request)
+  return { expectedFees: suggestion.fees, feeBasis: suggestion.basis }
+}
 function staffUser(tenant, userId, includeInactive = false) {
   return db.prepare(`SELECT id,role,name,email,username,active,last_login_at,tenant_id FROM users WHERE id=? AND tenant_id=? AND role IN ('admin','staff') ${includeInactive ? '' : 'AND active=1'}`).get(userId, tenant)
 }
@@ -207,7 +215,7 @@ export async function workOrderRoutes(req, res, url, user, h) {
     updateRequestStatus(request.id)
     const template = request.template_id ? templateFor(tenant, request.template_id) : null
     const plateAsset = request.plate_asset_id ? db.prepare('SELECT id, mainland_plate, local_plate, card_number, route FROM plate_assets WHERE id=?').get(request.plate_asset_id) || null : null
-    return json(res, 200, { ...requestFor(tenant, request.id), plateAsset, ...(user.role === 'admin' ? { expectedFees: expectedFees(request.id) } : {}), tasks: db.prepare('SELECT * FROM tasks WHERE request_id=? ORDER BY sort,rowid').all(request.id).map(stepPayload), activities: db.prepare('SELECT a.*,u.name actor_name FROM activities a LEFT JOIN users u ON u.id=a.actor_id WHERE a.request_id=? ORDER BY a.created_at DESC').all(request.id), template: template ? templatePayload(template) : null, plan: (service => service ? planFor(service, request.route) : null)(services.find(entry => entry.code === request.service_code)), clientTodos: db.prepare("SELECT id,title,owner,status,documents_json,sort FROM tasks WHERE request_id=? AND owner='client' AND status NOT IN ('已完成','不適用') ORDER BY sort,rowid").all(request.id).map(stepPayload) }), true
+    return json(res, 200, { ...requestFor(tenant, request.id), plateAsset, ...(user.role === 'admin' ? feeHints(tenant, request) : {}), tasks: db.prepare('SELECT * FROM tasks WHERE request_id=? ORDER BY sort,rowid').all(request.id).map(stepPayload), activities: db.prepare('SELECT a.*,u.name actor_name FROM activities a LEFT JOIN users u ON u.id=a.actor_id WHERE a.request_id=? ORDER BY a.created_at DESC').all(request.id), template: template ? templatePayload(template) : null, plan: (service => service ? planFor(service, request.route) : null)(services.find(entry => entry.code === request.service_code)), clientTodos: db.prepare("SELECT id,title,owner,status,documents_json,sort FROM tasks WHERE request_id=? AND owner='client' AND status NOT IN ('已完成','不適用') ORDER BY sort,rowid").all(request.id).map(stepPayload) }), true
   }
   if (requestMatch && method === 'PATCH') {
     const request = ensureScope(user, requestFor(tenant, requestMatch[1])); if (!request) return fail(res, 404, '工單不存在'), true
@@ -232,6 +240,7 @@ export async function workOrderRoutes(req, res, url, user, h) {
     db.prepare('INSERT INTO activities VALUES (?,?,?,?,?,?)').run(id(), request.id, user.id, 'status', `${nextStatusValue}${body.note ? ` · ${clean(body.note, 1000)}` : ''}`, now())
     if (nextStatusValue !== request.status) notifyStatus(request.id, nextStatusValue)
     if (body.status === '已完成' && request.status !== '已完成' && !body.skipFees && body.fees) recordRequestFees(tenant, request, body.fees, user.id)
+    if (body.status === '已完成' && request.status !== '已完成' && user.role !== 'admin') staffCloseFee(tenant, request, user.id)
     return json(res, 200, requestFor(tenant, request.id)), true
   }
   if (taskMatch && method === 'PATCH') {

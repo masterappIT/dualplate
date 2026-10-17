@@ -9,6 +9,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { api, rentMoney } from '../api'
+import { offerFee } from '../composables/fee-suggestion'
 import { useRouter } from 'vue-router'
 const router = useRouter()
 const currencyAmounts = amounts => Object.entries(amounts || {}).filter(([, value]) => value).map(([currency, value]) => rentMoney(value, currency)).join(' · ') || '—'
@@ -20,7 +21,7 @@ const statusLabel = level => statuses.find(item => item[0] === level)?.[1] || le
 const statusTone = level => ({ overdue:'danger', due:'amber', missing:'muted', upcoming:'success' }[level] || '')
 const healthLabel = health => ({red:'紅色：有逾期',amber:'黃色：有需處理或待錄入',green:'綠色：目前正常'}[health])
 async function load() { try { data.value = await api(`/overview?days=${days.value}`) } catch (error) { emit('error', error) } }
-async function complete(item) { try { await api('/rule-completions','POST',{ruleCode:item.ruleCode,ownerId:item.ownerId,period:item.period}); await load() } catch (error) { emit('error', error) } }
+async function complete(item) { try { const result = await api('/rule-completions','POST',{ruleCode:item.ruleCode,ownerId:item.ownerId,period:item.period}); await load(); await offerFee(result) } catch (error) { emit('error', error) } }
 onMounted(load)
 </script>
 <style scoped>

@@ -25,9 +25,11 @@
   <FormDialog :open="!!loginTarget" :title="`修改${loginTarget?.name || ''}的登入資料`" layout="stack" :saving="loginSaving" submit-text="儲存" @close="loginTarget = null" @submit="saveLogin"><Field label="顯示名稱" required><TextInput v-model="loginForm.name" /></Field><p class="dialog-note">電郵或手機號碼至少填一項。改了電郵或手機後，客戶原有登入會失效，需用新帳號重新登入。</p><Field label="電郵"><TextInput v-model="loginForm.email" type="email" /></Field><Field label="手機號碼"><PhoneInput v-model="loginForm.phone" /></Field><p v-if="loginError" class="error" role="alert">{{ loginError }}</p></FormDialog>
   <Modal :open="!!deleteAccountTarget" title="刪除客戶帳號" :sub="`刪除 ${deleteAccountTarget?.name || ''} 後無法再登入，也無法復原。有上傳或操作紀錄的帳號不能刪除，請改用停用。`" @close="deleteAccountTarget = null"><p v-if="accountActionError" role="alert" class="error">{{ accountActionError }}</p><template #footer><Button @click="deleteAccountTarget = null">取消</Button><Button variant="danger" :loading="!!accountSaving" @click="deleteAccount">確認刪除</Button></template></Modal>
   <Modal :open="customerDeleteOpen" title="刪除客戶" :sub="`確定刪除「${selectedCustomer?.name || ''}」？刪除後無法復原。`" @close="customerDeleteOpen = false"><p v-if="customerDeleteError" role="alert" class="error">{{ customerDeleteError }}</p><template #footer><Button @click="customerDeleteOpen = false">取消</Button><Button variant="danger" :loading="customerDeleting" @click="deleteCustomer">確認刪除</Button></template></Modal>
-  <Modal :open="templateOpen" title="套用委託範本" sub="先預覽變更清單，確認後才更新。" @close="templateOpen = false; preview = null"><Field label="範本"><select v-model="templateKey" @change="preview = null"><option value="full">全權托管</option><option value="plates_only">只管牌照</option><option value="plates_and_mainland">牌照＋內地公司</option></select></Field><p v-if="templateError" role="alert">{{ templateError }}</p><div v-for="change in preview?.changes || []" :key="`${change.ownerType}-${change.ownerId}-${change.service}`" class="record-row">{{ change.ownerLabel }} · {{ change.serviceLabel }}：{{ handlerName(change.from) }} → {{ handlerName(change.to) }}</div><p v-if="preview && !preview.changes.length">沒有需要變更的項目。</p><template #footer><Button @click="templateOpen = false">取消</Button><Button v-if="!preview" @click="previewTemplate">預覽變更</Button><Button v-else variant="primary" :disabled="!preview.changes.length || templateBusy" @click="applyTemplate">{{ templateBusy ? '套用中…' : '確認套用' }}</Button></template></Modal>
-  <Drawer :open="matrixOpen" title="委託範圍矩陣" sub="逐格切換負責方，改動會累計，確認後提交。" :width="900" @close="matrixOpen = false; pending = {}"><p v-if="matrixError" role="alert">{{ matrixError }}</p><p v-if="matrixLoading">載入矩陣中…</p><ServiceScopeMatrix v-else :rows="matrixRows" :services="matrixServices" :pending="pending" :is-self="!!selectedCustomer?.is_self" :saving="matrixSaving" @change="setMatrix" /><div v-for="[key, change] in Object.entries(pending).filter(([, item]) => item.handler === 'outsourced')" :key="key" class="record-row"><Field :label="`${matrixRows.find(row => row.id === change.ownerId)?.label} · ${matrixServices.find(item => item.code === change.service)?.label}外包單位`" required><TextInput :model-value="change.providerName" @update:model-value="pending[key] = { ...change, providerName: $event }" /></Field></div></Drawer>
-  <Teleport to="body"><div v-if="matrixOpen && Object.keys(pending).length" class="float-bar in-drawer"><span>{{ Object.keys(pending).length }} 項待提交</span><Button @click="pending = {}">放棄</Button><Button variant="primary" :disabled="matrixSaving" @click="saveMatrix">{{ matrixSaving ? '儲存中…' : '提交變更' }}</Button></div></Teleport>
+  <Modal :open="templateOpen" title="套用委託範本" sub="先預覽變更清單，確認後才更新。" @close="templateOpen = false; preview = null"><Field label="範本"><select v-model="templateKey" @change="preview = null"><option value="full">全權托管</option><option value="plates_only">只管牌照</option><option value="plates_and_mainland">牌照＋內地公司</option></select></Field><p v-if="templateError" role="alert">{{ templateError }}</p><div v-for="change in preview?.changes || []" :key="`${change.ownerType}-${change.ownerId}-${change.item}`" class="record-row">{{ change.ownerLabel }} · {{ change.itemLabel }}：{{ handlerName(change.from) }} → {{ handlerName(change.to) }}</div><p v-if="preview && !preview.changes.length">沒有需要變更的項目。</p><template #footer><Button @click="templateOpen = false">取消</Button><Button v-if="!preview" @click="previewTemplate">預覽變更</Button><Button v-else variant="primary" :disabled="!preview.changes.length || templateBusy" @click="applyTemplate">{{ templateBusy ? '套用中…' : '確認套用' }}</Button></template></Modal>
+  <Drawer :open="matrixOpen" title="委託範圍" sub="按公司和牌照逐件設定由誰辦理；改動累計後一次提交。" :width="960" @close="closeMatrix"><p v-if="matrixError" class="error" role="alert">{{ matrixError }}</p><p v-if="matrixLoading">載入委託範圍中…</p><ServiceScopeMatrix v-else-if="matrix" :data="matrix" :pending="pending" :is-self="!!selectedCustomer?.is_self" :saving="matrixSaving" @change="setMatrix" @column="setColumn" @items="openItems" /><section v-if="matrix && !selectedCustomer?.is_self" class="scope-section"><div class="panel-head"><div><h2>收費方式</h2><p>只有管理者看得到，客戶端不顯示價錢。改動只影響這位客戶，其餘沿用價目表。</p></div></div><PriceTable :customer-id="selectedCustomer.id" @saved="showSuccess" @error="showError" /></section><div v-for="item in outsourcedItems" :key="item" class="record-row"><Field :label="`${itemName(item)}外包單位（${Object.values(pending).filter(change => change.item === item && change.handler === 'outsourced').length} 格）`" required :hint="item === 'monthly_filing' ? '與報帳報稅頁共用；名單在報帳報稅頁的會計公司管理。' : ''"><Select v-if="item === 'monthly_filing'" :model-value="Object.values(pending).find(change => change.item === item && change.handler === 'outsourced')?.providerId || null" :options="firms.map(firm => ({ value: firm.id, label: firm.name }))" placeholder="選擇會計公司" empty-text="還沒有會計公司，請先到報帳報稅頁新增" @update:model-value="setFirm($event)" /><TextInput v-else :model-value="providerFor(item)" @update:model-value="setProvider(item, $event)" /></Field></div></Drawer>
+  <Teleport to="body"><div v-if="matrixOpen && Object.keys(pending).length && !impact && !itemsSection" class="float-bar in-drawer"><span>{{ Object.keys(pending).length }} 格待提交</span><Button @click="pending = {}">放棄</Button><Button variant="primary" :disabled="matrixSaving" @click="reviewMatrix">{{ matrixSaving ? '處理中…' : '提交變更' }}</Button></div></Teleport>
+  <Modal :open="!!impact" title="確認提交委託範圍" sub="以下是這次改動的影響。" @close="impact = null"><p v-if="impact?.toClient">{{ impact.toClient }} 項到期提醒將改為只提醒客戶，不再產生我們的工作。</p><p v-if="impact?.fromClient">{{ impact.fromClient }} 項改由我們跟進，會出現在今日工作。</p><template v-if="impact?.openRequests.length"><p>這些牌照有進行中的工單，工單不會自動取消：</p><div v-for="request in impact.openRequests" :key="request.id" class="record-row">{{ request.title }}</div></template><template #footer><Button @click="impact = null">返回修改</Button><Button variant="primary" :disabled="matrixSaving" @click="saveMatrix">{{ matrixSaving ? '提交中…' : '確認提交' }}</Button></template></Modal>
+  <Modal :open="!!itemsSection" :title="`${itemsSection?.label || ''}的事項`" sub="勾選這位客戶要管的事項。不在清單上的事，系統不會提醒任何人；已填的日期會保留。停用的事項（例如審計及利得稅）要先在規則頁啟用。" @close="itemsSection = null"><template v-for="group in itemsGroups" :key="group.label"><h3 v-if="group.label">{{ group.label }}</h3><div v-for="item in group.items" :key="item.code" class="record-row"><Checkbox :model-value="!!itemsChecked[item.code]" :label="item.name" @update:model-value="itemsChecked = { ...itemsChecked, [item.code]: $event }; itemsPreview = null" /></div></template><p v-if="itemsError" class="error" role="alert">{{ itemsError }}</p><template v-if="itemsPreview"><p v-for="item in itemsPreview.removed" :key="`r-${item.code}`">移除「{{ item.name }}」：{{ item.owners }} {{ ownerUnit }}不再提醒任何人{{ item.ours ? `（其中 ${item.ours} ${ownerUnit}原由我們跟進）` : '' }}。</p><p v-for="item in itemsPreview.added" :key="`a-${item.code}`">加入「{{ item.name }}」：{{ item.owners }} {{ ownerUnit }}開始提醒。</p><template v-if="itemsPreview.openRequests.length"><p>這些牌照有進行中的工單，工單不會自動取消：</p><div v-for="request in itemsPreview.openRequests" :key="request.id" class="record-row">{{ request.title }}</div></template></template><template #footer><Button @click="itemsSection = null">取消</Button><Button v-if="!itemsPreview" :disabled="!itemsDiff.add.length && !itemsDiff.remove.length" @click="previewItems">預覽變更</Button><Button v-else variant="primary" :disabled="itemsBusy" @click="applyItems">{{ itemsBusy ? '儲存中…' : '確認' }}</Button></template></Modal>
 </template>
 <script setup>
 import { computed, ref, watch, onMounted, nextTick } from 'vue'
@@ -50,6 +52,8 @@ import DataTable from '../components/ui/DataTable.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 import KeyValue from '../components/ui/KeyValue.vue'
 import ServiceScopeMatrix from '../components/business/ServiceScopeMatrix.vue'
+import Checkbox from '../components/ui/Checkbox.vue'
+import PriceTable from '../components/business/PriceTable.vue'
 import CustomerStructure from '../components/business/CustomerStructure.vue'
 import DueSwimlane from '../components/charts/DueSwimlane.vue'
 import { useViewMode } from '../composables/view'
@@ -169,11 +173,60 @@ const templateOpen = ref(false), templateKey = ref('full'), preview = ref(null),
 const handlerName = value => ({ us: '我們做', outsourced: '外包', client: '客戶自理' }[value] || value)
 async function previewTemplate() { try { preview.value = await api(`/customers/${selectedCustomer.value.id}/apply-template`, 'POST', { template: templateKey.value, dryRun: true }); templateError.value = '' } catch (error) { templateError.value = error.message } }
 async function applyTemplate() { templateBusy.value = true; try { await api(`/customers/${selectedCustomer.value.id}/apply-template`, 'POST', { template: templateKey.value, dryRun: false }); templateOpen.value = false; preview.value = null; showSuccess('委託範本已套用'); await refresh() } catch (error) { templateError.value = error.message } finally { templateBusy.value = false } }
-const matrixServices = [{ code: 'company_upkeep', label: '公司維護' }, { code: 'bookkeeping', label: '每月報帳' }, { code: 'audit_tax', label: '審計及利得稅' }, { code: 'secretary', label: '公司秘書' }, { code: 'plate_service', label: '牌照代辦' }, { code: 'rental_management', label: '出租代管' }]
-const matrixOpen = ref(false), matrixRows = ref([]), matrixLoading = ref(false), matrixError = ref(''), matrixSaving = ref(false), pending = ref({})
-async function loadMatrix() { matrixLoading.value = true; matrixError.value = ''; try { const owners = [...customerCompanies.value.map(item => ({ type: 'company', id: item.id, label: item.name })), ...customerPlates.value.map(item => ({ type: 'plate', id: item.id, label: item.mainland_plate || item.local_plate || item.card_number }))]; matrixRows.value = await Promise.all(owners.map(async owner => ({ ...owner, ...(await api(`/service-scopes?ownerType=${owner.type}&ownerId=${owner.id}`)) }))) } catch (error) { matrixError.value = error.message } finally { matrixLoading.value = false } }
-function setMatrix(row, service, handler) { const key = `${row.type}:${row.id}:${service}`; const current = row.services.find(item => item.service === service); if (handler === current.handler) { const next = { ...pending.value }; delete next[key]; pending.value = next } else pending.value = { ...pending.value, [key]: { ownerType: row.type, ownerId: row.id, service, handler, providerName: pending.value[key]?.providerName || (current.handler === 'outsourced' ? current.providerName : '') } } }
-async function saveMatrix() { if (Object.values(pending.value).some(change => change.handler === 'outsourced' && !change.providerName?.trim())) { matrixError.value = '外包須填寫單位名稱'; return } matrixSaving.value = true; matrixError.value = ''; try { await api('/service-scopes/batch', 'PUT', { changes: Object.values(pending.value) }); pending.value = {}; await loadMatrix(); showSuccess('委託範圍已更新') } catch (error) { matrixError.value = error.message } finally { matrixSaving.value = false } }
+const matrixOpen = ref(false), matrix = ref(null), matrixLoading = ref(false), matrixError = ref(''), matrixSaving = ref(false), pending = ref({}), impact = ref(null)
+const firms = ref([])
+async function loadMatrix() { matrixLoading.value = true; matrixError.value = ''; try { [matrix.value, firms.value] = await Promise.all([api(`/customers/${selectedCustomer.value.id}/scope`), api('/accounting-firms')]) } catch (error) { matrixError.value = error.message } finally { matrixLoading.value = false } }
+function closeMatrix() { matrixOpen.value = false; pending.value = {}; impact.value = null }
+// 一格可代表多件事（車牌小組），逐件累計；改回原值就從待提交移除
+function setMatrix(owner, codes, handler) {
+  const next = { ...pending.value }
+  for (const item of codes) {
+    const key = `${owner.type}:${owner.id}:${item}`, current = owner.cells[item]
+    if (!current) continue
+    if (handler === current.handler) delete next[key]
+    else next[key] = { ownerType: owner.type, ownerId: owner.id, item, handler, providerName: next[key]?.providerName || (current.handler === 'outsourced' ? current.providerName : '') }
+  }
+  pending.value = next
+}
+function setColumn(section, codes, handler) { for (const owner of section.owners) setMatrix(owner, codes, handler) }
+const itemName = code => matrix.value?.sections.flatMap(section => [...section.items, ...section.available]).find(item => item.code === code)?.name || code
+// 外包單位：同一件事填一次，套用到這次提交的全部外包格
+const outsourcedItems = computed(() => [...new Set(Object.values(pending.value).filter(change => change.handler === 'outsourced').map(change => change.item))])
+const providerFor = item => Object.values(pending.value).find(change => change.item === item && change.handler === 'outsourced')?.providerName || ''
+function setFirm(id) { const firm = firms.value.find(item => item.id === id); pending.value = Object.fromEntries(Object.entries(pending.value).map(([key, change]) => [key, change.item === 'monthly_filing' && change.handler === 'outsourced' ? { ...change, providerId: firm?.id, providerName: firm?.name || '' } : change])) }
+function setProvider(item, value) { pending.value = Object.fromEntries(Object.entries(pending.value).map(([key, change]) => [key, change.item === item && change.handler === 'outsourced' ? { ...change, providerName: value } : change])) }
+async function reviewMatrix() {
+  if (Object.values(pending.value).some(change => change.handler === 'outsourced' && !change.providerName?.trim())) { matrixError.value = '外包須填寫單位名稱'; return }
+  matrixSaving.value = true; matrixError.value = ''
+  try {
+    const result = await api('/service-scopes/batch', 'PUT', { changes: Object.values(pending.value), dryRun: true })
+    if (result.impact.toClient || result.impact.fromClient || result.impact.openRequests.length) impact.value = result.impact
+    else { matrixSaving.value = false; await saveMatrix() }
+  } catch (error) { matrixError.value = error.message } finally { matrixSaving.value = false }
+}
+async function saveMatrix() { matrixSaving.value = true; matrixError.value = ''; try { await api('/service-scopes/batch', 'PUT', { changes: Object.values(pending.value) }); pending.value = {}; impact.value = null; await loadMatrix(); showSuccess('委託範圍已更新'); await refresh() } catch (error) { matrixError.value = error.message; impact.value = null } finally { matrixSaving.value = false } }
+// 事項清單：勾選後先預覽影響，確認才寫入
+const itemsSection = ref(null), itemsChecked = ref({}), itemsPreview = ref(null), itemsBusy = ref(false), itemsError = ref('')
+function openItems(section) { itemsSection.value = section; itemsChecked.value = Object.fromEntries([...section.items.map(item => [item.code, true]), ...section.available.map(item => [item.code, false])]); itemsPreview.value = null; itemsError.value = '' }
+const itemsGroups = computed(() => {
+  const section = itemsSection.value
+  if (!section) return []
+  const all = [...section.items, ...section.available]
+  if (section.category !== 'plate') return [{ label: '', items: all }]
+  return Object.entries(matrix.value.groups).map(([key, label]) => ({ label, items: all.filter(item => item.group === key) })).filter(group => group.items.length)
+})
+const ownerUnit = computed(() => itemsSection.value?.category === 'plate' ? '個牌照' : '間公司')
+const itemsDiff = computed(() => { const section = itemsSection.value; return section ? { add: section.available.filter(item => itemsChecked.value[item.code]).map(item => item.code), remove: section.items.filter(item => !itemsChecked.value[item.code]).map(item => item.code) } : { add: [], remove: [] } })
+async function previewItems() { itemsError.value = ''; try { itemsPreview.value = await api(`/customers/${selectedCustomer.value.id}/items`, 'PUT', { ...itemsDiff.value, dryRun: true }) } catch (error) { itemsError.value = error.message } }
+async function applyItems() {
+  itemsBusy.value = true; itemsError.value = ''
+  try {
+    const { remove } = itemsDiff.value
+    await api(`/customers/${selectedCustomer.value.id}/items`, 'PUT', { ...itemsDiff.value, dryRun: false })
+    pending.value = Object.fromEntries(Object.entries(pending.value).filter(([, change]) => !remove.includes(change.item)))
+    itemsSection.value = null; await loadMatrix(); showSuccess('事項清單已更新'); await refresh()
+  } catch (error) { itemsError.value = error.message } finally { itemsBusy.value = false }
+}
 const plateColumns = [{ key: 'mainland_plate', title: '車牌' }, { key: 'holder_company', title: '持牌公司' }, { key: 'customer_id', title: '客戶' }, { key: 'port', title: '口岸' }, { key: 'card_expires_on', title: '批文到期' }, { key: 'permit_expires_on', title: 'CRP／通行證到期' }, { key: 'usage_status', title: '使用' }, { key: 'health_status', title: '狀態' }]
 const addGroupRequest = ref(0)
 const companyGroups = computed(() => allGroups.value.filter(group => group.customer_id === selectedCustomer.value?.id))
