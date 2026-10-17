@@ -29,6 +29,7 @@ import { plateCompanyRoutes, linkPlateCompanies } from './plate-companies.js'
 import { seedDemo } from './demo-seed.js'
 import { serviceModeRoutes, modes, startSelfManaged } from './service-mode.js'
 import { seal } from './password-vault.js'
+import { supportRoutes } from './support.js'
 import { passwordProblem, authenticate, createSession, lockedMinutes, recordFailure, clearFailures, loginPhone, PHONE_RULE, clientIp, audit, auditRoutes, logError, health } from './security.js'
 
 const port = Number(process.env.PORT || 4100)
@@ -176,6 +177,7 @@ export const server = http.createServer(async (req, res) => {
     if (await phase1Routes(req, res, url, user, { json, fail, parseBody, canAccessCustomer, vehicleFor, plateFor, query, one, clean })) return
     if (await entrustmentRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await serviceModeRoutes(req, res, url, user, { json, fail, parseBody })) return
+    if (await supportRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await workOrderRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await driverRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await vehicleDocumentRoutes(req, res, url, user, { json, fail, parseBody })) return

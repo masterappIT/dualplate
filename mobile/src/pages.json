@@ -92,6 +92,12 @@
       }
     },
     {
+      "path": "pages/messages/messages",
+      "style": {
+        "navigationBarTitleText": "聯絡我們"
+      }
+    },
+    {
       "path": "pages/profile/profile",
       "style": {
         "navigationBarTitleText": "我的資料"

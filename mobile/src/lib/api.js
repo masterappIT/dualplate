@@ -200,4 +200,13 @@ export async function uploadAttachment(requestId, file, taskId) {
 export const attachmentTone = { 待確認: 'blue', 已確認: '', 需重交: 'red' }
 export const attachmentLabel = { 待確認: '顧問核對中', 已確認: '已收妥', 需重交: '需要重交' }
 export function callAdvisor(phone) { if (phone) uni.makePhoneCall({ phoneNumber: phone.replace(/[\s-]/g, '') }) }
+// 打開外部連結（WhatsApp、企業微信客服）：H5 開新視窗；小程序不能直接開外部網址，改為複製連結
+export function openLink(url) {
+  if (!url) return
+  // #ifdef H5
+  window.open(url, '_blank')
+  return
+  // #endif
+  copyText(url, '連結已複製，請在瀏覽器打開')
+}
 export function copyText(value, title = '已複製') { if (value) uni.setClipboardData({ data: value, success: () => uni.showToast({ title, icon: 'none' }) }) }

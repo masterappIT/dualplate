@@ -7,6 +7,7 @@
     <StatCard label="進行中業務" tone="info" :value="todayCounts.active" hint="未完成工單" :active="todayTab === 'active'" @click="choose('active')" />
   </div>
   <ContractEndings />
+  <SupportInbox />
   <SelfHandledChanges />
   <CustomerChanges />
   <section ref="queuePanel" class="panel">
@@ -56,6 +57,7 @@ import FilterBar from '../components/business/FilterBar.vue'
 import CustomerChanges from '../components/business/CustomerChanges.vue'
 import SelfHandledChanges from '../components/business/SelfHandledChanges.vue'
 import ContractEndings from '../components/business/ContractEndings.vue'
+import SupportInbox from '../components/business/SupportInbox.vue'
 import { useAdminStore } from '../store'
 import { api, rentMoney } from '../api'
 import { offerFee, offerFees } from '../composables/fee-suggestion'
