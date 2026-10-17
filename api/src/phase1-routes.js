@@ -5,6 +5,8 @@ import { driverFor } from './drivers.js'
 import { rentOverview } from './rentals.js'
 import { filingDeadlines } from './bookkeeping.js'
 import { scopeMap } from './entrustment.js'
+import { priceFor } from './pricing.js'
+import { insertFee } from './fees.js'
 import { computeDeadlines, ruleMatches, ruleScopes, ruleMethods, matchKeys, dateFields, itemGroups, defaultGroup, defaultService } from './rules.js'
 
 const date = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value + 'T00:00:00Z')) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value
@@ -222,7 +224,13 @@ export async function phase1Routes(req, res, url, user, h) {
     if (typeof body.period !== 'string' || !(rule.method === 'after_field' ? date(body.period) : /^(\d{4}|\d{4}-(0[1-9]|1[0-2]))$/.test(body.period))) return error(400, '期數無效')
     if (method === 'POST') db.prepare('INSERT INTO rule_completions(tenant_id,code,owner_id,period,completed_by,completed_at) VALUES (?,?,?,?,?,?) ON CONFLICT(code,owner_id,period) DO UPDATE SET completed_by=excluded.completed_by,completed_at=excluded.completed_at').run(tenant, rule.code, body.ownerId, body.period, user.id, now())
     else db.prepare('DELETE FROM rule_completions WHERE tenant_id=? AND code=? AND owner_id=? AND period=?').run(tenant, rule.code, body.ownerId, body.period)
-    return send(200, { ok: true })
+    // 按次收費的事項：管理者標記辦好後提示記一筆收費（由前端確認才建立）
+    // 員工看不到收費，改為自動記一筆未收，由管理者核對（與員工結案工單一致）
+    const price = method === 'POST' && item.customer_id ? priceFor(tenant, item.customer_id, rule.code, rule.scope === 'plate' ? item.route : '') : null
+    const self = item.customer_id && one('SELECT is_self FROM customers WHERE id=?', item.customer_id)?.is_self
+    const suggestion = price?.billing === 'per_time' && price.amount && !self ? { customerId: item.customer_id, kind: 'service', description: `${rule.name}（${body.period}）`, currency: price.currency, amount: price.amount, plateId: rule.scope === 'plate' ? item.id : null } : null
+    if (suggestion && user.role !== 'admin') insertFee(tenant, { ...suggestion, periodKey: `done:${rule.code}:${item.id}:${body.period}`, notes: '員工標記辦好自動產生，請核對' }, user.id)
+    return send(200, { ok: true, ...(suggestion && user.role === 'admin' ? { feeSuggestion: suggestion } : {}) })
   }
   if (path === '/api/overview' && method === 'GET') {
     const days = url.searchParams.has('days') ? Number(url.searchParams.get('days')) : 90

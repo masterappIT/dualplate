@@ -92,6 +92,14 @@
 .scope-matrix-cell:focus-visible { outline: 2px solid var(--plate-yellow); outline-offset: -2px; }
 .scope-matrix-cell:disabled { cursor: wait; }
 .scope-matrix-empty { color: var(--ink-3); }
+/* 價目表（PriceTable.vue）：每件事一行，粵港／粵澳各一格，窄螢幕換行 */
+.price-section { display: grid; gap: 4px; margin-bottom: 16px; }
+.price-row { align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.price-cells { display: flex; flex-wrap: wrap; gap: 8px; }
+.price-cell { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: var(--r-control); padding: 4px 8px; background: var(--surface); cursor: pointer; }
+.price-cell:hover { background: var(--paper); }
+.price-cell:focus-visible { outline: 2px solid var(--plate-yellow); outline-offset: 2px; }
+.price-cell small { color: var(--ink-muted); }
 /* 委託範圍分段矩陣（ServiceScopeMatrix.vue）：欄數按段而定，窄螢幕改為每個對象一張卡 */
 .scope-section { display: grid; gap: 8px; margin-bottom: 24px; }
 .scope-section > .panel-head { margin: 0; }
