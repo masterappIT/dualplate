@@ -1,5 +1,5 @@
-import { db, now } from './db.js'
-import { logChanges } from './client-edits.js'
+import { db, id, now } from './db.js'
+import { logChanges, logPlateChanges } from './client-edits.js'
 import { vehicleFacts } from './plate-facts.js'
 import { ruleMatches } from './rules.js'
 import { fieldLabels, recognizeVehicleDocument } from './vehicle-ocr.js'
@@ -100,8 +100,45 @@ function applyRecognized({ vehicle, kind, recognized, user }) {
   return applied
 }
 
+// 牌照還沒有車輛記錄時（從批文卡建檔或匯入的牌照都沒有），按港澳車牌建立並綁定，之後才可上傳車輛證件。
+// 同客戶、同路線已有同車牌而沒綁到別的牌照的車，直接綁定，不重複建立。
+function plateFor(user, plateId) {
+  const plate = one('SELECT p.*, c.tenant_id FROM plate_assets p JOIN customers c ON c.id=p.customer_id WHERE p.id=?', plateId)
+  if (!plate || plate.tenant_id !== user.tenant_id) return null
+  if (['admin', 'staff'].includes(user.role)) return plate
+  return user.role === 'customer' && user.customer_id === plate.customer_id ? plate : null
+}
+function registerVehicle(user, plate) {
+  if (plate.vehicle_id) return { error: [409, '這個牌照已綁定車輛'] }
+  if (plate.installation_status === '未上牌') return { error: [400, '這個牌照未上牌，沒有車輛；上牌後再登記'] }
+  const local = String(plate.local_plate || '').trim().toUpperCase()
+  if (!local) return { error: [400, '請先填寫港澳車牌'] }
+  const origin = plate.route === '粵澳' ? '澳門' : '香港'
+  const same = value => String(value || '').toUpperCase().replace(/[\s\-]/g, '')
+  const existing = all('SELECT * FROM vehicles WHERE customer_id=? AND route=? AND retired_on IS NULL', plate.customer_id, plate.route)
+    .find(vehicle => same(vehicle.plate) === same(local) && !one('SELECT id FROM plate_assets WHERE vehicle_id=? AND id<>?', vehicle.id, plate.id))
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    const vehicleId = existing?.id || id()
+    if (!existing) db.prepare('INSERT INTO vehicles(id,customer_id,route,origin,type,plate) VALUES (?,?,?,?,?,?)').run(vehicleId, plate.customer_id, plate.route, origin, '私家車', local)
+    db.prepare("UPDATE plate_assets SET vehicle_id=?, installation_status=CASE WHEN installation_status='待核對' THEN '已上牌' ELSE installation_status END, updated_at=? WHERE id=?").run(vehicleId, now(), plate.id)
+    if (user.role === 'customer') logPlateChanges({ tenantId: plate.tenant_id, user, before: plate, after: one('SELECT * FROM plate_assets WHERE id=?', plate.id) })
+    db.exec('COMMIT')
+    return { vehicle: one('SELECT * FROM vehicles WHERE id=?', vehicleId), created: !existing }
+  } catch (error) { db.exec('ROLLBACK'); throw error }
+}
+
 export async function vehicleDocumentRoutes(req, res, url, user, { json, fail, parseBody }) {
   const path = url.pathname, method = req.method
+  const registerMatch = path.match(/^\/api\/plate-assets\/([^/]+)\/vehicle$/)
+  if (registerMatch) {
+    if (method !== 'POST') return fail(res, 405, '不支援此操作'), true
+    const plate = plateFor(user, decodeURIComponent(registerMatch[1]))
+    if (!plate) return fail(res, 404, '兩地牌不存在'), true
+    const result = registerVehicle(user, plate)
+    if (result.error) return fail(res, ...result.error), true
+    return json(res, result.created ? 201 : 200, result), true
+  }
   const listMatch = path.match(/^\/api\/vehicles\/([^/]+)\/documents$/)
   const kindMatch = path.match(/^\/api\/vehicles\/([^/]+)\/documents\/([^/]+)$/)
   const imageMatch = path.match(/^\/api\/vehicles\/([^/]+)\/documents\/([^/]+)\/image$/)

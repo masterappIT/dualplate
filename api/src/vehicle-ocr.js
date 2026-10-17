@@ -240,18 +240,23 @@ export async function recognizeVehicleDocument(image, kind, options = {}) {
   if (!documentFields[kind]) throw new Error('此證件不需要辨識')
   const variants = await prepare(image)
   const started = Date.now()
-  const worker = await createWorker(['chi_sim', 'eng'], 1, { langPath: tessdataPath, gzip: false, cachePath: tessdataPath, cacheMethod: 'readOnly' })
+  // tesseract.js 用 'chi_sim+eng' 同時載入兩種語言時，其中一種會載入失敗而不報錯，所以中文、英文分開讀（同批文卡）
+  const worker = await createWorker('chi_sim', 1, { langPath: tessdataPath, gzip: false, cachePath: tessdataPath, cacheMethod: 'readOnly' })
+  let language = 'chi_sim'
   const results = []
   try {
-    // 至少讀兩次（同一張圖兩種版面模式）互相印證；仍有欄位讀不到時再用黑白版本讀
+    // 每個版本用中文、英文各讀兩種版面模式，互相印證；仍有欄位讀不到時再用黑白版本讀
     for (const [index, variant] of variants.entries()) {
       if (index > 0 && Object.values(merge(results).fieldStatus).every(item => item.status !== 'failed')) break
-      for (const psm of ['3', '11']) {
-        await worker.setParameters({ tessedit_pageseg_mode: psm, preserve_interword_spaces: '1' })
-        const { data } = await worker.recognize(variant, {}, { text: true, blocks: true })
-        const lines = linesOf(data)
-        if (options.debug) console.log('VEHICLE OCR', kind, index, psm, JSON.stringify(lines.map(line => line.text)))
-        results.push(extractVehicleFields(kind, lines))
+      for (const next of ['chi_sim', 'eng']) {
+        if (next !== language) { await worker.reinitialize(next); language = next }
+        for (const psm of ['3', '11']) {
+          await worker.setParameters({ tessedit_pageseg_mode: psm, preserve_interword_spaces: '1' })
+          const { data } = await worker.recognize(variant, {}, { text: true, blocks: true })
+          const lines = linesOf(data)
+          if (options.debug) console.log('VEHICLE OCR', kind, index, language, psm, JSON.stringify(lines.map(line => line.text)))
+          results.push(extractVehicleFields(kind, lines))
+        }
       }
     }
   } finally {

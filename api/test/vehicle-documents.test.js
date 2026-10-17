@@ -423,3 +423,56 @@ test('已固定事項清單的客戶升級後加上澳門定期檢驗', () => {
     after.close()
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
+
+// ── 由牌照登記車輛（從批文卡建檔的牌照沒有車輛記錄） ──
+function makePlate({ customer = state.customer, route = '粵港', local = 'PQ4321', installation = '待核對', vehicleId = null } = {}) {
+  const plateId = randomUUID(), now = new Date().toISOString()
+  state.db.prepare('INSERT INTO plate_assets(id,customer_id,route,mainland_plate,local_plate,vehicle_id,installation_status,card_number,card_data,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(plateId, customer, route, '粵Z1234港', local, vehicleId, installation, 'C-' + plateId.slice(0, 8), '{}', now, now)
+  return plateId
+}
+const plateRow = id => state.db.prepare('SELECT * FROM plate_assets WHERE id=?').get(id)
+test('沒有車輛的香港牌照可按港澳車牌登記車輛並綁定', async () => {
+  const plateId = makePlate({ local: ' pq4321 ' })
+  const result = await request(`/plate-assets/${plateId}/vehicle`, 'POST')
+  assert.equal(result.status, 201)
+  assert.deepEqual([result.body.vehicle.plate, result.body.vehicle.origin, result.body.vehicle.route], ['PQ4321', '香港', '粵港'])
+  assert.equal(plateRow(plateId).vehicle_id, result.body.vehicle.id); assert.equal(plateRow(plateId).installation_status, '已上牌')
+})
+test('澳門牌照登記的車輛來源地為澳門', async () => {
+  const plateId = makePlate({ route: '粵澳', local: 'MY-56-78' })
+  assert.equal((await request(`/plate-assets/${plateId}/vehicle`, 'POST')).body.vehicle.origin, '澳門')
+})
+test('同客戶已有同車牌而未綁定的車，直接綁定不重複建立', async () => {
+  const vehicleId = randomUUID()
+  state.db.prepare('INSERT INTO vehicles(id,customer_id,route,origin,type,plate) VALUES (?,?,?,?,?,?)').run(vehicleId, state.customer, '粵港', '香港', '私家車', 'RS 9876')
+  const plateId = makePlate({ local: 'RS9876' })
+  const result = await request(`/plate-assets/${plateId}/vehicle`, 'POST')
+  assert.equal(result.status, 200); assert.equal(result.body.vehicle.id, vehicleId)
+})
+test('已綁定車輛的牌照不可再登記', async () => {
+  const { plateId } = makeVehicle()
+  assert.equal((await request(`/plate-assets/${plateId}/vehicle`, 'POST')).status, 409)
+})
+test('未上牌、沒有港澳車牌的牌照不可登記車輛', async () => {
+  assert.equal((await request(`/plate-assets/${makePlate({ installation: '未上牌' })}/vehicle`, 'POST')).status, 400)
+  assert.equal((await request(`/plate-assets/${makePlate({ local: '' })}/vehicle`, 'POST')).status, 400)
+  assert.equal((await request(`/plate-assets/${makePlate({ local: '   ' })}/vehicle`, 'POST')).status, 400)
+})
+test('客戶可為自己的牌照登記車輛，綁定列入待核對', async () => {
+  const plateId = makePlate({ local: 'TU1111' })
+  assert.equal((await request(`/plate-assets/${plateId}/vehicle`, 'POST', undefined, 'client')).status, 201)
+  assert.ok(state.db.prepare("SELECT 1 FROM customer_changes WHERE entity_type='plate' AND entity_id=? AND field='vehicleId' AND status='待核對'").get(plateId))
+})
+test('其他客戶、其他租戶不能為牌照登記車輛，不存在的牌照 404', async () => {
+  const plateId = makePlate({ local: 'VW2222' })
+  assert.equal((await request(`/plate-assets/${plateId}/vehicle`, 'POST', undefined, 'second-client')).status, 404)
+  assert.equal((await request(`/plate-assets/${plateId}/vehicle`, 'POST', undefined, 'foreign-admin')).status, 404)
+  assert.equal((await request(`/plate-assets/${randomUUID()}/vehicle`, 'POST')).status, 404)
+  assert.equal(plateRow(plateId).vehicle_id, null)
+})
+test('登記車輛只接受 POST', async () => { assert.equal((await request(`/plate-assets/${makePlate()}/vehicle`, 'GET')).status, 405) })
+test('重複按登記只建立一部車', async () => {
+  const plateId = makePlate({ local: 'XY3333' })
+  await request(`/plate-assets/${plateId}/vehicle`, 'POST'); await request(`/plate-assets/${plateId}/vehicle`, 'POST')
+  assert.equal(state.db.prepare("SELECT COUNT(*) count FROM vehicles WHERE customer_id=? AND plate='XY3333'").get(state.customer).count, 1)
+})

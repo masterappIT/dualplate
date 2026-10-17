@@ -17,6 +17,26 @@
       <button class="button primary" @click="startRequest">＋ 開工單</button>
     </div>
   </div>
+  <section class="panel plate-vehicle">
+    <div class="panel-head">
+      <div>
+        <h2>車輛與證件</h2>
+        <p>內地行駛證、{{ selectedPlate.route === '粵澳' ? '澳門車輛登記文件' : '香港車輛牌照' }}和保險單在車輛頁上傳，系統讀出車架號碼和日期。</p>
+      </div>
+    </div>
+    <div class="record-row">
+      <div v-if="boundVehicle">
+        <strong><PlateChip :plate="boundVehicle.plate" :route="boundVehicle.route" /></strong>
+        <small>{{ [boundVehicle.brand, boundVehicle.model].filter(Boolean).join(' ') || '品牌型號待補' }} · 車架號碼 {{ boundVehicle.vin || '待補' }}</small>
+      </div>
+      <div v-else>
+        <strong>尚未登記車輛</strong>
+        <small>{{ selectedPlate.installation_status === '未上牌' ? '這個牌照未上牌；上牌後再登記車輛。' : selectedPlate.local_plate ? `按港澳車牌 ${selectedPlate.local_plate} 登記這部車，之後即可上傳證件。` : '請先在下方填寫港澳車牌，再登記車輛。' }}</small>
+      </div>
+      <button v-if="boundVehicle" type="button" class="button primary" @click="openVehicle(boundVehicle)">車輛資料與證件</button>
+      <button v-else-if="selectedPlate.local_plate && selectedPlate.installation_status !== '未上牌'" type="button" class="button primary" :disabled="registering" @click="registerVehicle">{{ registering ? '正在登記…' : '登記這部車' }}</button>
+    </div>
+  </section>
   <section class="panel">
     <div class="panel-head">
       <div>
@@ -165,7 +185,7 @@
 <script setup>
 import { computed, ref, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { rentMoney } from '../api'
+import { api, rentMoney } from '../api'
 import { user } from '../api'
 import ServiceScope from '../components/ui/ServiceScope.vue'
 import CrossingRecords from '../components/ui/CrossingRecords.vue'
@@ -202,7 +222,21 @@ const {
   showSuccess,
   showError,
   newRequest,
+  openVehicle,
 } = useAdminStore();
+// 從批文卡建檔或匯入的牌照沒有車輛記錄：按港澳車牌登記並綁定，然後打開車輛頁上傳證件
+const boundVehicle = computed(() => vehicles.value.find(vehicle => vehicle.id === selectedPlate.value?.vehicle_id) || null)
+const registering = ref(false)
+async function registerVehicle() {
+  if (registering.value) return
+  registering.value = true
+  try {
+    const result = await api(`/plate-assets/${encodeURIComponent(selectedPlate.value.id)}/vehicle`, 'POST')
+    await refresh()
+    showSuccess(result.created ? `已登記車輛 ${result.vehicle.plate}，請上傳證件` : `已綁定車輛 ${result.vehicle.plate}，請上傳證件`)
+    await openVehicle(result.vehicle)
+  } catch (error) { showError(error) } finally { registering.value = false }
+}
 const rentalRouter = useRouter()
 function openRental(contractId) { rentalRouter.push({ path: '/rentals', query: contractId ? { contractId } : { plateId: selectedPlate.value.id, new: '1' } }) }
 const isAdmin = user()?.role === 'admin'

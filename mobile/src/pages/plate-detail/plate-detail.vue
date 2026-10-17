@@ -97,6 +97,13 @@
     </view>
 
     <text v-if="!creating && summary.id && !plates[0]?.stopped_on" class="link stop-link" @click="openSelf('stop_renewal')">不再續期這個牌照 ›</text>
+    <view v-if="!creating && loaded && plates[0] && !boundVehicles.length && plates[0].installation_status !== '未上牌'"><text class="section-title">車輛與證件</text>
+      <view class="card">
+        <text class="line-title">尚未登記車輛</text>
+        <text class="line-sub">{{ plates[0].local_plate ? '按港澳車牌 ' + plates[0].local_plate + ' 登記這部車，之後可拍下行駛證、' + (plates[0].route === '粵澳' ? '澳門車輛登記文件' : '香港車輛牌照') + '和保險單，系統會讀出車架號碼和日期。' : '請先在上方填寫港澳車牌，再登記車輛。' }}</text>
+        <button v-if="plates[0].local_plate" class="btn-sm solid register-vehicle" :disabled="registeringVehicle" @click="registerVehicle">{{ registeringVehicle ? '正在登記…' : '登記這部車' }}</button>
+      </view>
+    </view>
     <view v-if="!creating && boundVehicles.length"><text class="section-title">綁定車輛與驗車</text>
       <view v-for="v in boundVehicles" :key="v.id" class="card">
         <view class="row"><PlateChip :plate="v.plate" :region="v.origin==='內地'?'內地':v.origin==='澳門'?'澳門':'香港'" /><text class="pill gray">{{ v.type }}</text></view>
@@ -182,6 +189,9 @@ async function loadPending(){try{pending.value=await api('/my/pending')}catch{pe
 async function saveDate(item,date){if(!date||date===item.dueOn)return;try{await api('/my/dates','PUT',{ownerType:item.ownerType,ownerId:item.ownerId,code:item.code,expiresOn:date});summary.value=await api('/my/plates/'+plateId);loadPending();uni.showToast({title:'到期日已更新，顧問會再核對',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}}
 function editDriver(d){if(editingDriverId.value===d.id){editingDriverId.value='';return}const full=drivers.value.find(x=>x.id===d.id)||{};driverForm.value={name:full.name||d.name,phone:full.phone||'',hkIdNo:full.hkIdNo||'',homeReturnPermitNo:full.homeReturnPermitNo||''};editingDriverId.value=d.id}
 async function saveDriver(){if(savingDriver.value)return;savingDriver.value=true;try{await api('/my/drivers/'+editingDriverId.value,'PATCH',driverForm.value);editingDriverId.value='';const [mine,list]=await Promise.all([api('/my/plates/'+plateId),api('/my/drivers')]);summary.value=mine;drivers.value=list;loadPending();uni.showToast({title:'已更新，顧問會再核對',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{savingDriver.value=false}}
+// 從批文卡建檔的牌照沒有車輛記錄：按港澳車牌登記並綁定，然後即可上傳證件
+const registeringVehicle=ref(false)
+async function registerVehicle(){if(registeringVehicle.value)return;registeringVehicle.value=true;try{const r=await api('/plate-assets/'+plateId+'/vehicle','POST');uni.showToast({title:'已登記車輛 '+r.vehicle.plate+'，請上傳證件',icon:'none'});await load()}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{registeringVehicle.value=false}}
 // 車輛證件：上傳後系統辨識並填入空白資料，回傳最新的車輛與證件清單
 const docs=ref({}),uploadingDoc=ref('')
 async function loadDocs(list){const entries=await Promise.all(list.map(v=>api('/vehicles/'+v.id+'/documents').then(r=>[v.id,r]).catch(()=>[v.id,null])));docs.value={...docs.value,...Object.fromEntries(entries.filter(([,r])=>r))}}
@@ -231,7 +241,7 @@ import DueDate from '../../components/DueDate.vue'
 import StampMark from '../../components/StampMark.vue'
 </script>
 <style scoped>
-.doc-intro{margin-bottom:4px}.doc-check{display:flex;align-items:flex-start;gap:8px;padding:8px 0}.doc-line{align-items:flex-start}.doc-actions{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.register-vehicle{margin-top:12px}.doc-intro{margin-bottom:4px}.doc-check{display:flex;align-items:flex-start;gap:8px;padding:8px 0}.doc-line{align-items:flex-start}.doc-actions{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
 .head{margin-bottom:16px}.head-plates{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.head-sub{margin-top:8px}
 .actions{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:4px}.action{width:auto;padding:0 4px}
 .list{padding:4px 16px}
