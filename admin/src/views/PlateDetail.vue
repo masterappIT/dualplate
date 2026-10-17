@@ -71,8 +71,8 @@
         <button class="button" @click="saveCard">儲存並核對</button>
       </div>
     </div>
-    <!-- 有上傳原件時預設展開，方便對照核對 -->
-    <details class="scan-details" :open="!!(selectedPlate.cardImages?.front || selectedPlate.cardImages?.back)">
+    <!-- 平時收起，保持頁面整潔；要核對或重新上傳時才展開（管理者 2026-10-18） -->
+    <details class="scan-details">
       <summary>原件掃描與重新上傳（供核對）</summary>
       <div class="card-upload-grid">
         <div v-for="side in ['front', 'back']" :key="side">
@@ -83,13 +83,13 @@
             class="card-image"
           />
           <div v-else class="card-placeholder">尚未上傳</div>
-          <input
-            type="file"
-            accept="image/png,image/jpeg"
-            @change="uploadCard(side, $event)"
-          />
+          <div class="card-upload-actions">
+            <label class="button file-button">只保存正本<input type="file" accept="image/png,image/jpeg" :aria-label="`只保存${side === 'front' ? '正面' : '背面'}正本`" @change="uploadCard(side, $event, false)" /></label>
+            <label class="button file-button">上傳並讀取內容<input type="file" accept="image/png,image/jpeg" :aria-label="`上傳${side === 'front' ? '正面' : '背面'}並讀取內容`" @change="uploadCard(side, $event)" /></label>
+          </div>
         </div>
       </div>
+      <small class="cell-sub">只保存正本：資料不變，只留相片記錄。上傳並讀取內容：辨識後填入欄位，標為待核對。</small>
     </details>
   </section>
   <PlateDrivers ref="plateDrivers" :plate-id="selectedPlate.id" :customer-id="selectedPlate.customer_id" @saved="showSuccess" />
@@ -250,3 +250,8 @@ async function transferSaved(message) { showSuccess(message); await refresh(); v
 const vehicleOptions = computed(() => [{ value: '', label: '未綁定' }, ...vehicles.value.filter(vehicle => vehicle.customer_id === selectedPlate.value?.customer_id && vehicle.route === selectedPlate.value?.route).map(vehicle => ({ value: vehicle.id, label: `${vehicle.plate} · ${vehicle.brand || ''} ${vehicle.model || ''}` }))]);
 const groupOptions = computed(() => [{ value: '', label: '未分組' }, ...plateGroups.value.map(group => ({ value: group.id, label: group.name }))]);
 </script>
+
+<style scoped>
+.card-upload-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
+.file-button { position: relative; }
+</style>

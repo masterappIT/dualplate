@@ -619,16 +619,18 @@ async function readImageFile(event) {
     reader.readAsDataURL(file);
   });
 }
-async function uploadCard(side, event) {
+// recognize=false：只保存正本，不辨識、不改批文卡資料（管理者 2026-10-18）
+async function uploadCard(side, event, recognize = true) {
   try {
     const image = await readImageFile(event);
     if (!image) return;
     const result = await api(
       "/plate-assets/" + selectedPlate.value.id + "/card/" + side,
       "POST",
-      { image },
+      { image, recognize },
     );
     await openPlate(selectedPlate.value);
+    if (result.savedOnly) return showSuccess("批文卡" + (side === "front" ? "正面" : "背面") + "正本已保存，資料沒有改動");
     cardFieldStatus.value = result.fieldStatus || {};
     showSuccess(
       "批文卡" +

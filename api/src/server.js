@@ -496,6 +496,12 @@ export const server = http.createServer(async (req, res) => {
       const bytes = Buffer.from(matched[2], 'base64')
       if (!bytes.length || bytes.length > 3500000) return fail(res, 400, '圖片不可超過 3.5 MB')
       const side=cardMatch[2]
+      // 只保存正本（管理者 2026-10-18）：資料已對、只想留相片記錄時，不辨識、不改批文卡資料和狀態，也不列入客戶更新待核對
+      if (b.recognize !== undefined && typeof b.recognize !== 'boolean') return fail(res, 400, '上傳方式無效')
+      if (b.recognize === false) {
+        db.prepare('INSERT INTO approval_card_images VALUES (?,?,?,?) ON CONFLICT(plate_asset_id,side) DO UPDATE SET mime=excluded.mime,data=excluded.data').run(item.id,side,matched[1],bytes)
+        return json(res, 200, { side, uploaded: true, savedOnly: true, recognized: cardData(null), fieldStatus: {}, cardData: cardData(item.card_data), needsReview: false })
+      }
       let recognized={cardData:cardData(null),fieldStatus:{}}
       try { recognized=await recognizeCard(bytes,side) } catch (error) { console.error('Card OCR failed:',error) }
       const existing=cardData(item.card_data)
