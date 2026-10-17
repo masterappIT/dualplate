@@ -131,7 +131,10 @@ export async function changeReviewRoutes(req, res, url, user, { json, fail, pars
     const status = url.searchParams.get('status') || '待核對', customerId = url.searchParams.get('customerId')
     if (!['待核對', '已核對', '已改回'].includes(status)) return fail(res, 400, '狀態無效'), true
     const rows = db.prepare(`SELECT cc.*, c.name customer_name FROM customer_changes cc JOIN customers c ON c.id=cc.customer_id WHERE cc.tenant_id=? AND cc.status=? ${customerId ? 'AND cc.customer_id=?' : ''} ORDER BY ${status === '待核對' ? 'cc.is_date DESC, cc.changed_at DESC' : 'cc.reviewed_at DESC'} LIMIT 500`).all(...(customerId ? [tenant, status, customerId] : [tenant, status]))
-    return json(res, 200, rows.map(changeView)), true
+    // 同一牌照已有客戶自辦待核對時，批文卡的欄位修改已包在那一件（核對自辦時一併核對），這裏標出來不重複列
+    let covered = new Set()
+    try { covered = new Set(db.prepare("SELECT plate_asset_id FROM self_handled WHERE tenant_id=? AND status='待核對'").all(tenant).map(row => row.plate_asset_id)) } catch { covered = new Set() }
+    return json(res, 200, rows.map(row => ({ ...changeView(row), inSelfHandled: row.entity_type === 'card' && covered.has(row.entity_id) }))), true
   }
   if (method !== 'POST') return fail(res, 405, '不支援此操作'), true
   if (user.role !== 'admin') return fail(res, 403, '只有管理者可以核對客戶修改'), true

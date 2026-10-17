@@ -531,6 +531,17 @@ test('核對自辦時一併核對同一牌照的批文卡修改', async () => {
   assert.equal(state.db.prepare("SELECT COUNT(*) n FROM customer_changes WHERE entity_id=? AND status='待核對'").get(plateId).n, 0)
   assert.equal(plateRow(plateId).card_status, '已核對')
 })
+test('已包在自辦裏的批文卡修改在客戶更新清單標示出來', async () => {
+  const { plateId } = makePlate()
+  assert.equal((await request(`/plate-assets/${plateId}`, 'PUT', { cardData: { cardNumber: plateRow(plateId).card_number, localPlate: 'COVER1' } })).status, 200)
+  const flagged = async () => (await request('/customer-changes', 'GET', undefined, 'admin')).body.filter(item => item.entityId === plateId).map(item => item.inSelfHandled)
+  assert.deepEqual(await flagged(), [false])
+  await vehicleChange(plateId)
+  assert.deepEqual(await flagged(), [true])
+  const row = await pendingFor(plateId)
+  await request(`/self-handled/${row.id}/return`, 'POST', { note: '請重拍' }, 'admin')
+  assert.deepEqual(await flagged(), [false])
+})
 test('員工不能核對自辦', async () => {
   const { plateId } = makePlate()
   await vehicleChange(plateId)
