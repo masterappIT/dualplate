@@ -184,3 +184,41 @@ test('沒有連公司的牌照補資料提示為空', async () => {
   const id = state.db.prepare("SELECT id FROM plate_assets WHERE card_number='PC-014'").get().id
   assert.deepEqual((await request(`/my/plates/${id}`, 'GET', undefined, 'client')).body.companyGaps, [])
 })
+
+// —— 新建公司的委託：先客戶自理，員工確認後才產生工作 ——
+const scopeItems = async companyId => (await request(`/service-scopes?ownerType=company&ownerId=${companyId}`)).body.items
+const periodsOf = companyId => state.db.prepare('SELECT period, due_on FROM filing_periods WHERE company_id=? ORDER BY period').all(companyId)
+const runFilings = async () => (await import('../src/bookkeeping.js')).ensureFilings('default')
+const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Hong_Kong' })
+test('按名稱新建的公司委託項目全部先設為客戶自理', async () => {
+  const r = await createCard({ cardNumber: 'PC-030', company: '辛控股有限公司', contractor: '深圳辛贸易有限公司' })
+  const cn = groupCompanies(plate(r.body.id).group_id).find(item => item.jurisdiction === '內地')
+  const hk = groupCompanies(plate(r.body.id).group_id).find(item => item.jurisdiction === '香港')
+  state.newMainland = cn.id
+  for (const company of [cn, hk]) {
+    const items = await scopeItems(company.id)
+    assert.ok(items.length)
+    assert.ok(items.every(item => item.handler === 'client' && !item.defaulted), company.name)
+  }
+})
+test('按名稱新建的內地公司不產生報帳期數', async () => {
+  await runFilings()
+  assert.deepEqual(periodsOf(state.newMainland), [])
+})
+test('員工改為我們做後只生成接手日之後截止的報帳期數', async () => {
+  assert.equal((await request('/service-scopes', 'PUT', { ownerType: 'company', ownerId: state.newMainland, item: 'monthly_filing', handler: 'us' })).status, 200)
+  await runFilings()
+  const periods = periodsOf(state.newMainland)
+  assert.ok(periods.length >= 1)
+  assert.ok(periods.every(item => item.due_on >= today), JSON.stringify(periods))
+})
+test('連到已有公司時不改原有委託', async () => {
+  const before = state.db.prepare('SELECT COUNT(*) n FROM service_scopes').get().n
+  await createCard({ cardNumber: 'PC-031', company: '辛控股有限公司', contractor: '深圳辛贸易有限公司' })
+  assert.equal(state.db.prepare('SELECT COUNT(*) n FROM service_scopes').get().n, before)
+})
+test('員工新增、從未設為客戶自理的內地公司照舊生成最近 3 期', async () => {
+  const id = (await request('/companies', 'POST', { customerId: state.first, jurisdiction: '內地', name: '深圳员工新增有限公司' })).body.id
+  await runFilings()
+  assert.equal(periodsOf(id).length, 3)
+})

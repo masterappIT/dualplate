@@ -394,7 +394,7 @@ export const server = http.createServer(async (req, res) => {
         for(const [side,mime,bytes] of cardImages) db.prepare('INSERT INTO approval_card_images VALUES (?,?,?,?)').run(assetId,side,mime,bytes)
         if (user.role === 'customer') {
           // 只限客戶自行建檔；員工從申請案件建檔照舊，在牌照頁選公司組
-          const linked = linkPlateCompanies({ tenantId: user.tenant_id, plate: one('SELECT * FROM plate_assets WHERE id=?', assetId), card: proposedCard, explicitGroupId: b.groupId || null })
+          const linked = linkPlateCompanies({ tenantId: user.tenant_id, plate: one('SELECT * FROM plate_assets WHERE id=?', assetId), card: proposedCard, explicitGroupId: b.groupId || null, userId: user.id })
           logCreated({ tenantId: user.tenant_id, user, plate: one('SELECT * FROM plate_assets WHERE id=?', assetId) })
           for (const company of linked.created) logCompanyCreated({ tenantId: user.tenant_id, user, customerId: b.customerId, company })
         }

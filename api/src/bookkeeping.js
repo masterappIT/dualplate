@@ -26,6 +26,7 @@ export const dueFor = (tenantId, period) => db.prepare('SELECT due_on FROM filin
 
 // 每間在營內地公司生成到本月為止、最近 3 期的報帳工作（冪等）；客戶自理的不生成；按季者只在季首月。已註銷公司未完成的期數標記，不刪除。
 export function ensureFilings(tenantId) {
+  const takenOver = db.prepare("SELECT 1 FROM service_scopes WHERE tenant_id=? AND owner_type='company' AND owner_id=? AND service='monthly_filing' AND handler='client' AND ended_on IS NOT NULL LIMIT 1")
   const month = today().slice(0, 7), scopes = scopeMap(tenantId)
   const companies = db.prepare("SELECT * FROM companies WHERE tenant_id=? AND jurisdiction='內地'").all(tenantId)
   for (const company of companies) {
@@ -35,9 +36,13 @@ export function ensureFilings(tenantId) {
       continue
     }
     if ((scopes.handling('company', company.id, 'monthly_filing', company.customer_id)?.handler ?? 'client') === 'client') continue
+    // 原本客戶自理、後來才交給我們（或外包）的：只生成接手日之後才截止的期數，接手前的不是我們的責任期
+    const current = scopes.get(`company:${company.id}:monthly_filing`)
+    const since = current && takenOver.get(tenantId, company.id) ? current.started_on : null
     for (let back = 2; back >= 0; back--) {
       const period = addMonths(month, -back)
       if (company.filing_cycle === 'quarterly' && (Number(period.slice(5)) - 1) % 3 !== 0) continue
+      if (since && dueFor(tenantId, period) < since) continue
       db.prepare('INSERT OR IGNORE INTO filing_periods(id,tenant_id,company_id,period,due_on,updated_at) VALUES (?,?,?,?,?,?)').run(id(), tenantId, company.id, period, dueFor(tenantId, period), now())
     }
   }

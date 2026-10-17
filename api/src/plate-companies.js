@@ -1,5 +1,6 @@
 import { db, id, now } from './db.js'
 import { toSimplified } from './hans.js'
+import { loadOwner, ownerItems, writeScope } from './entrustment.js'
 
 // 客戶建檔批文卡時自動連到公司（管理者 2026-10-17）：批文卡「商號」是香港／澳門持牌公司，「內承單位」是內地公司。
 // 客戶名下已有同名公司就連到那間公司的公司組（一間公司持有兩個指標時不會重複建立）；沒有才只用名稱建立，
@@ -25,8 +26,17 @@ export function matchCompanies({ tenantId, customerId, route, company, contracto
   return { groupId, groupName: groupId ? groupName(tenantId, groupId) : '', companies: found }
 }
 
+// 客戶加的公司未必已委託我們（管理者 2026-10-17）：所有委託項目先設為客戶自理——到期照樣提醒客戶、不產生員工工作，
+// 等員工在「客戶更新待核對」設定委託範圍後才開始（報帳只從接手日起生成，見 bookkeeping.js）。
+// 不寫備註：員工改負責方時表單會帶出舊備註，來源已記錄在客戶更新待核對
+function startAsClientHandled(tenantId, companyId, userId) {
+  const owner = loadOwner(tenantId, 'company', companyId)
+  if (!owner || owner.is_self) return
+  for (const item of ownerItems(tenantId, 'company', owner)) writeScope({ tenantId, ownerType: 'company', ownerId: companyId, item: item.code, handler: 'client', notes: '', userId })
+}
+
 // 建檔後把牌照連到公司組。explicitGroupId：客戶在建檔頁自己選的公司組，只連過去、不按名稱新建公司
-export function linkPlateCompanies({ tenantId, plate, card, explicitGroupId }) {
+export function linkPlateCompanies({ tenantId, plate, card, explicitGroupId, userId }) {
   if (explicitGroupId) {
     db.prepare('UPDATE plate_assets SET group_id=?,updated_at=? WHERE id=?').run(explicitGroupId, now(), plate.id)
     return { groupId: explicitGroupId, created: [] }
@@ -43,6 +53,7 @@ export function linkPlateCompanies({ tenantId, plate, card, explicitGroupId }) {
     if (!item.existing) {
       const companyId = id()
       db.prepare("INSERT INTO companies(id,tenant_id,customer_id,group_id,jurisdiction,name,name_en,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,'',?,?,?)").run(companyId, tenantId, plate.customer_id, groupId, item.jurisdiction, item.name, '由批文卡建立，其他資料待補', now(), now())
+      startAsClientHandled(tenantId, companyId, userId)
       created.push({ id: companyId, name: item.name, jurisdiction: item.jurisdiction })
     } else if (!item.existing.group_id) {
       // 未分組的同名公司直接放進這個公司組；已屬其他公司組的不搬動

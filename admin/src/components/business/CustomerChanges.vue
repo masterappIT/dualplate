@@ -5,12 +5,17 @@ import { ref, computed, onMounted } from 'vue'
 import DataTable from '../ui/DataTable.vue'
 import Button from '../ui/Button.vue'
 import Tag from '../ui/Tag.vue'
+import Drawer from '../ui/Drawer.vue'
+import ServiceScope from '../ui/ServiceScope.vue'
 import { api } from '../../api'
 import { confirm } from '../../composables/confirm'
 import { useAdminStore } from '../../store'
 
 const { account, customers, openCustomer, openPlateById, showSuccess, showError } = useAdminStore()
 const rows = ref([]), loaded = ref(false), loadError = ref(''), busyId = ref(''), batchBusy = ref(false)
+// 客戶建檔時按名稱新建的公司，委託項目先是客戶自理；在這裏確認由誰辦理
+const scopeRow = ref(null)
+const needsScope = row => row.created && row.entityType === 'company'
 const canReview = computed(() => account.value?.role === 'admin')
 const columns = [{ key: 'customer', title: '客戶', minWidth: 110 }, { key: 'entity', title: '對象', minWidth: 140 }, { key: 'change', title: '修改內容', minWidth: 240 }, { key: 'changedAt', title: '修改時間', minWidth: 120, align: 'right' }, { key: 'action', title: '操作', className: 'col-actions', minWidth: 140 }]
 const time = value => value ? new Date(value).toLocaleString('zh-HK', { timeZone: 'Asia/Hong_Kong', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : ''
@@ -52,15 +57,18 @@ async function acceptAll() {
       <template #cell-entity="{ row }"><button class="text-button entity-link" @click="open(row)">{{ row.entityLabel }}</button><small class="cell-sub">{{ row.entityName }}</small></template>
       <template #cell-change="{ row }">
         <strong>{{ row.fieldLabel }}</strong><Tag v-if="row.isDate" tone="warning" class="change-tag">影響到期</Tag>
-        <small v-if="row.created" class="cell-sub">客戶自行建檔：{{ row.afterText }}</small>
+        <small v-if="row.created" class="cell-sub">客戶自行建檔：{{ row.afterText }}<template v-if="needsScope(row)">；委託項目暫設客戶自理</template></small>
         <small v-else class="cell-sub change-values"><s>{{ row.beforeText || '（空白）' }}</s> → <b>{{ row.afterText || '（空白）' }}</b></small>
       </template>
       <template #cell-changedAt="{ row }"><span class="num">{{ time(row.changedAt) }}</span><small class="cell-sub">{{ row.changedByName }}</small></template>
       <template #cell-action="{ row }">
-        <div v-if="canReview" class="row-actions"><button class="text-button" :disabled="busyId === row.id" @click="act(row, 'accept')">核對無誤</button><button v-if="!row.created" class="text-button" :disabled="busyId === row.id" @click="act(row, 'revert')">改回</button></div>
+        <div v-if="canReview" class="row-actions"><button v-if="needsScope(row)" class="text-button" @click="scopeRow = row">設定委託範圍</button><button class="text-button" :disabled="busyId === row.id" @click="act(row, 'accept')">核對無誤</button><button v-if="!row.created" class="text-button" :disabled="busyId === row.id" @click="act(row, 'revert')">改回</button></div>
         <span v-else class="cell-sub">由管理者核對</span>
       </template>
     </DataTable>
+    <Drawer :open="!!scopeRow" :title="scopeRow?.entityLabel || ''" sub="客戶建檔時新建的公司，委託項目暫設為客戶自理。改為我們做或外包後才產生工作；每月報帳只生成今天之後才截止的期數。" @close="scopeRow = null">
+      <ServiceScope v-if="scopeRow" owner-type="company" :owner-id="scopeRow.entityId" @saved="showSuccess" @error="showError" />
+    </Drawer>
   </section>
 </template>
 
