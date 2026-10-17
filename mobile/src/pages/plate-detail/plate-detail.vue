@@ -9,6 +9,8 @@
         <text class="subtle head-sub">{{ [p.route+'兩地牌', summary.holder].filter(Boolean).join(' · ') }}</text>
       </view>
       <view v-if="summary.warnings?.length" class="list-card warn-card"><text class="list-title">{{ summary.warnings.join('、') }}</text><text class="list-sub">牌照仍照常管理，如需處理我們會聯絡你。</text></view>
+      <!-- 建檔時按批文卡名稱建立的公司，資料要客戶補上 -->
+      <view v-if="summary.companyGaps?.length" class="list-card warn-card" @click="fillCompany(summary.companyGaps[0].id)"><text class="list-title">請補上公司資料</text><text v-for="c in summary.companyGaps" :key="c.id" class="list-sub">{{ c.name }}：缺{{ c.missing.join('、') }}</text><text class="link fill-link">前往補充 ›</text></view>
 
       <!-- 最常用的辦理入口放在最上面 -->
       <view v-if="summary.id" class="actions"><button v-for="a in quickActions" :key="a.code" class="btn-line action" @click="startRequest(a.code, summary.id)">{{ a.name }}</button></view>
@@ -177,6 +179,8 @@ function editDriver(d){if(editingDriverId.value===d.id){editingDriverId.value=''
 async function saveDriver(){if(savingDriver.value)return;savingDriver.value=true;try{await api('/my/drivers/'+editingDriverId.value,'PATCH',driverForm.value);editingDriverId.value='';const [mine,list]=await Promise.all([api('/my/plates/'+plateId),api('/my/drivers')]);summary.value=mine;drivers.value=list;loadPending();uni.showToast({title:'已更新，顧問會再核對',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{savingDriver.value=false}}
 function editVehicle(v){if(editingVehicleId.value===v.id){editingVehicleId.value='';return}vehicleForm.value={plate:v.plate||'',brand:v.brand||'',model:v.model||'',vin:v.vin||'',manufacturedYear:v.manufactured_year?String(v.manufactured_year):'',firstRegisteredOn:v.first_registered_on||''};editingVehicleId.value=v.id}
 async function saveVehicle(v){if(savingVehicle.value)return;savingVehicle.value=true;try{const updated=await api('/my/vehicles/'+v.id,'PATCH',{...vehicleForm.value,manufacturedYear:String(vehicleForm.value.manufacturedYear||'')});vehicles.value=vehicles.value.map(item=>item.id===v.id?updated:item);editingVehicleId.value='';loadPending();uni.showToast({title:'已更新，顧問會再核對',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{savingVehicle.value=false}}
+// 到「我的公司」打開那間公司的修改表單
+function fillCompany(id){uni.setStorageSync('editCompany',id);uni.switchTab({url:'/pages/companies/companies'})}
 function boundVehicle(p){const v=vehicles.value.find(x=>x.id===p.vehicle_id);return v?[v.brand,v.model,v.plate].filter(Boolean).join(' · '):'未綁定'}
 function mainlandParts(value){const clean=String(value||'').toUpperCase().replace(/[\s·•.-]/g,'');const match=clean.match(/^([粵粤])([A-Z])(.+?)([港澳])$/);return match?{province:'粵',code:match[2],serial:match[3],suffix:match[4]}:{province:'',code:'',serial:clean,suffix:''}}
 function formatHongKong(value){const clean=String(value||'').toUpperCase().replace(/\s+/g,'');return clean.replace(/^([A-Z]{1,2})([0-9]{1,4})$/,'$1 $2')}
@@ -203,6 +207,7 @@ import StampMark from '../../components/StampMark.vue'
 .card-editor{margin-top:16px;padding:0 12px 12px;border-radius:var(--r-card);background:var(--paper)}
 .editor-actions{display:flex;gap:8px;margin-top:16px}.editor-actions .btn-sm{flex:1}
 .date-edit{display:flex;align-items:center;gap:8px}.date-spacer{visibility:hidden}
+.fill-link{display:block;margin-top:8px}
 .field-status{margin-left:8px;color:var(--due);font-size:var(--fs-cap);font-weight:700}.field-status.failed{color:var(--overdue)}
 .plate-pair{display:flex;gap:12px}.plate-item{flex:1;min-width:0}
 .plate-label{display:block;font-size:var(--fs-cap);color:var(--ink-3);margin-bottom:8px}

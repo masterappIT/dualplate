@@ -11,6 +11,8 @@
     <view v-if="images.front||images.back||showFields" class="card preview"><text class="step-title">第二步：確認辨識結果</text><ApprovalCard :data="draft"/>
       <view><text class="field-label">批文卡編號（必填）<text v-if="fieldStatusText(fieldStatus.cardNumber)" class="field-status" :class="fieldStatusClass(fieldStatus.cardNumber)">{{ fieldStatusText(fieldStatus.cardNumber) }}</text></text><input class="field num" v-model="draft.cardNumber" placeholder="按批文卡正面「編號」填寫"/></view>
       <text class="subtle field-hint">其他內容顧問會對照原件核對；發現辨識錯誤也可以自行修改。</text>
+      <view class="holder"><text class="field-label">持牌公司</text><text class="holder-text">{{ holderText }}</text>
+        <picker v-if="link.groups.length" :range="groupOptions" range-key="label" @change="groupId=groupOptions[Number($event.detail.value)].id"><text class="more">{{ groupId ? '改選或改回自動判斷 ›' : '不對？改選名下其他公司組 ›' }}</text></picker></view>
       <text class="more" @click="showFields=!showFields">{{ showFields ? '收起全部欄位' : '查看或修改全部欄位 ›' }}</text>
       <view v-if="showFields"><view v-for="field in fields.filter(f=>f.key!=='cardNumber')" :key="field.key"><text class="field-label">{{ field.label }}<text v-if="fieldStatusText(fieldStatus[field.key])" class="field-status" :class="fieldStatusClass(fieldStatus[field.key])">{{ fieldStatusText(fieldStatus[field.key]) }}</text></text><input class="field" v-model="draft[field.key]" placeholder="按批文卡填寫"/></view></view>
     </view>
@@ -19,10 +21,22 @@
   </view>
 </template>
 <script setup>
-import { ref } from 'vue'
+import { ref,computed,watch } from 'vue'
 import { api,getUser } from '../../lib/api'
 import ApprovalCard from '../../components/ApprovalCard.vue'
 const route=ref('粵港'),draft=ref({}),images=ref({}),busy=ref(false),showFields=ref(false),fieldStatus=ref({})
+// 持牌公司：按批文卡的商號、內承單位找名下公司；找不到就只用名稱新建，之後在「我的公司」補資料
+const link=ref({groupId:null,groupName:'',companies:[],groups:[]}),groupId=ref('')
+const groupOptions=computed(()=>[{id:'',label:'按批文卡自動判斷'},...link.value.groups.map(g=>({id:g.id,label:g.name}))])
+const holderText=computed(()=>{
+  if(groupId.value)return '將連到：'+(link.value.groups.find(g=>g.id===groupId.value)?.name||'')
+  const fresh=link.value.companies.filter(c=>!c.existing).map(c=>c.name)
+  if(link.value.groupId)return '將連到你已有的公司：'+link.value.groupName+(fresh.length?'；'+fresh.join('、')+' 會加到這組':'')
+  if(fresh.length)return '會新建公司：'+fresh.join('、')+'。建檔後在「我的公司」補上登記號碼等資料即可。'
+  return '未辨識到商號，你的顧問核對時會連到你的公司。'
+})
+let linkTimer=0
+watch(()=>[route.value,draft.value.company,draft.value.contractor],()=>{clearTimeout(linkTimer);linkTimer=setTimeout(async()=>{try{link.value=await api('/my/plate-companies?route='+encodeURIComponent(route.value)+'&company='+encodeURIComponent(draft.value.company||'')+'&contractor='+encodeURIComponent(draft.value.contractor||''))}catch{}},400)},{immediate:true})
 const fields=[['cardNumber','批文卡編號'],['company','商號'],['contractor','內承單位'],['crossing','通行口岸'],['serial','卡面流水號'],['mainlandPlate','內地車牌號'],['localPlate','港澳車牌號'],['driver1','駕駛人 1'],['driver2','駕駛人 2'],['driver3','駕駛人 3'],['currentApproval','現批文號'],['previousApproval','原批文號'],['color','顏色'],['seats','座位／噸位'],['purpose','請予辦理'],['validFrom','有效期開始'],['validTo','有效期結束'],['notes','備註']].map(([key,label])=>({key,label,placeholder:key==='cardNumber'?'必填，按批文卡編號填寫':''}))
 async function imageData(result){
   // #ifdef H5
@@ -40,7 +54,7 @@ async function imageData(result){
 function fieldStatusText(status){return status?.status==='uncertain'?'請核對':status?.status==='failed'?'未能辨識，請手動填寫':''}
 function fieldStatusClass(status){return status?.status==='failed'?'failed':'uncertain'}
 function pickCard(side){uni.chooseImage({count:1,sizeType:['original'],sourceType:['album','camera'],success:async result=>{busy.value=true;try{const image=await imageData(result);images.value={...images.value,[side]:image};const recognized=await api('/card-recognize','POST',{side,image});const next={...draft.value};for(const [key,value] of Object.entries(recognized.cardData||{}))if(value&&!next[key])next[key]=value;draft.value=next;fieldStatus.value={...fieldStatus.value,...(recognized.fieldStatus||{})};uni.showToast({title:'已辨識，請確認編號',icon:'none'})}catch(e){uni.showToast({title:e.message||'上傳失敗',icon:'none'})}finally{busy.value=false}}})}
-async function create(){if(busy.value)return;const cardNumber=String(draft.value.cardNumber||'').trim();if(!cardNumber)return uni.showToast({title:images.value.front||images.value.back?'未能辨識編號，請手動填寫':'請先拍下批文卡',icon:'none'});const user=getUser();if(!user?.customerId)return uni.navigateTo({url:'/pages/login/login'});busy.value=true;try{const plate=await api('/plate-assets','POST',{customerId:user.customerId,route:route.value,cardData:{...draft.value,cardNumber},cardImages:images.value});uni.redirectTo({url:'/pages/plate-detail/plate-detail?id='+encodeURIComponent(plate.id)})}catch(e){uni.showToast({title:e.message||'建檔失敗',icon:'none'})}finally{busy.value=false}}
+async function create(){if(busy.value)return;const cardNumber=String(draft.value.cardNumber||'').trim();if(!cardNumber)return uni.showToast({title:images.value.front||images.value.back?'未能辨識編號，請手動填寫':'請先拍下批文卡',icon:'none'});const user=getUser();if(!user?.customerId)return uni.navigateTo({url:'/pages/login/login'});busy.value=true;try{const plate=await api('/plate-assets','POST',{customerId:user.customerId,route:route.value,cardData:{...draft.value,cardNumber},cardImages:images.value,groupId:groupId.value});uni.redirectTo({url:'/pages/plate-detail/plate-detail?id='+encodeURIComponent(plate.id)})}catch(e){uni.showToast({title:e.message||'建檔失敗',icon:'none'})}finally{busy.value=false}}
 function goRequests(){uni.navigateTo({url:'/pages/requests/requests?service=new_application'})}
 </script>
 <style scoped>
@@ -52,6 +66,7 @@ function goRequests(){uni.navigateTo({url:'/pages/requests/requests?service=new_
 .preview :deep(.approval-preview){margin-top:12px}
 .field-status{margin-left:8px;color:var(--due);font-size:var(--fs-cap);font-weight:700}.field-status.failed{color:var(--overdue)}
 .field-hint{margin-top:8px}
+.holder{margin-top:4px}.holder-text{display:block;color:var(--ink-2);font-size:var(--fs-body);line-height:1.6}
 .save-file{margin-top:4px}
 .request-link{display:block;text-align:center;padding:16px 0}
 </style>
