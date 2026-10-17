@@ -54,7 +54,7 @@ function lines(row) {
     d.cardNumber ? `批文卡編號：${d.cardNumber.before || '未有記錄'} → ${d.cardNumber.after}` : '',
     d.validityChanged ? `新卡有效期與原來不同（${d.validityChanged.before} → ${d.validityChanged.after}），補領有效期應不變，請核對` : ''
   ].filter(Boolean)
-  if (row.kind === 'inspection_done' || row.kind === 'filing_done') return [
+  if (row.kind === 'inspection_done' || row.kind === 'filing_done' || row.kind === 'tax_paid') return [
     `${d.name}${d.label ? `：${d.label}` : ''}${d.ownerLabel ? `（${d.ownerLabel}）` : ''}，到期日 ${d.dueOn}`,
     '客戶表示已辦好，這一期已停止提醒；退回會恢復提醒'
   ]

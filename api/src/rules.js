@@ -6,6 +6,9 @@ export const defaultService = scope => scope === 'company' ? 'company_upkeep' : 
 // Plate-side items are grouped in the entrustment matrix (docs/tasks/scope-items-design.md §3); company rules have no group.
 export const itemGroups = { permit: '批文與通行證', filing: '備案', vehicle: '車輛', driver: '司機', crossing: '過關', rental: '出租', other: '其他' }
 export const defaultGroup = scope => scope === 'vehicle' ? 'vehicle' : scope === 'driver' ? 'driver' : scope === 'plate' ? 'permit' : null
+// Items the client always handles alone (manager 2026-10-17): reminded to the client only, never on the entrustment
+// list, matrix or price table. The tenant's own 「本公司（自有）」 vehicles are reminded to staff instead.
+export const clientOnlyItems = new Set(['mo_vehicle_tax'])
 export const ruleMethods = ['expiry', 'anniversary', 'yearly', 'inspection', 'periodic', 'since_last', 'after_field']
 // Date facts that since_last / after_field rules may count from.
 export const dateFields = { since_last: ['lastCrossedOn'], after_field: ['cardValidFrom'] }
@@ -19,6 +22,10 @@ export const defaultRules = [
   { code: 'local_insurance', name: '港澳車輛保險', scope: 'vehicle', method: 'expiry', match: {}, params: {}, remindDays: 30, service: 'plate_service', group: 'vehicle', customerVisible: true },
   { code: 'cn_ctpl', name: '內地交強險', scope: 'vehicle', method: 'expiry', match: {}, params: {}, remindDays: 30, service: 'plate_service', group: 'vehicle', customerVisible: true },
   { code: 'inspection', name: '內地驗車／檢驗標誌', scope: 'vehicle', method: 'inspection', match: {}, params: { markYears: [2, 4, 8], inspectYears: [6], yearlyFrom: 10 }, remindDays: 60, service: 'plate_service', group: 'vehicle', customerVisible: true },
+  // 澳門車按澳門規定（管理者 2026-10-17）。定期檢驗日期由交通事務局按註冊日訂定，系統不推算，照通知填寫（gov.mo PS-1933）；
+  // 行車稅（車輛使用牌照稅）已註冊車輛每年一月至三月繳交（gov.mo PS-1926），只提醒客戶自理，不放進委託範圍（見 clientOnlyItems）。
+  { code: 'mo_inspection', name: '澳門車輛定期檢驗', scope: 'vehicle', method: 'expiry', match: { origin: '澳門' }, params: {}, remindDays: 30, service: 'plate_service', group: 'vehicle', customerVisible: true },
+  { code: 'mo_vehicle_tax', name: '澳門行車稅（車輛使用牌照稅）', scope: 'vehicle', method: 'yearly', match: { origin: '澳門' }, params: { month: 3, day: 31 }, remindDays: 45, service: 'plate_service', group: 'vehicle', customerVisible: true },
   { code: 'hk_nar1', name: '香港周年申報表 NAR1', scope: 'company', method: 'anniversary', match: { jurisdiction: '香港' }, params: { offsetDays: 42 }, remindDays: 30, service: 'company_upkeep', customerVisible: true },
   { code: 'hk_br', name: '香港商業登記證', scope: 'company', method: 'expiry', match: { jurisdiction: '香港' }, params: {}, remindDays: 30, service: 'company_upkeep', customerVisible: true },
   { code: 'mo_tax', name: '澳門營業稅／所得補充稅申報', scope: 'company', method: 'expiry', match: { jurisdiction: '澳門' }, params: {}, remindDays: 30, service: 'bookkeeping', customerVisible: true },

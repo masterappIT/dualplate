@@ -15,11 +15,11 @@ CREATE INDEX IF NOT EXISTS idx_self_handled_plate ON self_handled(plate_asset_id
 CREATE TABLE IF NOT EXISTS self_handled_files(id TEXT PRIMARY KEY, record_id TEXT NOT NULL, mime TEXT NOT NULL, data BLOB NOT NULL, created_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_self_handled_files ON self_handled_files(record_id);`)
 
-export const kinds = { vehicle_change: '自行換車', renewal: '自行續期', driver_change: '自行換司機', stop_renewal: '不再續期', inspection_done: '自行驗車', filing_done: '自行備案', crossing_change: '自行口岸變更', company_change: '自行商號變更', replacement: '自行補領' }
+export const kinds = { vehicle_change: '自行換車', renewal: '自行續期', driver_change: '自行換司機', stop_renewal: '不再續期', inspection_done: '自行驗車', filing_done: '自行備案', tax_paid: '自行繳交行車稅', crossing_change: '自行口岸變更', company_change: '自行商號變更', replacement: '自行補領' }
 // 客戶可自行標記辦好的到期事項（第七節第 4 項）：哪一類對應哪條規則、掛在甚麼對象上
-export const markable = { inspection_done: { code: 'inspection', ownerType: 'vehicle' }, filing_done: { code: 'new_card_filing', ownerType: 'plate' } }
+export const markable = { inspection_done: { code: 'inspection', ownerType: 'vehicle' }, filing_done: { code: 'new_card_filing', ownerType: 'plate' }, tax_paid: { code: 'mo_vehicle_tax', ownerType: 'vehicle' } }
 // 和這次自辦同類、仍未結案的工單：提示員工取消，以免重複辦理
-const sameService = { vehicle_change: ['vehicle_change'], renewal: ['renewal'], driver_change: ['driver_change'], stop_renewal: null, inspection_done: ['inspection'], filing_done: ['filing'], crossing_change: ['crossing_change'], company_change: ['company_change'], replacement: ['replacement'] }
+const sameService = { vehicle_change: ['vehicle_change'], renewal: ['renewal'], driver_change: ['driver_change'], stop_renewal: null, inspection_done: ['inspection'], filing_done: ['filing'], tax_paid: null, crossing_change: ['crossing_change'], company_change: ['company_change'], replacement: ['replacement'] }
 const stopReasons = ['已賣車／不再使用', '放棄指標', '其他']
 const MAX_PHOTOS = 6, MAX_PHOTO_BYTES = 3500000
 
@@ -217,7 +217,8 @@ function prepareStop(ctx, body) {
     }
   }
 }
-// 驗車、備案由客戶標記辦好：只限這個牌照（或它綁定的車）現在仍未完成的那一期，並須附相片作證明
+const markPhotoHint = { inspection_done: '請附上檢驗標誌或檢驗結果相片', filing_done: '請附上備案回執相片', tax_paid: '請附上行車稅繳費收據相片' }
+// 驗車、備案、澳門行車稅由客戶標記辦好：只限這個牌照（或它綁定的車）現在仍未完成的那一期，並須附相片作證明
 function prepareMarkDone(ctx, body, kind) {
   const { plate, tenantId } = ctx, { code, ownerType } = markable[kind]
   if (typeof body.period !== 'string' || !body.period.trim()) return bad(400, '請選擇要標記的期數')
@@ -232,7 +233,7 @@ function prepareMarkDone(ctx, body, kind) {
   const open = computeDeadlines({ rules: [decoded], owners: [{ ownerType, ownerId: owner.id, label: '', facts }], tracked: new Map(), completions: new Set(), windowDays: 180 })
     .find(item => item.completable && item.period === body.period)
   if (!open) return bad(400, '這一期目前不需要標記')
-  if (!ctx.photoCount) return bad(400, ownerType === 'vehicle' ? '請附上檢驗標誌或檢驗結果相片' : '請附上備案回執相片')
+  if (!ctx.photoCount) return bad(400, markPhotoHint[kind])
   return {
     write(userId) {
       db.prepare('INSERT INTO rule_completions(tenant_id,code,owner_id,period,completed_by,completed_at) VALUES (?,?,?,?,?,?)').run(tenantId, code, owner.id, body.period, userId, now())
@@ -306,7 +307,7 @@ function prepareReplacement(ctx, body) {
     }
   }
 }
-const prepare = { crossing_change: prepareCrossingChange, company_change: prepareCompanyChange, replacement: prepareReplacement, vehicle_change: prepareVehicleChange, renewal: prepareRenewal, driver_change: prepareDriverChange, stop_renewal: prepareStop, inspection_done: (ctx, body) => prepareMarkDone(ctx, body, 'inspection_done'), filing_done: (ctx, body) => prepareMarkDone(ctx, body, 'filing_done') }
+const prepare = { crossing_change: prepareCrossingChange, company_change: prepareCompanyChange, replacement: prepareReplacement, vehicle_change: prepareVehicleChange, renewal: prepareRenewal, driver_change: prepareDriverChange, stop_renewal: prepareStop, inspection_done: (ctx, body) => prepareMarkDone(ctx, body, 'inspection_done'), filing_done: (ctx, body) => prepareMarkDone(ctx, body, 'filing_done'), tax_paid: (ctx, body) => prepareMarkDone(ctx, body, 'tax_paid') }
 
 // 客戶端表單需要的資料：這個牌照適用哪些文件、新車和司機要填哪些到期日、現況
 function formFor(plate, tenantId) {

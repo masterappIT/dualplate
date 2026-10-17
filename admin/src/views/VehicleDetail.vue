@@ -17,6 +17,7 @@
       >
     </div>
   </div>
+  <VehicleDocuments :vehicle-id="selectedVehicle.id" @saved="showSuccess" @error="showError" @updated="documentsUpdated" />
   <section class="panel vehicle-data-panel">
     <div class="panel-head">
       <div>
@@ -37,6 +38,7 @@
     <button class="button primary" @click="saveVehicle">儲存車輛</button>
   </section>
   <ExpiryPanel
+    :key="expiryKey"
     owner-type="vehicle"
     :owner-id="selectedVehicle.id"
     @saved="showSuccess"
@@ -108,7 +110,9 @@
 </template>
 <script setup>
 import { useAdminStore } from "../store";
+import { ref } from "vue";
 import ExpiryPanel from "../components/ExpiryPanel.vue";
+import VehicleDocuments from "../components/business/VehicleDocuments.vue";
 import PlateChip from '../components/ui/PlateChip.vue';
 import Field from '../components/ui/Field.vue';
 import DateInput from '../components/ui/DateInput.vue';
@@ -126,5 +130,12 @@ const {
   updateInspection,
   sources,
   openInspectionForm,
+  openVehicle,
 } = useAdminStore();
+// 證件辨識可能填入了車架號碼、品牌等和香港牌照到期日：重新載入車輛資料與到期項目
+const expiryKey = ref(0);
+async function documentsUpdated() {
+  await openVehicle(selectedVehicle.value);
+  expiryKey.value += 1;
+}
 </script>

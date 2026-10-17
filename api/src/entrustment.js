@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { db } from './db.js'
-import { businessToday, itemGroups, defaultGroup, ruleMatches } from './rules.js'
+import { businessToday, itemGroups, defaultGroup, ruleMatches, clientOnlyItems } from './rules.js'
 import { plateFacts } from './plate-facts.js'
 
 // What a client entrusts to us (docs/tasks/scope-items-design.md). Three layers: the tenant's item catalogue (every rule
@@ -18,7 +18,8 @@ const builtins = [
 ]
 
 export function catalogue(tenantId) {
-  const rules = db.prepare('SELECT code, name, scope, match_json, active, service, item_group FROM rules WHERE tenant_id=? ORDER BY sort, name').all(tenantId).map(rule => {
+  // Client-only items (rules.js clientOnlyItems) are never entrusted, so they stay out of every list built from here.
+  const rules = db.prepare('SELECT code, name, scope, match_json, active, service, item_group FROM rules WHERE tenant_id=? ORDER BY sort, name').all(tenantId).filter(rule => !clientOnlyItems.has(rule.code)).map(rule => {
     const jurisdiction = JSON.parse(rule.match_json).jurisdiction
     const companyCategories = jurisdiction ? [].concat(jurisdiction).map(value => categoryOf[value]).filter(Boolean) : ['hk', 'mo', 'cn']
     return { code: rule.code, name: rule.name, scope: rule.scope, match: JSON.parse(rule.match_json), categories: rule.scope === 'company' ? companyCategories : ['plate'], group: rule.scope === 'company' ? null : rule.item_group || defaultGroup(rule.scope), legacy: rule.service, active: Boolean(rule.active), builtin: false }
@@ -76,6 +77,7 @@ export function scopeMap(tenantId) {
     get: key => rows.get(key),
     handling(ownerType, ownerId, code, customerId) {
       const customer = customers.get(customerId)
+      if (clientOnlyItems.has(code)) return { handler: customer?.is_self ? 'us' : 'client', providerName: '' }
       if (customer && !listOf(customer).has(code)) return null
       const row = rows.get(`${ownerType}:${ownerId}:${code}`)
       if (row) return { handler: row.handler, providerName: code === 'monthly_filing' && row.handler === 'outsourced' && firms.get(ownerId) || row.provider_name || '' }

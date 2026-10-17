@@ -10,6 +10,8 @@ export const sources = [
   { id: 'MO-RENEW', agency: '澳門海關', title: '車輛邊境通行證續期', url: 'https://www.gov.mo/zh-hant/services/ps-1455/ps-1455b/', checkedAt: '2026-10-15', appliesTo: '粵澳續期' },
   { id: 'MO-REPLACE', agency: '澳門海關', title: '車輛邊境通行證補領', url: 'https://www.gov.mo/zh-hant/services/ps-1455/ps-1455c/', checkedAt: '2026-10-15', appliesTo: '粵澳損毀或遺失補領' },
   { id: 'MO-FORM', agency: '澳門海關', title: '車輛邊境通行證及網上服務申請表', url: 'https://www.customs.gov.mo/form/SA214.pdf', checkedAt: '2026-10-15', appliesTo: '粵澳首次、更換、續期及補辦表格與條件式文件' },
+  { id: 'MO-INSPECTION', agency: '澳門交通事務局', title: '車輛定期檢驗', url: 'https://www.gov.mo/zh-hant/services/ps-1933/ps-1933a/', checkedAt: '2026-10-17', appliesTo: '澳門註冊車輛年度定期檢驗；日期由交通事務局訂定，逾期須繳逾期費，超過限期未驗取消註冊' },
+  { id: 'MO-VEHICLE-TAX', agency: '澳門交通事務局', title: '車輛使用牌照稅－繳納', url: 'https://www.gov.mo/zh-hant/services/ps-1926/ps-1926j/', checkedAt: '2026-10-17', appliesTo: '澳門已註冊車輛每年一月至三月繳交行車稅；繳稅前須先繳清交通違例罰款' },
   { id: 'HK-FORMS', agency: '香港運輸署', title: '許可證官方表格索引', url: 'https://www.td.gov.hk/tc/public_forms/td_forms/permit/index_t.html', checkedAt: '2026-10-15', appliesTo: 'TD547、TD547D 現行表格' },
   { id: 'CN-CUSTOMS', agency: '海關總署', title: '進出境運輸工具備案辦事指南', url: 'https://online.customs.gov.cn/static/pages/guides/000629018001/000629018001.html', checkedAt: '2026-10-15', appliesTo: '海關備案／變更；具體口岸須核實' }
 ]
@@ -54,6 +56,8 @@ export function inspectionGuidance(vehicle = {}, serviceCode) {
   if (vehicle.origin === '內地' && vehicle.route === '粵港') results.push({ label: '首次來港的內地企業私家車，或車齡滿六年的內地公務／企業私家車：香港檢驗', state: 'conditional', sourceId: 'HK-MAINLAND-CHECKLIST' })
   if (vehicle.origin === '香港' && vehicle.type === '私家車') results.push({ label: '香港車輛牌照續期：按製造年份核對六年或以上私家車年檢', state: 'conditional', sourceId: 'HK-VEHICLE-EXAM' })
   if (vehicle.origin === '澳門' && serviceCode === 'new_application') results.push({ label: '粵澳新申請：按廣東省公安廳流程核對驗車', state: 'conditional', sourceId: 'GD-NEW-MO' })
+  if (vehicle.origin === '澳門') results.push({ label: '澳門定期檢驗：日期由交通事務局按註冊日訂定，照通知填寫；逾期須繳逾期費，超過限期未驗會被取消註冊', state: 'required', sourceId: 'MO-INSPECTION' })
+  if (vehicle.origin === '澳門') results.push({ label: '澳門行車稅：每年一月至三月繳交，由客戶自理', state: 'required', sourceId: 'MO-VEHICLE-TAX' })
   if (!results.length) results.push({ label: '此類型驗車要求尚未由現有官方來源確定，需人工核實', state: 'review', sourceId: null })
   return results
 }

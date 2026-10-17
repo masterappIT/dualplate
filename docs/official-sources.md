@@ -19,6 +19,8 @@
 | H-06 | [香港運輸署：車輛登記及牌照](https://www.td.gov.hk/tc/public_services/licences_and_permits/vehicle_licences/how_to_apply_for_registering_and_licensing_a_vehic/index.html?print=1) | 香港私家車等車類的年檢條件 | 香港車輛本地牌照續期；不等同所有兩地牌均須驗車 |
 | M-04 | [澳門海關：車輛邊境通行證及網上服務申請表](https://www.customs.gov.mo/form/SA214.pdf) | 粵澳首次、更換、續期、補辦選項；車主、車輛、批文、司機和條件式授權／抵押材料 | 表格上的「更換」需專員按實際變更內容確認 |
 | M-05 | [澳門政府：車輛邊境通行證補領](https://www.gov.mo/zh-hant/services/ps-1455/ps-1455c/) | 遺失或損毀補領 | 粵澳通行證；依現行服務頁 |
+| M-06 | [澳門政府：車輛定期檢驗](https://www.gov.mo/zh-hant/services/ps-1933/ps-1933a/) | 指定條件下的車輛須年度定期檢驗；日期由交通事務局訂定，逾期須繳逾期費，超過限期未驗取消註冊 | 2026-10-17 核對；頁面沒有列明車齡條件，系統不推算日期，照交通事務局通知填寫 |
+| M-07 | [澳門政府：車輛使用牌照稅－繳納](https://www.gov.mo/zh-hant/services/ps-1926/ps-1926j/) | 已註冊車輛每年一月至三月繳交行車稅；繳稅前須先繳清交通違例罰款 | 2026-10-17 核對；新車於首次註冊後五個工作日內繳交，系統只提醒每年一期 |
 | C-01 | [海關總署：進出境運輸工具備案辦事指南](https://online.customs.gov.cn/static/pages/guides/000629018001/000629018001.html) | 備案／變更的官方入口與流程類型 | 具體車種及口岸是否適用需人工核對 |
 
 ## 規則資料的發布要求

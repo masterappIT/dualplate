@@ -113,6 +113,17 @@
           <view class="editor-actions"><button class="btn-sm" @click="editingVehicleId=''">取消</button><button class="btn-sm solid" :disabled="savingVehicle" @click="saveVehicle(v)">{{ savingVehicle ? '正在儲存…' : '儲存車輛資料' }}</button></view>
         </view>
         <view class="ticket-rule" />
+        <text class="line-title">車輛證件</text>
+        <text class="line-sub doc-intro">拍下證件，系統會讀出車架號碼、日期等，只填入空白的資料，不會改動你已填的；顧問會再核對。</text>
+        <view v-for="c in docs[v.id]?.checks || []" :key="c.code" class="doc-check"><text class="pill amber">請核對</text><text class="line-sub">{{ c.text }}</text></view>
+        <view v-for="d in docs[v.id]?.documents || []" :key="d.kind" class="line doc-line">
+          <view class="grow"><text class="line-title">{{ d.label }}</text>
+            <text class="line-sub">{{ d.uploaded ? '已上傳 · ' + (d.uploadedAt || '').slice(0, 10) : d.hint }}</text>
+            <text v-for="f in d.fields.filter(item => item.value)" :key="f.key" class="line-sub num">{{ f.label }}：{{ f.value }}{{ f.status === 'ok' ? '' : '（請核對）' }}</text>
+          </view>
+          <view class="doc-actions"><text v-if="d.uploaded" class="link" @click="viewVehicleDocument(v.id, d.kind)">看原件</text><text v-if="!docs[v.id].retired" class="link" @click="uploadDoc(v, d)">{{ uploadingDoc === v.id + ':' + d.kind ? (d.recognizable ? '辨識中…' : '上傳中…') : d.uploaded ? '重新上傳' : '上傳' }}</text></view>
+        </view>
+        <view class="ticket-rule" />
         <text class="line-title">驗車安排</text>
         <view v-for="i in detail[v.id]?.inspections || []" :key="i.id" class="line"><view class="grow"><text class="line-title">{{ i.title }}</text><text class="line-sub num">{{ i.appointment_on || '日期待安排' }}</text></view><text class="pill blue">{{ i.status }}</text></view>
         <text v-if="!detail[v.id]?.inspections?.length" class="line-sub">暫時沒有驗車安排。</text>
@@ -124,7 +135,7 @@
 <script setup>
 import { ref,computed } from 'vue'
 import { onLoad,onShow } from '@dcloudio/uni-app'
-import { api,getUser,startRequest,requestTone,clientStage,detailText,selfHandled,money,cardPhoto,viewCardOriginal,forgetCardOriginal } from '../../lib/api'
+import { api,getUser,startRequest,requestTone,clientStage,detailText,selfHandled,money,cardPhoto,viewCardOriginal,forgetCardOriginal,viewVehicleDocument } from '../../lib/api'
 import PlateChip from '../../components/PlateChip.vue'
 import ApprovalCard from '../../components/ApprovalCard.vue'
 import MainlandPlate from '../../components/MainlandPlate.vue'
@@ -171,6 +182,11 @@ async function loadPending(){try{pending.value=await api('/my/pending')}catch{pe
 async function saveDate(item,date){if(!date||date===item.dueOn)return;try{await api('/my/dates','PUT',{ownerType:item.ownerType,ownerId:item.ownerId,code:item.code,expiresOn:date});summary.value=await api('/my/plates/'+plateId);loadPending();uni.showToast({title:'到期日已更新，顧問會再核對',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}}
 function editDriver(d){if(editingDriverId.value===d.id){editingDriverId.value='';return}const full=drivers.value.find(x=>x.id===d.id)||{};driverForm.value={name:full.name||d.name,phone:full.phone||'',hkIdNo:full.hkIdNo||'',homeReturnPermitNo:full.homeReturnPermitNo||''};editingDriverId.value=d.id}
 async function saveDriver(){if(savingDriver.value)return;savingDriver.value=true;try{await api('/my/drivers/'+editingDriverId.value,'PATCH',driverForm.value);editingDriverId.value='';const [mine,list]=await Promise.all([api('/my/plates/'+plateId),api('/my/drivers')]);summary.value=mine;drivers.value=list;loadPending();uni.showToast({title:'已更新，顧問會再核對',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{savingDriver.value=false}}
+// 車輛證件：上傳後系統辨識並填入空白資料，回傳最新的車輛與證件清單
+const docs=ref({}),uploadingDoc=ref('')
+async function loadDocs(list){const entries=await Promise.all(list.map(v=>api('/vehicles/'+v.id+'/documents').then(r=>[v.id,r]).catch(()=>[v.id,null])));docs.value={...docs.value,...Object.fromEntries(entries.filter(([,r])=>r))}}
+function pickOne(){return new Promise((resolve,reject)=>uni.chooseImage({count:1,sizeType:['compressed'],sourceType:['camera','album'],success:resolve,fail:e=>/cancel/.test(e.errMsg||'')?resolve(null):reject(new Error('未能選擇相片'))}))}
+async function uploadDoc(v,d){if(uploadingDoc.value)return;try{const picked=await pickOne();if(!picked)return;uploadingDoc.value=v.id+':'+d.kind;const {data}=await cardPhoto(picked);const r=await api('/vehicles/'+v.id+'/documents/'+d.kind,'POST',{image:data});docs.value={...docs.value,[v.id]:{vehicleId:r.vehicleId,retired:r.retired,documents:r.documents,checks:r.checks}};if(r.vehicle)vehicles.value=vehicles.value.map(item=>item.id===v.id?r.vehicle:item);if(r.applied?.length){summary.value=await api('/my/plates/'+plateId);loadPending()}uni.showToast({title:!d.recognizable?'已上傳':r.recognitionFailed?'已上傳，未能辨識，請手動填寫':r.applied?.length?'已讀出並填入'+r.applied.map(a=>a.label).join('、'):'已上傳，請對照核對',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{uploadingDoc.value=''}}
 function editVehicle(v){if(editingVehicleId.value===v.id){editingVehicleId.value='';return}vehicleForm.value={plate:v.plate||'',brand:v.brand||'',model:v.model||'',vin:v.vin||'',manufacturedYear:v.manufactured_year?String(v.manufactured_year):'',firstRegisteredOn:v.first_registered_on||''};editingVehicleId.value=v.id}
 async function saveVehicle(v){if(savingVehicle.value)return;const newPlate=vehicleForm.value.plate.trim();if(newPlate&&v.plate&&newPlate.toUpperCase()!==v.plate.toUpperCase()){const did=await askChange('車牌由 '+v.plate+' 改為 '+newPlate,'換車');if(did===null)return;if(did){editingVehicleId.value='';return openSelf('vehicle_change',newPlate)}}savingVehicle.value=true;try{const updated=await api('/my/vehicles/'+v.id,'PATCH',{...vehicleForm.value,manufacturedYear:String(vehicleForm.value.manufacturedYear||'')});vehicles.value=vehicles.value.map(item=>item.id===v.id?updated:item);editingVehicleId.value='';loadPending();uni.showToast({title:'已更新，顧問會再核對',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{savingVehicle.value=false}}
 // 客戶自行辦理（docs/tasks/self-handled-changes-design.md）：改車牌、駕駛人、有效期時先問是辦了變更還是填錯；
@@ -181,7 +197,7 @@ const selfNotes=computed(()=>{const seen=new Set();return selfRecords.value.filt
 async function loadSelf(){try{selfRecords.value=await api('/my/plates/'+plateId+'/self-handled')}catch{selfRecords.value=[]}}
 function openSelf(kind,newPlate='',extra={}){const query={plate:plateId,kind,...(newPlate?{newPlate}:{}),...extra};uni.navigateTo({url:'/pages/self-change/self-change?'+Object.entries(query).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&')})}
 // 驗車、新批文備案：客戶自己辦好了，附相片標記，顧問再核對
-function markDone(item){openSelf(item.code==='inspection'?'inspection_done':'filing_done','',{period:item.period,name:item.name,label:item.detail||'',dueOn:item.dueOn||''})}
+function markDone(item){openSelf(item.code==='inspection'?'inspection_done':item.code==='mo_vehicle_tax'?'tax_paid':'filing_done','',{period:item.period,name:item.name,label:item.detail||'',dueOn:item.dueOn||''})}
 const selfKinds={renewal:'renewal',vehicle_change:'vehicle_change',driver_change:'driver_change'}
 // 「其他」：口岸變更（只限粵港）、商號變更、補領也可以是客戶自己辦好的
 function otherAction(){const own=[...(plates.value[0]?.route==='粵港'?[['已自己辦好口岸變更','crossing_change']]:[]),['已自己辦好商號變更','company_change'],['已自己辦好補領','replacement']];uni.showActionSheet({itemList:['請我們代辦',...own.map(item=>item[0])],success:choice=>choice.tapIndex===0?startRequest('other',summary.value.id):openSelf(own[choice.tapIndex-1][1])})}
@@ -208,13 +224,14 @@ function mainlandParts(value){const clean=String(value||'').toUpperCase().replac
 function formatHongKong(value){const clean=String(value||'').toUpperCase().replace(/\s+/g,'');return clean.replace(/^([A-Z]{1,2})([0-9]{1,4})$/,'$1 $2')}
 function formatMacau(value){const clean=String(value||'').toUpperCase().replace(/[\s-]/g,'');return clean.replace(/^([A-Z]{2})([0-9]{2})([0-9]{2})$/,'$1-$2-$3')}
 function openSource(sourceId){const source=sources.value.find(s=>s.id===sourceId);if(source)uni.setClipboardData({data:source.url,success:()=>uni.showToast({title:'官方連結已複製',icon:'none'})})}
-async function load(){if(!getUser())return uni.navigateTo({url:'/pages/login/login'});if(creating.value||!plateId)return;try{const [p,v,catalog,mine]=await Promise.all([api('/plate-assets/'+plateId),api('/vehicles'),api('/catalog'),api('/my/plates/'+plateId)]);summary.value=mine;loadPending();loadSelf();api('/my/drivers').then(list=>{drivers.value=list}).catch(()=>{drivers.value=[]});api('/my/rentals').then(list=>{arrangements.value=list.filter(item=>item.plateId===plateId)}).catch(()=>{arrangements.value=[]});plates.value=[p];plateDetail.value={...plateDetail.value,[p.id]:p};vehicles.value=v;sources.value=catalog.sources;fillPlateForm(p);detail.value=Object.fromEntries(await Promise.all(v.map(async item=>[item.id,await api('/vehicles/'+item.id)])))}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
+async function load(){if(!getUser())return uni.navigateTo({url:'/pages/login/login'});if(creating.value||!plateId)return;try{const [p,v,catalog,mine]=await Promise.all([api('/plate-assets/'+plateId),api('/vehicles'),api('/catalog'),api('/my/plates/'+plateId)]);summary.value=mine;loadPending();loadSelf();api('/my/drivers').then(list=>{drivers.value=list}).catch(()=>{drivers.value=[]});api('/my/rentals').then(list=>{arrangements.value=list.filter(item=>item.plateId===plateId)}).catch(()=>{arrangements.value=[]});plates.value=[p];plateDetail.value={...plateDetail.value,[p.id]:p};vehicles.value=v;sources.value=catalog.sources;fillPlateForm(p);detail.value=Object.fromEntries(await Promise.all(v.map(async item=>[item.id,await api('/vehicles/'+item.id)])));loadDocs(v.filter(item=>item.id===p.vehicle_id))}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
 onLoad(options=>{plateId=options.id||'';creating.value=options.new==='1';if(!creating.value)load()})
 onShow(load)
 import DueDate from '../../components/DueDate.vue'
 import StampMark from '../../components/StampMark.vue'
 </script>
 <style scoped>
+.doc-intro{margin-bottom:4px}.doc-check{display:flex;align-items:flex-start;gap:8px;padding:8px 0}.doc-line{align-items:flex-start}.doc-actions{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
 .head{margin-bottom:16px}.head-plates{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.head-sub{margin-top:8px}
 .actions{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:4px}.action{width:auto;padding:0 4px}
 .list{padding:4px 16px}

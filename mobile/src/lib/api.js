@@ -144,6 +144,16 @@ export async function viewCardOriginal(plateId, sides, current) {
   } catch (e) { uni.hideLoading(); uni.showToast({ title: e.message || '圖片載入失敗', icon: 'none' }) }
 }
 
+// 看車輛證件原件（行駛證、香港車輛牌照、澳門登記文件、保險單）：同批文卡，下載後用系統圖片檢視器
+export async function viewVehicleDocument(vehicleId, kind) {
+  uni.showLoading({ title: '正在載入', mask: true })
+  try {
+    const url = await downloadPrivate(`/vehicles/${encodeURIComponent(vehicleId)}/documents/${encodeURIComponent(kind)}/image`)
+    uni.hideLoading()
+    uni.previewImage({ urls: [url] })
+  } catch (e) { uni.hideLoading(); uni.showToast({ title: e.message || '圖片載入失敗', icon: 'none' }) }
+}
+
 // ── 第 15 輪：上傳文件、顧問、通知 ──
 export const MAX_UPLOAD = 5 * 1024 * 1024
 // 選相片（相機或相簿）；回傳 [{ name, path, size }]

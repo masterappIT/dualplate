@@ -277,6 +277,18 @@ if (!db.prepare('SELECT name FROM schema_migrations WHERE name=?').get(scopeItem
     db.exec('COMMIT')
   } catch (error) { db.exec('ROLLBACK'); throw error }
 }
+// 澳門車輛定期檢驗是新的預設事項：已固定自己清單的客戶也加上（同規則頁「加到所有客戶的事項清單」）。
+// 行車稅只提醒客戶，不在清單上（rules.js clientOnlyItems）。
+const macauVehicleRulesMigration = 'macau-vehicle-rules-v1'
+if (!db.prepare('SELECT name FROM schema_migrations WHERE name=?').get(macauVehicleRulesMigration)) {
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    const stamp = new Date().toISOString()
+    db.prepare("INSERT OR IGNORE INTO customer_items(customer_id,tenant_id,item_code,added_by,added_at) SELECT c.id, c.tenant_id, 'mo_inspection', NULL, ? FROM customers c WHERE c.items_customized=1 AND EXISTS (SELECT 1 FROM rules r WHERE r.tenant_id=c.tenant_id AND r.code='mo_inspection' AND r.active=1)").run(stamp)
+    db.prepare('INSERT INTO schema_migrations(name,applied_at) VALUES (?,?)').run(macauVehicleRulesMigration, stamp)
+    db.exec('COMMIT')
+  } catch (error) { db.exec('ROLLBACK'); throw error }
+}
 const approvalRuleMigration = 'approval-rule-card-expires-on'
 if (!db.prepare('SELECT name FROM schema_migrations WHERE name=?').get(approvalRuleMigration)) {
   db.exec('BEGIN IMMEDIATE')

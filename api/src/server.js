@@ -23,6 +23,7 @@ import { reportRoutes } from './reports.js'
 import { renterPublicRoutes, renterAdminRoutes } from './renter-portal.js'
 import { clientEditRoutes, changeReviewRoutes, logCreated, logCompanyCreated, logCardChanges, logPlateChanges } from './client-edits.js'
 import { selfHandledClientRoutes, selfHandledReviewRoutes } from './self-handled.js'
+import { vehicleDocumentRoutes } from './vehicle-documents.js'
 import { publicTermsRoutes, termsGate, termsRoutes } from './terms.js'
 import { plateCompanyRoutes, linkPlateCompanies } from './plate-companies.js'
 import { seedDemo } from './demo-seed.js'
@@ -172,6 +173,7 @@ export const server = http.createServer(async (req, res) => {
     if (await entrustmentRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await workOrderRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await driverRoutes(req, res, url, user, { json, fail, parseBody })) return
+    if (await vehicleDocumentRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (viewRoutes(req, res, url, user, { json, fail })) return
     if (await renterAdminRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await rentalRoutes(req, res, url, user, { json, fail, parseBody })) return

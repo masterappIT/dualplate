@@ -91,7 +91,7 @@
       <view v-if="marking" class="card">
         <text class="step-title">{{ mark.name }}</text>
         <view class="kv mark-facts"><template v-if="mark.label"><text class="k">項目</text><text class="v">{{ mark.label }}</text></template><text class="k">到期日</text><text class="v num">{{ mark.dueOn || '—' }}</text></view>
-        <text class="subtle mark-hint">標記後這一期不再提醒；請附上{{ kind==='inspection_done' ? '檢驗標誌或檢驗結果' : '備案回執' }}相片，顧問會再核對。</text>
+        <text class="subtle mark-hint">標記後這一期不再提醒；請附上{{ markProof[kind] }}相片，顧問會再核對。</text>
       </view>
 
       <!-- 不再續期 -->
@@ -120,10 +120,11 @@
 import { ref,computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { api,cardPhoto,forgetCardOriginal } from '../../lib/api'
-const names={vehicle_change:'自行換車',renewal:'自行續期',driver_change:'自行換司機',stop_renewal:'不再續期',inspection_done:'自行驗車',filing_done:'自行備案',crossing_change:'自行口岸變更',company_change:'自行商號變更',replacement:'自行補領'}
+const names={vehicle_change:'自行換車',renewal:'自行續期',driver_change:'自行換司機',stop_renewal:'不再續期',inspection_done:'自行驗車',filing_done:'自行備案',tax_paid:'自行繳交行車稅',crossing_change:'自行口岸變更',company_change:'自行商號變更',replacement:'自行補領'}
 // 驗車、新批文備案只是標記一期辦好，不用拍新批文卡
 const cardText=ref({crossing:'',crpExpiresOn:'',company:'',contractor:'',serial:'',cardNumber:''}),before=ref({})
-const marking=computed(()=>kind.value==='inspection_done'||kind.value==='filing_done'),mark=ref({period:'',name:'',label:'',dueOn:''})
+const markProof={inspection_done:'檢驗標誌或檢驗結果',filing_done:'備案回執',tax_paid:'行車稅繳費收據'},markDoing={inspection_done:'驗車',filing_done:'新批文備案',tax_paid:'繳交澳門行車稅'}
+const marking=computed(()=>!!markProof[kind.value]),mark=ref({period:'',name:'',label:'',dueOn:''})
 const plateId=ref(''),kind=ref('vehicle_change'),form=ref({}),loaded=ref(false),busy=ref(false),submitting=ref(false),uploaded=ref({})
 const todayIso=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 const today=todayIso(),handledOn=ref(today)
@@ -133,9 +134,9 @@ const kindName=computed(()=>names[kind.value])
 const pendingHere=computed(()=>(form.value.pending||[]).includes(kind.value))
 const localName=computed(()=>form.value.route==='粵澳'?'澳門':'香港')
 const doing={vehicle_change:'換車',renewal:'續期',driver_change:'換司機',crossing_change:'口岸變更',company_change:'商號變更',replacement:'補領'}
-const intro=computed(()=>marking.value?`你自己辦好了${kind.value==='inspection_done'?'驗車':'新批文備案'}？在這裏標記，資料立即生效，你的顧問會再核對。`:kind.value==='stop_renewal'?'決定不再續期這個兩地牌（例如已賣車、放棄指標）？告訴我們，停止到期提醒。':`你自己辦好了${doing[kind.value]}？在這裏一次更新，資料立即生效，你的顧問會再核對。自行辦理的變更，請在辦好後 7 天內更新。`)
+const intro=computed(()=>marking.value?`你自己辦好了${markDoing[kind.value]}？在這裏標記，資料立即生效，你的顧問會再核對。`:kind.value==='stop_renewal'?'決定不再續期這個兩地牌（例如已賣車、放棄指標）？告訴我們，停止到期提醒。':`你自己辦好了${doing[kind.value]}？在這裏一次更新，資料立即生效，你的顧問會再核對。自行辦理的變更，請在辦好後 7 天內更新。`)
 const cardHint=computed(()=>({crossing_change:'拍下新卡正面，系統會讀出新的通行口岸。',company_change:'拍下新卡正面，系統會讀出新的商號和內承單位。',replacement:'拍下補領的新卡，顧問會對照核對。',vehicle_change:'換車後批文卡上的港澳車牌會改變，請拍下新卡正反面，顧問會對照核對。',renewal:'拍下新卡，系統會讀出新的有效期，填在下面。',driver_change:'新卡背面列出駕駛人，請拍下正反面，顧問會對照核對。'}[kind.value]))
-const photoLabel=computed(()=>({crossing_change:'新香港 CRP 相片',company_change:'公司變更證明相片',replacement:'補領證明相片',vehicle_change:'新車行車證、保險單相片',renewal:'新證件相片（例如香港許可證）',driver_change:'新司機證件相片',inspection_done:'檢驗標誌或檢驗結果相片',filing_done:'備案回執相片'}[kind.value]))
+const photoLabel=computed(()=>({crossing_change:'新香港 CRP 相片',company_change:'公司變更證明相片',replacement:'補領證明相片',vehicle_change:'新車行車證、保險單相片',renewal:'新證件相片（例如香港許可證）',driver_change:'新司機證件相片',inspection_done:'檢驗標誌或檢驗結果相片',filing_done:'備案回執相片',tax_paid:'行車稅繳費收據相片'}[kind.value]))
 const submitText=computed(()=>kind.value==='stop_renewal'?'確認不再續期':marking.value?'標記已辦好':'提交更新')
 function fillDefaults(){
   const f=form.value
@@ -180,7 +181,7 @@ function problem(){
   if(kind.value==='crossing_change'&&!cardText.value.crossing.trim())return'請填寫新的通行口岸'
   if(kind.value==='company_change'&&!cardText.value.company.trim()&&!cardText.value.contractor.trim())return'請填寫新的商號或內承單位'
   if(kind.value==='replacement'&&!cardText.value.serial.trim())return'請填寫新卡的卡面流水號'
-  if(marking.value&&!photos.value.length)return kind.value==='inspection_done'?'請附上檢驗標誌或檢驗結果相片':'請附上備案回執相片'
+  if(marking.value&&!photos.value.length)return '請附上'+markProof[kind.value]+'相片'
   return''
 }
 async function submit(){
