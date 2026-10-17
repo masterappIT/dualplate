@@ -31,10 +31,10 @@ export function seedDemo() {
     db.prepare('INSERT INTO accounting_firms(id,tenant_id,name,contact,phone,created_at,updated_at) VALUES (?,?,?,?,?,?,?)').run(firm, tenant, '信達會計（廣州）', '何小姐', '+86 20 1234 5678', at, at)
     const groups = []
     for (const [customer, index] of [[li, 1], [li, 2], [li, 3], [self, 1]]) {
-      const group = id(), hk = id(), cn = id(), label = customer === self ? '本公司' : `李氏${index}`
+      const group = id(), hk = id(), cn = id(), label = customer === self ? '本公司' : `李氏${index}`, labelEn = customer === self ? 'Own Company' : `Lee ${index}`
       db.prepare('INSERT INTO company_groups(id,tenant_id,customer_id,name,created_at) VALUES (?,?,?,?,?)').run(group, tenant, customer, `${label}組`, at)
-      db.prepare('INSERT INTO companies(id,tenant_id,customer_id,group_id,jurisdiction,name,registration_no,incorporated_on,status,created_at,updated_at,company_number) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').run(hk, tenant, customer, group, '香港', `${label}貿易（香港）有限公司`, `7${index}12345`, `20${18 + index}-0${index + 2}-1${index}`, '存續', at, at, `31${index}0000`)
-      db.prepare('INSERT INTO companies(id,tenant_id,customer_id,group_id,jurisdiction,name,registration_no,incorporated_on,taxpayer_type,status,created_at,updated_at,accounting_firm_id,filing_cycle) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(cn, tenant, customer, group, '內地', `廣州${label}商貿有限公司`, `91440101MA5D${index}XXXX`, `20${18 + index}-05-20`, index === 2 ? '一般納稅人' : '小規模納稅人', '存續', at, at, firm, 'monthly')
+      db.prepare('INSERT INTO companies(id,tenant_id,customer_id,group_id,jurisdiction,name,name_en,registration_no,incorporated_on,status,created_at,updated_at,company_number) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)').run(hk, tenant, customer, group, '香港', `${label}貿易（香港）有限公司`, `${labelEn} Trading (Hong Kong) Limited`, `7${index}12345`, `20${18 + index}-0${index + 2}-1${index}`, '存續', at, at, `31${index}0000`)
+      db.prepare('INSERT INTO companies(id,tenant_id,customer_id,group_id,jurisdiction,name,registration_no,incorporated_on,taxpayer_type,status,created_at,updated_at,accounting_firm_id,filing_cycle) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(cn, tenant, customer, group, '內地', `广州${label}商贸有限公司`, `91440101MA5D${index}XXXX`, `20${18 + index}-05-20`, index === 2 ? '一般納稅人' : '小規模納稅人', '存續', at, at, firm, 'monthly')
       groups.push({ group, hk, cn, customer })
     }
     // 香港公司的商業登記與周年申報到期
