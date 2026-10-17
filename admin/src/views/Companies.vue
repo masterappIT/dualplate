@@ -19,7 +19,7 @@
       </div>
     </div>
   </section>
-  <FormDialog :open="!!dialog" :title="dialog === 'new-group' ? '新增公司組' : dialog === 'group' ? '編輯公司組' : dialog === 'new-company' ? '新增公司' : '編輯公司'" :submit-text="dialog === 'group' || dialog === 'new-group' ? '儲存公司組' : '儲存公司'" @close="dialog = null" @submit="submit">
+  <FormDialog :open="!!dialog" layout="stack" :title="dialog === 'new-group' ? '新增公司組' : dialog === 'group' ? '編輯公司組' : dialog === 'new-company' ? '新增公司' : '編輯公司'" :submit-text="dialog === 'group' || dialog === 'new-group' ? '儲存公司組' : '儲存公司'" @close="dialog = null" @submit="submit">
     <template v-if="dialog === 'group' || dialog === 'new-group'"><Field label="公司組名稱" required><TextInput v-model="dialogForm.name" /></Field><Field label="備註"><TextInput v-model="dialogForm.notes" /></Field></template>
     <template v-else><div class="form-grid">
       <Field label="公司組"><Select v-model="dialogForm.groupId" :options="groupOptions" /></Field>

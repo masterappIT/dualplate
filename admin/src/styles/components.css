@@ -6,7 +6,8 @@
 @media (prefers-reduced-motion: reduce) { .ripple-clip, .morph-ghost { display: none; } }
 .btn-block { width: 100%; }
 .btn:disabled { opacity: .6; cursor: not-allowed; }
-.field { display: grid; gap: 6px; }
+/* 欄位內容不可撐寬欄位：長選項、長名稱在欄內省略，不伸進旁邊的欄 */
+.field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; }
 .field-label { color: var(--ink); font-weight: 600; }
 .field-error { color: var(--status-overdue); font-size: 12px; }
 .input-shell { display: flex; align-items: center; min-height: var(--control-h); border: 1px solid var(--border); border-radius: var(--r-control); background: var(--surface); padding: 0 10px; }
@@ -145,7 +146,7 @@
 .scope-board .scope-matrix-detail-item .scope-matrix-choice { width: 140px; }
 @media (max-width: 600px) {
   .scope-board .scope-matrix { min-width: 0; }
-  .scope-board .scope-matrix-row { grid-template-columns: 1fr 1fr; }
+  .scope-board .scope-matrix-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .scope-board .scope-matrix-row > div { border-right: 0; }
   .scope-board .scope-matrix-row > .scope-matrix-owner, .scope-board .scope-matrix-head > div:first-child { grid-column: 1 / -1; }
   .scope-board .scope-matrix-slot { flex-direction: column; align-items: flex-start; }
