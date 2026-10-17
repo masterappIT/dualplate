@@ -57,9 +57,10 @@ export function privateImage(path) {
   })
 }
 
-// 批文卡照片：原圖多大都可以，上傳前在手機上壓縮成 JPEG（長邊最多 2400 像素、約 1.5 MB 內；伺服器上限 3.5 MB）。
+// 批文卡照片：原圖多大都可以，上傳前在手機上壓縮成 JPEG（長邊最多 2000 像素、約 800 KB 內；伺服器上限 3.5 MB）。
+// 2000 像素下卡面小字仍清楚；檔案小，「查看正本」在手機網絡下也快。
 // 回傳 { data: 上傳用的 data URL, path: 可直接預覽的地址 }
-const CARD_EDGE = 2400, CARD_TARGET = 1500000
+const CARD_EDGE = 2000, CARD_TARGET = 800000
 const dataBytes = dataUrl => Math.floor((dataUrl.length - dataUrl.indexOf(',') - 1) * 3 / 4)
 export async function cardPhoto(result) {
   // #ifdef H5
@@ -94,22 +95,23 @@ export async function cardPhoto(result) {
   return { data, path }
   // #endif
 }
-// 看上傳的批文卡正本：拿回伺服器存的照片，用系統圖片檢視器打開（可放大、左右滑看正反面）
+// 看上傳的批文卡正本：兩面同時下載，直接用下載得到的地址給系統圖片檢視器（可放大、左右滑看正反面），
+// 不再轉成 base64；同一次使用中看過的不重新下載，上傳新卡後用 forgetCardOriginal 清掉。
+const originals = new Map()
+export function forgetCardOriginal(plateId) { for (const key of [...originals.keys()]) if (key.startsWith(plateId + ':')) originals.delete(key) }
+function downloadPrivate(path) {
+  return new Promise((resolve, reject) => uni.downloadFile({ url: base + '/api' + path, header: { authorization: getToken() ? `Bearer ${getToken()}` : '' },
+    success: r => r.statusCode === 200 ? resolve(r.tempFilePath) : reject(new Error('圖片載入失敗')),
+    fail: () => reject(new Error('圖片載入失敗，請檢查網絡後再試')) }))
+}
 export async function viewCardOriginal(plateId, sides, current) {
   uni.showLoading({ title: '正在載入', mask: true })
   try {
-    const urls = []
-    for (const side of sides) {
-      const data = await privateImage(`/plate-assets/${encodeURIComponent(plateId)}/image/card-${side}`)
-      // #ifdef H5
-      urls.push(data)
-      // #endif
-      // #ifndef H5
-      const path = `${wx.env.USER_DATA_PATH}/card-${plateId}-${side}.jpg`
-      await new Promise((resolve, reject) => uni.getFileSystemManager().writeFile({ filePath: path, data: data.slice(data.indexOf(',') + 1), encoding: 'base64', success: resolve, fail: () => reject(new Error('圖片載入失敗')) }))
-      urls.push(path)
-      // #endif
-    }
+    const urls = await Promise.all(sides.map(async side => {
+      const key = plateId + ':' + side
+      if (!originals.has(key)) originals.set(key, downloadPrivate(`/plate-assets/${encodeURIComponent(plateId)}/image/card-${side}`).catch(error => { originals.delete(key); throw error }))
+      return originals.get(key)
+    }))
     uni.hideLoading()
     uni.previewImage({ urls, current: urls[Math.max(0, sides.indexOf(current))] })
   } catch (e) { uni.hideLoading(); uni.showToast({ title: e.message || '圖片載入失敗', icon: 'none' }) }

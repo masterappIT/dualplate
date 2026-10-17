@@ -113,6 +113,8 @@ export const server = http.createServer(async (req, res) => {
   if (origin && allowedOrigins.has(origin)) res.setHeader('access-control-allow-origin', origin)
   res.setHeader('access-control-allow-headers', 'authorization,content-type')
   res.setHeader('access-control-allow-methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS')
+  // 客戶端用 uni.downloadFile 取批文卡正本時會讀這個標頭；不公開的話跨站時瀏覽器會報錯
+  res.setHeader('access-control-expose-headers', 'content-disposition')
   if (req.method === 'OPTIONS') { res.writeHead(204); return res.end() }
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`)
   const path = url.pathname
