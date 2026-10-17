@@ -1,5 +1,5 @@
 <script setup>
-// 客戶自行辦理待核對（docs/tasks/self-handled-changes-design.md）：客戶自己辦了換車、續期、換司機或決定不再續期，
+// 客戶自行辦理待核對（docs/tasks/self-handled-changes-design.md）：客戶自己辦了換車、續期、換司機、口岸、商號、補領、驗車、備案，或決定不再續期，
 // 在客戶端整件更新（資料已生效）；這裏按「整件」對照正本核對。管理者「核對無誤」或寫明原因「退回」（通知客戶）；員工只可查看。
 import { ref, computed, onMounted } from 'vue'
 import DataTable from '../ui/DataTable.vue'
@@ -40,6 +40,20 @@ function lines(row) {
     d.removed.length ? `換走：${d.removed.map(item => `${item.name}${item.stillDrivesOther ? '（仍開其他牌照）' : '（不再提醒）'}`).join('、')}` : '',
     ...d.after.filter(item => item.missing.length).map(item => `${item.name} 未填：${item.missing.join('、')}`)
   ].filter(Boolean)
+  if (row.kind === 'crossing_change') return [
+    `通行口岸：${d.before || '未有記錄'} → ${d.after}`,
+    d.crp ? `香港 CRP：${d.crp.before || '未有記錄'} → ${d.crp.after}` : '香港 CRP 到期日未更新',
+    `牌照口岸欄現為 ${d.port || '未設定'}，請按新卡設定；海關及邊檢備案可能要重辦`
+  ]
+  if (row.kind === 'company_change') return [
+    ...d.changes.map(item => `${item.label}：${item.before || '未有記錄'} → ${item.after}`),
+    '牌照所屬公司組沒有自動搬移，請核對後到牌照頁處理'
+  ]
+  if (row.kind === 'replacement') return [
+    `卡面流水號：${d.serial.before || '未有記錄'} → ${d.serial.after}`,
+    d.cardNumber ? `批文卡編號：${d.cardNumber.before || '未有記錄'} → ${d.cardNumber.after}` : '',
+    d.validityChanged ? `新卡有效期與原來不同（${d.validityChanged.before} → ${d.validityChanged.after}），補領有效期應不變，請核對` : ''
+  ].filter(Boolean)
   if (row.kind === 'inspection_done' || row.kind === 'filing_done') return [
     `${d.name}${d.label ? `：${d.label}` : ''}${d.ownerLabel ? `（${d.ownerLabel}）` : ''}，到期日 ${d.dueOn}`,
     '客戶表示已辦好，這一期已停止提醒；退回會恢復提醒'
@@ -74,7 +88,7 @@ async function confirmReturn() {
 <template>
   <section v-if="rows.length || loadError" class="panel self-handled">
     <div class="panel-head">
-      <div><h2>客戶自行辦理待核對 · {{ rows.length }} 件</h2><p>客戶自己辦了換車、續期、換司機或決定不再續期，資料已更新；請對照正本整件核對。</p></div>
+      <div><h2>客戶自行辦理待核對 · {{ rows.length }} 件</h2><p>客戶自己辦好了變更（換車、續期、換司機、口岸、商號、補領、驗車、備案）或決定不再續期，資料已更新；請對照正本整件核對。</p></div>
     </div>
     <p v-if="loadError" role="alert">客戶自辦載入失敗：{{ loadError }} <button class="text-button" @click="load">重試</button></p>
     <DataTable v-else :columns="columns" :data="rows" :min-width="820" empty-text="沒有待核對的客戶自辦">

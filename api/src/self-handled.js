@@ -1,5 +1,5 @@
 import { db, id, now } from './db.js'
-import { cardData } from './card.js'
+import { cardData, cardFields } from './card.js'
 import { notify } from './client-portal.js'
 import { scopeMap } from './entrustment.js'
 import { plateFacts, vehicleFacts } from './plate-facts.js'
@@ -15,11 +15,11 @@ CREATE INDEX IF NOT EXISTS idx_self_handled_plate ON self_handled(plate_asset_id
 CREATE TABLE IF NOT EXISTS self_handled_files(id TEXT PRIMARY KEY, record_id TEXT NOT NULL, mime TEXT NOT NULL, data BLOB NOT NULL, created_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_self_handled_files ON self_handled_files(record_id);`)
 
-export const kinds = { vehicle_change: '自行換車', renewal: '自行續期', driver_change: '自行換司機', stop_renewal: '不再續期', inspection_done: '自行驗車', filing_done: '自行備案' }
+export const kinds = { vehicle_change: '自行換車', renewal: '自行續期', driver_change: '自行換司機', stop_renewal: '不再續期', inspection_done: '自行驗車', filing_done: '自行備案', crossing_change: '自行口岸變更', company_change: '自行商號變更', replacement: '自行補領' }
 // 客戶可自行標記辦好的到期事項（第七節第 4 項）：哪一類對應哪條規則、掛在甚麼對象上
 export const markable = { inspection_done: { code: 'inspection', ownerType: 'vehicle' }, filing_done: { code: 'new_card_filing', ownerType: 'plate' } }
 // 和這次自辦同類、仍未結案的工單：提示員工取消，以免重複辦理
-const sameService = { vehicle_change: ['vehicle_change'], renewal: ['renewal'], driver_change: ['driver_change'], stop_renewal: null, inspection_done: ['inspection'], filing_done: ['filing'] }
+const sameService = { vehicle_change: ['vehicle_change'], renewal: ['renewal'], driver_change: ['driver_change'], stop_renewal: null, inspection_done: ['inspection'], filing_done: ['filing'], crossing_change: ['crossing_change'], company_change: ['company_change'], replacement: ['replacement'] }
 const stopReasons = ['已賣車／不再使用', '放棄指標', '其他']
 const MAX_PHOTOS = 6, MAX_PHOTO_BYTES = 3500000
 
@@ -129,7 +129,7 @@ function prepareRenewal(ctx, body) {
     if (!entry.done) { notDone.push(code); continue }
     if (!validDate(entry.expiresOn)) return bad(400, `請填寫${known.get(code).name}的新到期日`)
     if (entry.expiresOn <= ctx.handledOn) return bad(400, `${known.get(code).name}的新到期日應在辦好日期之後`)
-    const current = code === 'approval' ? (cardData(plate.card_data).validTo || plate.card_expires_on || '') : dateOf('plate', plate.id, code)
+    const current = code === 'approval' ? (cardBefore(plate).validTo || plate.card_expires_on || '') : dateOf('plate', plate.id, code)
     if (current && entry.expiresOn <= current) return bad(400, `${known.get(code).name}的新到期日應比現在的 ${current} 晚；如只是之前填錯，請直接修改日期`)
     done.push([code, entry.expiresOn])
   }
@@ -142,7 +142,7 @@ function prepareRenewal(ctx, body) {
       for (const [code, value] of done) {
         if (code === 'approval') {
           // 批文有效期來自批文卡：更新卡上的「有效期結束」
-          before[code] = card.validTo || plate.card_expires_on || ''
+          before[code] = cardBefore(plate).validTo || plate.card_expires_on || ''
           db.prepare('UPDATE plate_assets SET card_data=?, card_expires_on=?, updated_at=? WHERE id=?').run(JSON.stringify({ ...card, validTo: value }), value, now(), plate.id)
         } else { before[code] = dateOf('plate', plate.id, code); writeDate(tenantId, 'plate', plate.id, code, value, userId) }
       }
@@ -240,7 +240,73 @@ function prepareMarkDone(ctx, body, kind) {
     }
   }
 }
-const prepare = { vehicle_change: prepareVehicleChange, renewal: prepareRenewal, driver_change: prepareDriverChange, stop_renewal: prepareStop, inspection_done: (ctx, body) => prepareMarkDone(ctx, body, 'inspection_done'), filing_done: (ctx, body) => prepareMarkDone(ctx, body, 'filing_done') }
+// 寫回批文卡上的幾個欄位（批文卡編號同時寫在牌照欄，與 PUT /plate-assets/:id 一致）
+function writeCard(plate, changes) {
+  const card = { ...cardData(one('SELECT card_data FROM plate_assets WHERE id=?', plate.id).card_data), ...changes }
+  db.prepare('UPDATE plate_assets SET card_data=?, card_number=?, updated_at=? WHERE id=?').run(JSON.stringify(card), card.cardNumber || plate.card_number, now(), plate.id)
+}
+// 批文卡欄位「原來」的值：客戶剛改卡或上傳新卡、顧問還沒核對時，以改之前的值為準
+// （客戶多是先改卡再說明是自己辦了變更；那些未核對的修改屬於這次自辦，核對時一併處理）
+function cardBefore(plate) {
+  const card = cardData(plate.card_data), result = { ...card }
+  for (const row of all("SELECT field, before_value FROM customer_changes WHERE entity_type='card' AND entity_id=? AND status='待核對'", plate.id)) if (row.field in card || cardFields.includes(row.field)) result[row.field] = row.before_value ?? ''
+  if (!result.cardNumber) result.cardNumber = plate.card_number || ''
+  return result
+}
+const optionalText = (body, key, max) => body[key] === undefined ? { value: undefined } : typeof body[key] !== 'string' ? { error: true } : { value: clean(body[key], max) }
+
+// 口岸變更（只限粵港）：更新批文卡「通行口岸」，可同時填新的香港 CRP 到期日；牌照的口岸欄由管理者按新卡設定
+function prepareCrossingChange(ctx, body) {
+  const { plate, tenantId } = ctx
+  if (plate.route !== '粵港') return bad(400, '口岸變更只適用於粵港牌照')
+  const crossing = optionalText(body, 'crossing', 120)
+  if (crossing.error || !crossing.value) return bad(400, '請填寫新的通行口岸')
+  const card = cardBefore(plate)
+  if (crossing.value === clean(card.crossing, 120)) return bad(400, '通行口岸與原來相同；如只是之前填錯，請直接修改批文卡')
+  if (body.crpExpiresOn !== undefined && body.crpExpiresOn !== '' && !validDate(body.crpExpiresOn)) return bad(400, '香港 CRP 到期日無效')
+  return {
+    write(userId) {
+      writeCard(plate, { crossing: crossing.value })
+      const crpBefore = dateOf('plate', plate.id, 'hk_crp')
+      if (body.crpExpiresOn) writeDate(tenantId, 'plate', plate.id, 'hk_crp', body.crpExpiresOn, userId)
+      return { before: card.crossing || '', after: crossing.value, port: plate.port || '', crp: body.crpExpiresOn ? { before: crpBefore, after: body.crpExpiresOn } : null }
+    }
+  }
+}
+// 商號／內承單位變更：只改批文卡上的名稱；牌照所屬公司組不自動搬，由員工核對後處理（避免搬錯公司）
+function prepareCompanyChange(ctx, body) {
+  const company = optionalText(body, 'company', 150), contractor = optionalText(body, 'contractor', 150)
+  if (company.error || contractor.error) return bad(400, '商號或內承單位格式無效')
+  if (company.value === '' || contractor.value === '') return bad(400, '商號和內承單位不可留空')
+  const card = cardBefore(ctx.plate), changes = {}
+  if (company.value !== undefined && company.value !== clean(card.company, 150)) changes.company = company.value
+  if (contractor.value !== undefined && contractor.value !== clean(card.contractor, 150)) changes.contractor = contractor.value
+  if (!Object.keys(changes).length) return bad(400, '商號和內承單位都沒有改變')
+  return {
+    write() {
+      writeCard(ctx.plate, changes)
+      return { changes: Object.keys(changes).map(key => ({ label: key === 'company' ? '商號' : '內承單位', before: card[key] || '', after: changes[key] })) }
+    }
+  }
+}
+// 補領：新卡的流水號（及編號，如有改變）；有效期應不變，上傳新卡讀出的有效期不同時提示員工核對
+function prepareReplacement(ctx, body) {
+  const { plate } = ctx
+  const serial = optionalText(body, 'serial', 60), cardNumber = optionalText(body, 'cardNumber', 60)
+  if (serial.error || !serial.value) return bad(400, '請填寫新卡的卡面流水號')
+  if (cardNumber.error || cardNumber.value === '') return bad(400, '批文卡編號不可留空')
+  const card = cardBefore(plate)
+  if (serial.value === clean(card.serial, 60) && (cardNumber.value === undefined || cardNumber.value === clean(card.cardNumber, 60))) return bad(400, '流水號與原來相同；如只是之前填錯，請直接修改批文卡')
+  if (cardNumber.value && cardNumber.value !== plate.card_number && one('SELECT id FROM plate_assets WHERE customer_id=? AND route=? AND card_number=? AND id<>?', plate.customer_id, plate.route, cardNumber.value, plate.id)) return bad(409, '這張批文卡已在名下建檔')
+  return {
+    write() {
+      writeCard(plate, { serial: serial.value, ...(cardNumber.value ? { cardNumber: cardNumber.value } : {}) })
+      const validity = one("SELECT before_text, after_text FROM customer_changes WHERE entity_type='card' AND entity_id=? AND field='validTo' AND status='待核對'", plate.id)
+      return { serial: { before: card.serial || '', after: serial.value }, cardNumber: cardNumber.value && cardNumber.value !== card.cardNumber ? { before: card.cardNumber || '', after: cardNumber.value } : null, validityChanged: validity ? { before: validity.before_text, after: validity.after_text } : null }
+    }
+  }
+}
+const prepare = { crossing_change: prepareCrossingChange, company_change: prepareCompanyChange, replacement: prepareReplacement, vehicle_change: prepareVehicleChange, renewal: prepareRenewal, driver_change: prepareDriverChange, stop_renewal: prepareStop, inspection_done: (ctx, body) => prepareMarkDone(ctx, body, 'inspection_done'), filing_done: (ctx, body) => prepareMarkDone(ctx, body, 'filing_done') }
 
 // 客戶端表單需要的資料：這個牌照適用哪些文件、新車和司機要填哪些到期日、現況
 function formFor(plate, tenantId) {
@@ -249,9 +315,10 @@ function formFor(plate, tenantId) {
   const origin = vehicle?.origin || (plate.route === '粵澳' ? '澳門' : '香港')
   const renewal = decodedRules(tenantId, 'plate').filter(rule => ruleMatches(rule, facts) && (rule.code === 'approval' || !rule.params.field))
   return {
-    route: plate.route, stoppedOn: plate.stopped_on || null, stopReason: plate.stop_reason || '',
+    route: plate.route, crpExpiresOn: dateOf('plate', plate.id, 'hk_crp'), stoppedOn: plate.stopped_on || null, stopReason: plate.stop_reason || '',
     pending: all("SELECT kind FROM self_handled WHERE plate_asset_id=? AND status='待核對'", plate.id).map(row => row.kind),
-    card: { localPlate: card.localPlate || '', validFrom: card.validFrom || '', validTo: card.validTo || plate.card_expires_on || '', drivers: ['driver1', 'driver2', 'driver3'].map(key => card[key] || '').filter(Boolean) },
+    card: { localPlate: card.localPlate || '', crossing: card.crossing || '', company: card.company || '', contractor: card.contractor || '', serial: card.serial || '', cardNumber: card.cardNumber || plate.card_number || '', validFrom: card.validFrom || '', validTo: card.validTo || plate.card_expires_on || '', drivers: ['driver1', 'driver2', 'driver3'].map(key => card[key] || '').filter(Boolean) },
+    cardBefore: (({ localPlate = '', crossing = '', company = '', contractor = '', serial = '', cardNumber = '', validTo = '' }) => ({ localPlate, crossing, company, contractor, serial, cardNumber, validTo: validTo || plate.card_expires_on || '' }))(cardBefore(plate)),
     vehicle: vehicle ? { plate: vehicle.plate, brand: vehicle.brand || '', model: vehicle.model || '' } : null,
     renewalDocuments: renewal.map(rule => ({ code: rule.code, name: rule.name, expiresOn: rule.code === 'approval' ? (card.validTo || plate.card_expires_on || '') : dateOf('plate', plate.id, rule.code) })),
     vehicleDates: dateRules(tenantId, 'vehicle', vehicleFacts({ route: plate.route, origin })).map(rule => ({ code: rule.code, name: rule.name })),

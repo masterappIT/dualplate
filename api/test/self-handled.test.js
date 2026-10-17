@@ -413,6 +413,88 @@ test('核對驗車標記後保持已辦好', async () => {
   assert.ok(state.db.prepare("SELECT 1 FROM rule_completions WHERE code='inspection' AND owner_id=? AND period=?").get(vehicleId, period))
 })
 
+// ── 口岸變更、商號變更、補領 ──
+const cardOf = plateId => JSON.parse(plateRow(plateId).card_data)
+test('自行口岸變更：更新批文卡通行口岸和香港 CRP', async () => {
+  const { plateId } = makePlate({ card: { crossing: '深圳灣' } })
+  setDate('plate', plateId, 'hk_crp', shift(30))
+  const r = await submit(plateId, { kind: 'crossing_change', crossing: '港珠澳大橋', crpExpiresOn: shift(400) })
+  assert.equal(r.status, 201)
+  assert.equal(cardOf(plateId).crossing, '港珠澳大橋')
+  assert.equal(dateOf('plate', plateId, 'hk_crp'), shift(400))
+  assert.deepEqual(r.body.details.crp, { before: shift(30), after: shift(400) })
+})
+test('口岸變更可不填 CRP 到期日', async () => { const { plateId } = makePlate({ card: { crossing: '深圳灣' } }); const r = await submit(plateId, { kind: 'crossing_change', crossing: '皇崗' }); assert.equal(r.status, 201); assert.equal(r.body.details.crp, null) })
+test('粵澳牌照不能自行口岸變更', async () => { const { plateId } = makePlate({ route: '粵澳', vehiclePlate: 'MC1234' }); assert.equal((await submit(plateId, { kind: 'crossing_change', crossing: '橫琴' })).status, 400) })
+test('口岸變更沒有新口岸回 400', async () => { const { plateId } = makePlate(); assert.equal((await submit(plateId, { kind: 'crossing_change', crossing: '  ' })).status, 400) })
+test('口岸變更新口岸不是文字回 400', async () => { const { plateId } = makePlate(); assert.equal((await submit(plateId, { kind: 'crossing_change', crossing: ['皇崗'] })).status, 400) })
+test('口岸與現在相同回 400', async () => { const { plateId } = makePlate({ card: { crossing: '皇崗' } }); const r = await submit(plateId, { kind: 'crossing_change', crossing: '皇崗' }); assert.equal(r.status, 400); assert.match(r.body.error, /直接修改/) })
+test('口岸變更 CRP 到期日無效回 400', async () => { const { plateId } = makePlate(); assert.equal((await submit(plateId, { kind: 'crossing_change', crossing: '皇崗', crpExpiresOn: '2027-02-30' })).status, 400) })
+test('自行商號變更：只改批文卡名稱，不搬公司組', async () => {
+  const { plateId } = makePlate({ card: { company: '舊商號有限公司', contractor: '旧内承有限公司' } })
+  const groupBefore = plateRow(plateId).group_id
+  const r = await submit(plateId, { kind: 'company_change', company: '新商號有限公司', contractor: '旧内承有限公司' })
+  assert.equal(r.status, 201)
+  assert.equal(cardOf(plateId).company, '新商號有限公司')
+  assert.equal(plateRow(plateId).group_id, groupBefore)
+  assert.deepEqual(r.body.details.changes, [{ label: '商號', before: '舊商號有限公司', after: '新商號有限公司' }])
+})
+test('商號變更兩項都沒改變回 400', async () => { const { plateId } = makePlate({ card: { company: '甲有限公司' } }); assert.equal((await submit(plateId, { kind: 'company_change', company: '甲有限公司' })).status, 400) })
+test('商號變更不可把商號留空', async () => { const { plateId } = makePlate({ card: { company: '甲有限公司' } }); assert.equal((await submit(plateId, { kind: 'company_change', company: '   ' })).status, 400) })
+test('商號變更內承單位不是文字回 400', async () => { const { plateId } = makePlate(); assert.equal((await submit(plateId, { kind: 'company_change', contractor: 7 })).status, 400) })
+test('自行補領：更新卡面流水號', async () => {
+  const { plateId } = makePlate({ card: { serial: 'S0001' } })
+  const r = await submit(plateId, { kind: 'replacement', serial: 'S0099' })
+  assert.equal(r.status, 201)
+  assert.equal(cardOf(plateId).serial, 'S0099')
+  assert.equal(r.body.details.cardNumber, null)
+})
+test('補領時可一併更新批文卡編號', async () => {
+  const { plateId } = makePlate({ card: { serial: 'S0001' } })
+  const next = 'NEWNO-' + plateId.slice(0, 6)
+  const r = await submit(plateId, { kind: 'replacement', serial: 'S0100', cardNumber: next })
+  assert.equal(r.status, 201)
+  assert.equal(plateRow(plateId).card_number, next)
+  assert.equal(cardOf(plateId).cardNumber, next)
+})
+test('補領不能用名下另一張卡的編號', async () => {
+  const { plateId } = makePlate(), other = makePlate()
+  assert.equal((await submit(plateId, { kind: 'replacement', serial: 'S2', cardNumber: plateRow(other.plateId).card_number })).status, 409)
+})
+test('補領沒有流水號回 400', async () => { const { plateId } = makePlate(); assert.equal((await submit(plateId, { kind: 'replacement' })).status, 400) })
+test('補領批文卡編號留空回 400', async () => { const { plateId } = makePlate(); assert.equal((await submit(plateId, { kind: 'replacement', serial: 'S3', cardNumber: ' ' })).status, 400) })
+test('補領流水號與現在相同回 400', async () => { const { plateId } = makePlate({ card: { serial: 'S7' } }); assert.equal((await submit(plateId, { kind: 'replacement', serial: 'S7' })).status, 400) })
+test('補領時新卡有效期不同會提示員工核對', async () => {
+  const { plateId } = makePlate({ card: { serial: 'S1', validTo: shift(100) } })
+  assert.equal((await request(`/plate-assets/${plateId}`, 'PUT', { cardData: { ...cardOf(plateId), validTo: shift(200) } })).status, 200)
+  const r = await submit(plateId, { kind: 'replacement', serial: 'S2' })
+  assert.deepEqual(r.body.details.validityChanged, { before: shift(100), after: shift(200) })
+})
+test('先改批文卡口岸再說明是自行變更也可提交', async () => {
+  const { plateId } = makePlate({ card: { crossing: '深圳灣' } })
+  assert.equal((await request(`/plate-assets/${plateId}`, 'PUT', { cardData: { ...cardOf(plateId), crossing: '皇崗' } })).status, 200)
+  const form = (await request(`/my/plates/${plateId}/self-handled/form`)).body
+  assert.equal(form.cardBefore.crossing, '深圳灣'); assert.equal(form.card.crossing, '皇崗')
+  const r = await submit(plateId, { kind: 'crossing_change', crossing: '皇崗' })
+  assert.equal(r.status, 201); assert.equal(r.body.details.before, '深圳灣')
+})
+test('先改批文卡有效期再說明是自行續期也可提交', async () => {
+  const { plateId } = makePlate({ card: { validTo: shift(20) } })
+  assert.equal((await request(`/plate-assets/${plateId}`, 'PUT', { cardData: { ...cardOf(plateId), validTo: shift(385) } })).status, 200)
+  const r = await submit(plateId, { kind: 'renewal', documents: { approval: { done: true, expiresOn: shift(385) } } })
+  assert.equal(r.status, 201); assert.equal(r.body.details.done[0].before, shift(20))
+})
+test('先改流水號再說明是自行補領也可提交', async () => {
+  const { plateId } = makePlate({ card: { serial: 'S10' } })
+  assert.equal((await request(`/plate-assets/${plateId}`, 'PUT', { cardData: { ...cardOf(plateId), serial: 'S11' } })).status, 200)
+  assert.equal((await submit(plateId, { kind: 'replacement', serial: 'S11' })).status, 201)
+})
+test('自辦表單帶出批文卡口岸、商號和流水號', async () => {
+  const { plateId } = makePlate({ card: { crossing: '皇崗', company: '甲有限公司', serial: 'S5' } })
+  const form = (await request(`/my/plates/${plateId}/self-handled/form`)).body
+  assert.equal(form.card.crossing, '皇崗'); assert.equal(form.card.company, '甲有限公司'); assert.equal(form.card.serial, 'S5')
+})
+
 // ── 管理端核對 ──
 const pendingFor = async plateId => (await request('/self-handled', 'GET', undefined, 'admin')).body.find(item => item.plateId === plateId)
 test('員工可查看客戶自辦待核對清單', async () => {

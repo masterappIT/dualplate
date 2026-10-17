@@ -183,9 +183,11 @@ function openSelf(kind,newPlate='',extra={}){const query={plate:plateId,kind,...
 // 驗車、新批文備案：客戶自己辦好了，附相片標記，顧問再核對
 function markDone(item){openSelf(item.code==='inspection'?'inspection_done':'filing_done','',{period:item.period,name:item.name,label:item.detail||'',dueOn:item.dueOn||''})}
 const selfKinds={renewal:'renewal',vehicle_change:'vehicle_change',driver_change:'driver_change'}
-function quickAction(code){if(!selfKinds[code])return startRequest(code,summary.value.id);uni.showActionSheet({itemList:['請我們代辦','已自己辦好，更新資料'],success:choice=>choice.tapIndex===0?startRequest(code,summary.value.id):openSelf(selfKinds[code])})}
+// 「其他」：口岸變更（只限粵港）、商號變更、補領也可以是客戶自己辦好的
+function otherAction(){const own=[...(plates.value[0]?.route==='粵港'?[['已自己辦好口岸變更','crossing_change']]:[]),['已自己辦好商號變更','company_change'],['已自己辦好補領','replacement']];uni.showActionSheet({itemList:['請我們代辦',...own.map(item=>item[0])],success:choice=>choice.tapIndex===0?startRequest('other',summary.value.id):openSelf(own[choice.tapIndex-1][1])})}
+function quickAction(code){if(code==='other')return otherAction();if(!selfKinds[code])return startRequest(code,summary.value.id);uni.showActionSheet({itemList:['請我們代辦','已自己辦好，更新資料'],success:choice=>choice.tapIndex===0?startRequest(code,summary.value.id):openSelf(selfKinds[code])})}
 // 回傳 true＝辦了變更、false＝之前填錯、null＝取消
-function askChange(what,change){return new Promise(resolve=>uni.showModal({title:what,content:'是自己辦了'+change+'，還是之前填錯？',confirmText:{換車:'辦了換車',換司機:'換了司機',續期:'辦了續期'}[change],cancelText:'之前填錯',success:r=>resolve(r.confirm?true:r.cancel?false:null),fail:()=>resolve(null)}))}
+function askChange(what,change){return new Promise(resolve=>uni.showModal({title:what,content:'是自己辦了'+change+'，還是之前填錯？',confirmText:{換車:'辦了換車',換司機:'換了司機',續期:'辦了續期',口岸變更:'辦了變更',商號變更:'辦了變更',補領:'辦了補領'}[change],cancelText:'之前填錯',success:r=>resolve(r.confirm?true:r.cancel?false:null),fail:()=>resolve(null)}))}
 const driverNames=card=>['driver1','driver2','driver3'].map(k=>String(card[k]||'').trim()).filter(Boolean).sort().join('、')
 // 比較批文卡改動：港澳車牌→換車、駕駛人→換司機、有效期延後→續期。uploaded：新卡已存檔，只問不擋
 async function askWhy(before,after,uploaded=false){
@@ -193,6 +195,10 @@ async function askWhy(before,after,uploaded=false){
   if(local&&oldLocal&&local.toUpperCase()!==oldLocal.toUpperCase()){const did=await askChange('港澳車牌由 '+oldLocal+' 改為 '+local,'換車');return did===null?(uploaded?false:null):did?{kind:'vehicle_change',newPlate:local}:false}
   if(driverNames(before)&&driverNames(after)&&driverNames(before)!==driverNames(after)){const did=await askChange('駕駛人改為 '+driverNames(after),'換司機');return did===null?(uploaded?false:null):did?{kind:'driver_change'}:false}
   if(before.validTo&&after.validTo&&after.validTo>before.validTo){const did=await askChange('有效期延至 '+after.validTo,'續期');return did===null?(uploaded?false:null):did?{kind:'renewal'}:false}
+  const text=key=>String(after[key]||'').trim(),old=key=>String(before[key]||'').trim(),moved=key=>text(key)&&old(key)&&text(key)!==old(key)
+  if(moved('crossing')&&plates.value[0]?.route==='粵港'){const did=await askChange('通行口岸改為 '+text('crossing'),'口岸變更');return did===null?(uploaded?false:null):did?{kind:'crossing_change'}:false}
+  if(moved('company')||moved('contractor')){const did=await askChange((moved('company')?'商號':'內承單位')+'改為 '+text(moved('company')?'company':'contractor'),'商號變更');return did===null?(uploaded?false:null):did?{kind:'company_change'}:false}
+  if(moved('serial')){const did=await askChange('卡面流水號改為 '+text('serial'),'補領');return did===null?(uploaded?false:null):did?{kind:'replacement'}:false}
   return false
 }
 // 到「我的公司」打開那間公司的修改表單
