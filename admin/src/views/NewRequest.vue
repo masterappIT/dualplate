@@ -22,16 +22,25 @@ const plateOptions = computed(() => [
   ...plates.value.filter(plate => plate.customer_id === newRequest.value.customerId && plate.route === newRequest.value.route && plate.card_number).map(plate => ({ value: plate.id, label: `${plate.card_number} · ${plate.mainland_plate || plate.local_plate || plate.route}` })),
 ])
 const templates = ref([]), staff = ref([]), problem = ref('')
-// 工單標題按所選服務自動帶出；員工改過標題就不再覆蓋
+// 工單標題自動帶出「業務範本 · 牌照（或車輛）」；員工改過標題就不再覆蓋
+const suggestedTitle = computed(() => {
+  const draft = newRequest.value
+  const name = templates.value.find(item => item.id === draft.templateId)?.name || services.value.find(service => service.code === draft.serviceCode)?.name || ''
+  const plate = plates.value.find(item => item.id === draft.plateAssetId)
+  const target = plate ? plate.mainland_plate || plate.local_plate || plate.card_number : vehicles.value.find(item => item.id === draft.vehicleId)?.plate
+  return [name, target].filter(Boolean).join(' · ')
+})
 let autoTitle = ''
-watch(() => newRequest.value.serviceCode, code => { const name = services.value.find(service => service.code === code)?.name || ''; if (!newRequest.value.title || newRequest.value.title === autoTitle) { newRequest.value.title = name; autoTitle = name } }, { immediate: true })
+watch(suggestedTitle, title => { if (!newRequest.value.title || newRequest.value.title === autoTitle) newRequest.value.title = title; autoTitle = title }, { immediate: true })
+// 截止日按範本步驟天數合計；範本沒有設定天數時預設 14 天（docs/v1-plan.md §三）
+function dueFor(template) { const days = template?.steps.reduce((total, step) => total + (Number(step.days) || 0), 0) || 14; const date = new Date(); date.setDate(date.getDate() + days); return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Hong_Kong' }) }
 const templateOptions = computed(() => templates.value.filter(item => item.active && item.route === newRequest.value.route && item.service_code === newRequest.value.serviceCode).map(item => ({ value: item.id, label: item.name })))
 const staffOptions = computed(() => staff.value.filter(item => item.active).map(item => ({ value: item.id, label: item.name })))
 async function loadOptions() { try { templates.value = await api('/work-templates'); if (user()?.role === 'admin') staff.value = await api('/staff'); else staff.value = [{ id: user()?.id, name: user()?.name, active: true }]; newRequest.value.assigneeId ||= user()?.id } catch (error) { problem.value = error.message } }
 onMounted(loadOptions)
-watch(() => [newRequest.value.serviceCode, newRequest.value.route], () => { const match = templates.value.find(item => item.active && item.service_code === newRequest.value.serviceCode && item.route === newRequest.value.route); newRequest.value.templateId = match?.id || ''; const days = match?.steps.reduce((total, step) => total + (Number(step.days) || 0), 0) || 0; const date = new Date(); date.setDate(date.getDate() + days); newRequest.value.dueOn = date.toLocaleDateString('en-CA', { timeZone: 'Asia/Hong_Kong' }) }, { immediate: true })
+watch(() => [newRequest.value.serviceCode, newRequest.value.route], () => { const match = templates.value.find(item => item.active && item.service_code === newRequest.value.serviceCode && item.route === newRequest.value.route); newRequest.value.templateId = match?.id || ''; newRequest.value.dueOn = dueFor(match) }, { immediate: true })
 watch(templates, () => { if (!newRequest.value.templateId) { const match = templates.value.find(item => item.active && item.service_code === newRequest.value.serviceCode && item.route === newRequest.value.route); newRequest.value.templateId = match?.id || '' } })
-watch(() => newRequest.value.templateId, id => { const match = templates.value.find(item => item.id === id); if (!match) return; const days = match.steps.reduce((total, step) => total + (Number(step.days) || 0), 0); const date = new Date(); date.setDate(date.getDate() + days); newRequest.value.dueOn = date.toLocaleDateString('en-CA', { timeZone: 'Asia/Hong_Kong' }) })
+watch(() => newRequest.value.templateId, id => { const match = templates.value.find(item => item.id === id); if (match) newRequest.value.dueOn = dueFor(match) })
 </script>
 <template>
   <div class="page">
