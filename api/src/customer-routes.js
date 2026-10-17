@@ -9,9 +9,11 @@ import { services, planFor } from './catalog.js'
 // Customer-facing summaries for the client app. Customers only see their own records, never
 // internal "missing data" items, rule codes or tenant details.
 const levelRank = { overdue: 0, due: 1, upcoming: 2, ok: 3 }
-const publicDeadline = item => ({ handledBy: item.handler === 'client' ? 'you' : 'us', name: item.name, ownerType: item.ownerType, ownerId: item.ownerId, ownerLabel: item.ownerLabel, dueOn: item.dueOn, daysLeft: item.daysLeft, level: item.level, detail: item.method === 'expiry' ? '' : item.detail })
+// editable：客戶可在客戶端直接改這個到期日（按日期記錄、不是來自批文卡的事項）
+const publicDeadline = (item, editable = false) => ({ code: item.ruleCode, editable, handledBy: item.handler === 'client' ? 'you' : 'us', name: item.name, ownerType: item.ownerType, ownerId: item.ownerId, ownerLabel: item.ownerLabel, dueOn: item.dueOn, daysLeft: item.daysLeft, level: item.level, detail: item.method === 'expiry' ? '' : item.detail })
 const plateLabel = plate => `${plate.mainland_plate || '內地車牌待補'} · ${plate.local_plate || '港澳車牌待補'}`
 const companyStatus = company => company.status || '存續'
+const companyFields = item => ({ id: item.id, name: item.name, nameEn: item.name_en || '', jurisdiction: item.jurisdiction, registrationNo: item.registration_no || '', companyNumber: item.company_number || '', incorporatedOn: item.incorporated_on || '', taxpayerType: item.taxpayer_type || '', status: companyStatus(item) })
 // 更新紀錄裡的內部狀態字眼換成客戶看得懂的說法
 const customerWords = text => String(text || '').replace(/待客戶提供|待客戶配合|待開始|新要求|待收件|進行中/g, word => requestStatus(word)).replace(/：待辦$/, '：待處理')
 export const requestStatus = status => ({ '待開始': '已收到', '新要求': '已收到', '進行中': '辦理中', '待收件': '辦理中', '待客戶提供': '需要你提供資料', '待客戶配合': '需要你提供資料', '已完成': '已完成', '已取消': '已取消' }[status] || status)
@@ -56,7 +58,8 @@ export async function customerRoutes(req, res, url, user, h) {
     ]
     const tracked = new Map(query('SELECT * FROM tracked_items WHERE tenant_id=?', customer.tenant_id).map(item => [`${item.owner_type}:${item.owner_id}:${item.code}`, item]))
     const completions = new Set(query('SELECT * FROM rule_completions WHERE tenant_id=?', customer.tenant_id).map(item => `${item.code}:${item.owner_id}:${item.period}`))
-    return computeDeadlines({ rules, owners, tracked, completions, scopes: scopeMap(customer.tenant_id), windowDays: 180 }).map(item => ({ ...publicDeadline(item), plateId: plateOf(item) || null }))
+    const editable = new Set(rules.filter(rule => rule.method === 'expiry' && !rule.params?.field).map(rule => rule.code))
+    return computeDeadlines({ rules, owners, tracked, completions, scopes: scopeMap(customer.tenant_id), windowDays: 180 }).map(item => ({ ...publicDeadline(item, editable.has(item.ruleCode)), plateId: plateOf(item) || null }))
   }
   // Vehicle deadlines belong to the plate the vehicle is mounted on.
   const visible = list => list.filter(item => item.level !== 'missing')
@@ -64,7 +67,7 @@ export async function customerRoutes(req, res, url, user, h) {
   const plateOf = item => item.ownerType === 'plate' ? item.ownerId : item.ownerType === 'driver' ? mainPlate(item.ownerId) : item.ownerType === 'vehicle' ? plates.find(plate => plate.vehicle_id === item.ownerId)?.id : plates.find(plate => plate.group_id && companies.some(company => company.id === item.ownerId && company.group_id === plate.group_id))?.id
   function groupCompanies(groupId) {
     const members = companies.filter(item => item.group_id === groupId)
-    const pick = list => list.map(item => ({ id: item.id, name: item.name, nameEn: item.name_en || '', jurisdiction: item.jurisdiction, registrationNo: item.registration_no || '', incorporatedOn: item.incorporated_on || '', status: companyStatus(item) }))
+    const pick = list => list.map(companyFields)
     return { offshore: pick(members.filter(item => item.jurisdiction !== '內地')), mainland: pick(members.filter(item => item.jurisdiction === '內地')) }
   }
   function plateSummary(plate, all) {
@@ -126,7 +129,7 @@ export async function customerRoutes(req, res, url, user, h) {
       return { id: group.id, name: group.name, ...members, plates: group.plates.map(plate => ({ id: plate.id, label: plateLabel(plate), indicatorCategory: plate.indicator_category || '', port: plate.port || '' })),
         deadlines: visible(all).filter(item => item.ownerType === 'company' && companies.some(company => company.id === item.ownerId && company.group_id === group.id)) }
     })
-    const loose = companies.filter(item => !item.group_id).map(item => ({ id: item.id, name: item.name, nameEn: item.name_en || '', jurisdiction: item.jurisdiction, registrationNo: item.registration_no || '', incorporatedOn: item.incorporated_on || '', status: companyStatus(item) }))
+    const loose = companies.filter(item => !item.group_id).map(companyFields)
     return json(res, 200, { groups: result, ungrouped: loose }), true
   }
   if (reminderPut) {
@@ -155,7 +158,7 @@ export async function customerRoutes(req, res, url, user, h) {
     const own = all.filter(item => plateOf(item) === plate.id || (item.ownerType === 'company' && companies.some(company => company.id === item.ownerId && company.group_id && company.group_id === plate.group_id)))
     const requests = query('SELECT id,title,status,stage,updated_at FROM requests WHERE customer_id=? AND plate_asset_id=? ORDER BY updated_at DESC', customer.id, plate.id)
     const crossing = crossingSummary(customer.tenant_id, plate.id)
-    return json(res, 200, { ...summary, crossing: { enabled: crossing.enabled, lastCrossedOn: crossing.lastCrossedOn, nextDueOn: crossing.nextDueOn, days: crossing.days }, deadlines: visible(own).sort((a, b) => String(a.dueOn).localeCompare(String(b.dueOn))), requests: requests.map(item => ({ id: item.id, title: item.title, status: requestStatus(item.status), stage: item.stage, updatedAt: item.updated_at })), drivers: query("SELECT d.name, pd.role FROM plate_drivers pd JOIN drivers d ON d.id=pd.driver_id WHERE pd.plate_asset_id=? ORDER BY CASE pd.role WHEN '主' THEN 0 ELSE 1 END, pd.sort", plate.id) }), true
+    return json(res, 200, { ...summary, crossing: { enabled: crossing.enabled, lastCrossedOn: crossing.lastCrossedOn, nextDueOn: crossing.nextDueOn, days: crossing.days }, deadlines: visible(own).sort((a, b) => String(a.dueOn).localeCompare(String(b.dueOn))), requests: requests.map(item => ({ id: item.id, title: item.title, status: requestStatus(item.status), stage: item.stage, updatedAt: item.updated_at })), drivers: query("SELECT d.id, d.name, pd.role FROM plate_drivers pd JOIN drivers d ON d.id=pd.driver_id WHERE pd.plate_asset_id=? ORDER BY CASE pd.role WHEN '主' THEN 0 ELSE 1 END, pd.sort", plate.id) }), true
   }
   return fail(res, 404, '找不到此頁'), true
 }

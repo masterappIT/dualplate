@@ -21,6 +21,7 @@ import { pricingRoutes } from './pricing.js'
 import { bookkeepingRoutes } from './bookkeeping.js'
 import { reportRoutes } from './reports.js'
 import { renterPublicRoutes, renterAdminRoutes } from './renter-portal.js'
+import { clientEditRoutes, changeReviewRoutes, logCreated, logCardChanges, logPlateChanges } from './client-edits.js'
 import { seedDemo } from './demo-seed.js'
 import { passwordProblem, authenticate, createSession, lockedMinutes, recordFailure, clearFailures, loginPhone, PHONE_RULE, clientIp, audit, auditRoutes, logError, health } from './security.js'
 
@@ -166,6 +167,8 @@ export const server = http.createServer(async (req, res) => {
     if (await bookkeepingRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await reportRoutes(req, res, url, user, { json, fail })) return
     if (await portalRoutes(req, res, url, user, { json, fail, parseBody })) return
+    if (await changeReviewRoutes(req, res, url, user, { json, fail, parseBody })) return
+    if (await clientEditRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await customerRoutes(req, res, url, user, { json, fail, query, one, plateFor, parseBody })) return
     if (path === '/api/import/plates' && req.method === 'POST') {
       if (user.role !== 'admin') return fail(res, 403, '無權限')
@@ -385,6 +388,7 @@ export const server = http.createServer(async (req, res) => {
       try {
         db.prepare('INSERT INTO plate_assets(id,customer_id,route,mainland_plate,local_plate,vehicle_id,installation_status,usage_status,card_number,card_expires_on,notes,created_at,updated_at,card_data,card_status,card_updated_by,card_updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(assetId,b.customerId,b.route,mainlandPlate,localPlate,b.vehicleId||null,'待核對','待核對',cardNumber,cardExpiresOn,clean(b.notes,1000),now(),now(),JSON.stringify({...proposedCard,cardNumber}),'待核對',user.name,now())
         for(const [side,mime,bytes] of cardImages) db.prepare('INSERT INTO approval_card_images VALUES (?,?,?,?)').run(assetId,side,mime,bytes)
+        if (user.role === 'customer') logCreated({ tenantId: user.tenant_id, user, plate: one('SELECT * FROM plate_assets WHERE id=?', assetId) })
         if (b.sourceRequestId) {
           db.prepare('UPDATE requests SET plate_asset_id=?,updated_at=? WHERE id=? AND plate_asset_id IS NULL').run(assetId,now(),b.sourceRequestId)
           pushActivity(b.sourceRequestId,user.id,'plate_created',`已取得批文卡 ${cardNumber}，建立兩地牌檔案`)
@@ -426,6 +430,7 @@ export const server = http.createServer(async (req, res) => {
         if (cardNumberChanged) {
           db.prepare('UPDATE plate_assets SET card_data=?,card_status=?,card_updated_by=?,card_updated_at=? WHERE id=?').run(JSON.stringify(nextCard),'待核對',user.name,now(),old.id)
         }
+        if (user.role === 'customer') logPlateChanges({ tenantId: user.tenant_id, user, before: old, after: one('SELECT * FROM plate_assets WHERE id=?', old.id) })
         db.exec('COMMIT')
       } catch (error) { db.exec('ROLLBACK'); throw error }
       return json(res, 200, plateDetail(user, old.id))
@@ -442,6 +447,7 @@ export const server = http.createServer(async (req, res) => {
       db.exec('BEGIN IMMEDIATE')
       try {
         db.prepare('UPDATE plate_assets SET card_data=?,card_status=?,card_number=?,card_expires_on=?,mainland_plate=?,local_plate=?,card_updated_by=?,card_updated_at=?,updated_at=? WHERE id=?').run(JSON.stringify(proposed),nextStatus,proposed.cardNumber||null,proposed.validTo||null,proposed.mainlandPlate||null,proposed.localPlate||null,user.name,now(),now(),old.id)
+        if (user.role === 'customer') logCardChanges({ tenantId: user.tenant_id, user, plate: old, before: cardData(old.card_data), after: proposed })
         db.exec('COMMIT')
       } catch (error) { db.exec('ROLLBACK'); throw error }
       return json(res, 200, plateDetail(user, old.id))
@@ -473,6 +479,7 @@ export const server = http.createServer(async (req, res) => {
       try {
         db.prepare('INSERT INTO approval_card_images VALUES (?,?,?,?) ON CONFLICT(plate_asset_id,side) DO UPDATE SET mime=excluded.mime,data=excluded.data').run(item.id,side,matched[1],bytes)
         db.prepare('UPDATE plate_assets SET card_data=?,card_status=?,card_number=?,card_expires_on=?,mainland_plate=?,local_plate=?,card_updated_by=?,card_updated_at=?,updated_at=? WHERE id=?').run(JSON.stringify(proposed),'待核對',proposed.cardNumber||null,proposed.validTo||null,proposed.mainlandPlate||null,proposed.localPlate||null,user.name,now(),now(),item.id)
+        if (user.role === 'customer') logCardChanges({ tenantId: user.tenant_id, user, plate: item, before: existing, after: proposed })
         db.exec('COMMIT')
       } catch (error) { db.exec('ROLLBACK'); throw error }
       return json(res, 200, { side, uploaded: true, recognized: recognized.cardData, fieldStatus: recognized.fieldStatus, cardData: proposed, needsReview: true })
