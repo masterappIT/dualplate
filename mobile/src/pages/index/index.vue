@@ -12,7 +12,7 @@
         <view class="status-tile overdue" :class="{ zero: !data.counts.overdue }" @click="goPlates('overdue')"><text class="status-num num">{{ data.counts.overdue }}</text><text class="status-label">已逾期</text></view>
       </view>
     </view>
-    <text v-if="data.counts.pending" class="pending-note">另有 {{ data.counts.pending }} 個牌照資料整理中</text>
+    <text v-if="data.counts.pending" class="pending-note">另有 {{ data.counts.pending }} 個牌照{{ selfManaged ? '未填到期日' : '資料整理中' }}</text>
 
     <!-- 自管客戶還沒有牌照：引導拍批文卡建立第一個（沿用新增牌照頁） -->
     <view v-if="selfManaged && loaded && !data.plates.length" class="list-card first-plate">

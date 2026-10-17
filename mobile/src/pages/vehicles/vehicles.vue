@@ -27,9 +27,9 @@
         <ApprovalCard :key="selectedPlate.id" :data="details[selectedPlate.id]?.cardData || {}" :back="flipped" :flip-on-tap="false" :tap-label="flipped ? '翻到批文卡正面' : '翻到批文卡背面'" @card-tap="flipped=!flipped"/>
         <view class="segmented flip-switch"><text class="seg" :class="{on:!flipped}" @click="flipped=false">正面</text><text class="seg" :class="{on:flipped}" @click="flipped=true">背面</text></view>
         <view class="kv focus-facts">
-          <text class="k">上牌狀態</text><text class="v">{{ !selectedPlate.installation_status || selectedPlate.installation_status==='待核對' ? '確認中' : selectedPlate.installation_status }}</text>
-          <text class="k">使用狀態</text><text class="v">{{ !selectedPlate.usage_status || selectedPlate.usage_status==='待核對' ? '確認中' : selectedPlate.usage_status==='出租中' ? '使用安排中' : selectedPlate.usage_status }}</text>
-          <text class="k">批文卡編號</text><text class="v num">{{ selectedPlate.card_number || '待核對' }}</text>
+          <text class="k">上牌狀態</text><text class="v">{{ !selectedPlate.installation_status || selectedPlate.installation_status==='待核對' ? unsetWord() : selectedPlate.installation_status }}</text>
+          <text class="k">使用狀態</text><text class="v">{{ !selectedPlate.usage_status || selectedPlate.usage_status==='待核對' ? unsetWord() : selectedPlate.usage_status==='出租中' ? '使用安排中' : selectedPlate.usage_status }}</text>
+          <text class="k">批文卡編號</text><text class="v num">{{ selectedPlate.card_number || (isSelfManaged() ? '未填寫' : '待核對') }}</text>
         </view>
         <button class="primary open-file" @click="openPlate(selectedPlate)">查看牌照詳情</button>
       </view>
@@ -39,12 +39,12 @@
 <script setup>
 import { computed,ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { api,getUser,daysText } from '../../lib/api'
+import { api,getUser,daysText,unsetWord,noDatesWord,isSelfManaged } from '../../lib/api'
 import ApprovalCard from '../../components/ApprovalCard.vue'
 const plates=ref([]),summaries=ref([]),details=ref({}),loaded=ref(false),selectedPlateId=ref(''),flipped=ref(false),mode=ref(uni.getStorageSync('plateView')||'cards'),keyword=ref(''),filter=ref('')
-const healthLabel={ok:'正常',due:'快到期',overdue:'已逾期',pending:'資料整理中'},healthTone={ok:'',due:'amber',overdue:'red',pending:'gray'},noteTone={overdue:'note-red',due:'note-amber',upcoming:'note-green',ok:'note-gray'}
+const healthLabel={ok:'正常',due:'快到期',overdue:'已逾期',pending:noDatesWord()},healthTone={ok:'',due:'amber',overdue:'red',pending:'gray'},noteTone={overdue:'note-red',due:'note-amber',upcoming:'note-green',ok:'note-gray'}
 const idle=p=>p.installationStatus==='未上牌'||p.usageStatus==='暫停使用'
-const usageText=p=>p.rental?`使用安排：${p.rental.renter}`:idle(p)?'空置':p.usageStatus==='自用'?'自用':'使用狀況確認中'
+const usageText=p=>p.rental?`使用安排：${p.rental.renter}`:idle(p)?'空置':p.usageStatus==='自用'?'自用':isSelfManaged()?'未填用途':'使用狀況確認中'
 const tests={attention:p=>['due','overdue'].includes(p.health),rented:p=>!!p.rental,self:p=>p.usageStatus==='自用'&&!p.rental,idle}
 const filters=computed(()=>[{id:'',name:'全部',count:summaries.value.length},{id:'attention',name:'需注意'},{id:'rented',name:'使用安排中'},{id:'self',name:'自用'},{id:'idle',name:'空置'}].map(f=>f.id?{...f,count:summaries.value.filter(tests[f.id]).length}:f))
 // 數目為零的篩選不顯示（「全部」除外）

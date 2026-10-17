@@ -123,7 +123,7 @@
       <view :id="'fold-holder'" class="list-card row fold-head" @click="toggle('holder')"><text class="fold-title">持牌公司</text><text class="fold-sum grow">{{ summary.holder || '待補充' }}</text><text class="chev">{{ open.holder ? '⌃' : '›' }}</text></view>
       <view v-if="open.holder" class="fold-body">
         <view class="card kv">
-          <text class="k">用途</text><text class="v">{{ summary.rental ? '使用安排：'+summary.rental.renter : summary.usageStatus==='自用' ? '自用' : summary.installationStatus==='未上牌' ? '空置（未上牌）' : '確認中' }}</text>
+          <text class="k">用途</text><text class="v">{{ summary.rental ? '使用安排：'+summary.rental.renter : summary.usageStatus==='自用' ? '自用' : summary.installationStatus==='未上牌' ? '空置（未上牌）' : unsetWord() }}</text>
           <template v-if="summary.rental"><text class="k">使用期</text><text class="v num">{{ (summary.rental.startsOn||'—')+' 至 '+(summary.rental.endsOn||'未定') }}</text></template>
           <text v-if="summary.indicatorCategory" class="k">指標類別</text><text v-if="summary.indicatorCategory" class="v">{{ summary.indicatorCategory }}</text>
           <text v-if="summary.port" class="k">口岸</text><text v-if="summary.port" class="v">{{ summary.port }}</text>
@@ -138,7 +138,7 @@
           <view class="plate-item"><text class="plate-label">內地港澳入出境號牌</text><MainlandPlate v-if="p.mainland_plate" :plate="p.mainland_plate" :width="300"/><view v-else class="plate-missing">未提供號碼</view></view>
           <view class="plate-item"><text class="plate-label">{{ p.route==='粵港'?'香港':'澳門' }}號牌</text><template v-if="p.local_plate"><HongKongPlate v-if="p.route==='粵港'" :plate="p.local_plate" :width="300"/><view v-else class="physical-plate macau"><text>{{ formatMacau(p.local_plate) }}</text></view></template><view v-else class="plate-missing">未提供號碼</view></view>
         </view>
-        <view class="kv facts"><text class="k">上牌狀態</text><text class="v">{{ p.installation_status==='待核對' ? '確認中' : p.installation_status }}</text><text class="k">使用狀態</text><text class="v">{{ usageWord(p.usage_status) }}</text><text class="k">綁定車輛</text><text class="v">{{ boundVehicle(p) }}</text></view>
+        <view class="kv facts"><text class="k">上牌狀態</text><text class="v">{{ p.installation_status==='待核對' ? unsetWord() : p.installation_status }}</text><text class="k">使用狀態</text><text class="v">{{ usageWord(p.usage_status) }}</text><text class="k">綁定車輛</text><text class="v">{{ boundVehicle(p) }}</text></view>
         <view class="more" @click="showEdit=!showEdit">{{ showEdit ? '收起資料修改' : '修改牌照資料 ›' }}</view>
         <view v-if="showEdit" class="edit-file">
           <text class="field-label">內地車牌號</text><input class="field" v-model="plateForm.mainlandPlate" placeholder="尚未上牌可留空"/>
@@ -168,7 +168,7 @@
 import { ref,computed,nextTick } from 'vue'
 import { onLoad,onShow } from '@dcloudio/uni-app'
 import { useChoice,useConfirm } from '../../lib/choice'
-import { canEntrust,startEntrust,isSelfManaged } from '../../lib/api'
+import { canEntrust,startEntrust,isSelfManaged,unsetWord,noDatesWord } from '../../lib/api'
 // 自管客戶自己建檔，沒有顧問核對批文卡：不顯示「待核對」，只顯示有效期
 const cardSelfManaged=isSelfManaged()
 import { api,getUser,startRequest,requestTone,clientStage,detailText,selfHandled,money,cardPhoto,viewCardOriginal,forgetCardOriginal,viewVehicleDocument,daysLeft } from '../../lib/api'
@@ -179,7 +179,7 @@ import HongKongPlate from '../../components/HongKongPlate.vue'
 const { sheet,choose,onSelect,onClose }=useChoice(),confirmBox=useConfirm()
 const vehicles=ref([]),detail=ref({}),plates=ref([]),plateDetail=ref({}),sources=ref([])
 const crossingBusy=ref(false),justCrossed=ref(false),loaded=ref(false),cardBack=ref(false),allDeadlines=ref(false)
-const healthLabel={ok:'正常',due:'快到期',overdue:'已逾期',pending:'資料整理中'},healthTone={ok:'',due:'amber',overdue:'red',pending:'gray'}
+const healthLabel={ok:'正常',due:'快到期',overdue:'已逾期',pending:noDatesWord()},healthTone={ok:'',due:'amber',overdue:'red',pending:'gray'}
 // 90 天過關有自己的卡片，不在到期清單重複
 const deadlineList=computed(()=>(summary.value.deadlines||[]).filter(item=>!(summary.value.crossing?.enabled&&item.name==='90 天過關')))
 const shownDeadlines=computed(()=>allDeadlines.value?deadlineList.value:deadlineList.value.slice(0,5))
@@ -192,7 +192,7 @@ async function markCrossed(date){if(crossingBusy.value||!date)return;crossingBus
 const summary=ref({}),showEdit=ref(false),fieldStatus=ref({}),arrangements=ref([])
 // 客戶端不寫「出租」：牌照用途顯示為使用安排
 function cardSummary(p){const status=p.card_status||'待核對',expires=p.card_expires_on?'有效期至 '+p.card_expires_on:'';if(cardSelfManaged&&status==='待核對')return expires||'已建檔';return status+(expires?' · '+expires:'')}
-const usageWord=status=>!status||status==='待核對'?'確認中':status==='出租中'?'使用安排中':status
+const usageWord=status=>!status||status==='待核對'?unsetWord():status==='出租中'?'使用安排中':status
 const cycleLabel={monthly:'每月',quarterly:'每季',yearly:'每年'},feeTone={已收:'gray',逾期:'red',部分收:'amber',待收:''}
 // 代收的寫「已收到」；直付的由客戶自己收款，寫「已確認收到」
 function feeLabel(a,i){return i.status==='已收'?(a.collectionMode==='代收'?'我們已收到':'已確認收到'):i.status==='逾期'?'未收到（已過期）':i.status==='部分收'?'部分收到':'未到期'}
@@ -253,14 +253,14 @@ function toggle(key){open.value={...open.value,[key]:!open.value[key]}}
 function openFold(key){open.value={...open.value,[key]:true};nextTick(()=>setTimeout(()=>uni.pageScrollTo({selector:'#fold-'+key,duration:200}),50))}
 const clientTodoCount=computed(()=>(summary.value.deadlines||[]).filter(i=>['due','overdue'].includes(i.level)&&(i.handledBy==='you'||i.code==='crossing_90')).length)
 const levelWord={overdue:'已逾期',due:'快到期'}
-const deadlineSummary=computed(()=>{const list=deadlineList.value;if(!list.length)return summary.value.health==='pending'?'整理中':'半年內沒有';const urgent=list.filter(i=>['overdue','due'].includes(i.level));return list.length+' 項'+(urgent.length?' · '+urgent.length+' 項'+levelWord[urgent.some(i=>i.level==='overdue')?'overdue':'due']:'')})
+const deadlineSummary=computed(()=>{const list=deadlineList.value;if(!list.length)return summary.value.health==='pending'?(cardSelfManaged?'未填到期日':'整理中'):'半年內沒有';const urgent=list.filter(i=>['overdue','due'].includes(i.level));return list.length+' 項'+(urgent.length?' · '+urgent.length+' 項'+levelWord[urgent.some(i=>i.level==='overdue')?'overdue':'due']:'')})
 const crossingSummary=computed(()=>{const c=summary.value.crossing;return !c?.enabled?'未開啟':c.lastCrossedOn?'上次 '+c.lastCrossedOn:'未記錄過關日期'})
 const vehicleSummary=computed(()=>{const v=boundVehicles.value[0];if(!v)return '尚未登記車輛';const list=docs.value[v.id]?.documents||[];return v.plate+(list.length?' · 證件 '+list.filter(d=>d.uploaded).length+'/'+list.length+' 已上傳':'')})
 const driverSummary=computed(()=>{const list=summary.value.drivers||[];if(!list.length)return '未登記';const main=list.find(d=>d.role==='主')||list[0];return main.name+'（'+(main.role==='主'?'主':'副')+'）'+(list.length>1?' 等 '+list.length+' 人':'')})
 // 有使用安排時，摘要加最近一期使用費的收款狀態
 const paidWord=a=>{const list=a?.invoices||[];if(list.some(i=>i.status==='逾期'))return '有逾期未收';const last=[...list].sort((x,y)=>String(y.period).localeCompare(String(x.period)))[0];return !last?'未有使用費記錄':last.status==='已收'?'已收':last.status==='部分收'?'部分收到':'未到期'}
-const usageSummary=computed(()=>{const s=summary.value,active=arrangements.value.find(a=>a.status==='生效')||arrangements.value[0];if(active)return active.user.name+' · '+paidWord(active);return s.rental?'使用安排：'+s.rental.renter:s.usageStatus==='自用'?'自用':s.installationStatus==='未上牌'?'空置（未上牌）':'確認中'})
-const plateSummary=computed(()=>{const p=plates.value[0];return p?(p.installation_status==='待核對'?'確認中':p.installation_status)+' · '+boundVehicle(p):''})
+const usageSummary=computed(()=>{const s=summary.value,active=arrangements.value.find(a=>a.status==='生效')||arrangements.value[0];if(active)return active.user.name+' · '+paidWord(active);return s.rental?'使用安排：'+s.rental.renter:s.usageStatus==='自用'?'自用':s.installationStatus==='未上牌'?'空置（未上牌）':unsetWord()})
+const plateSummary=computed(()=>{const p=plates.value[0];return p?(p.installation_status==='待核對'?unsetWord():p.installation_status)+' · '+boundVehicle(p):''})
 // 下一件要做的事：先逾期、再快到期（你自理的事項、90 天過關），然後是車輛登記和必要證件
 const nextBusy=ref(false)
 const nextStep=computed(()=>{

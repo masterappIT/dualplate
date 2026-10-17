@@ -7,6 +7,9 @@ export function rememberMode(mode) { try { uni.setStorageSync('serviceMode', mod
 export function isSelfManaged() { try { return (uni.getStorageSync('serviceMode') || uni.getStorageSync('user')?.serviceMode) === '自管' } catch { return false } }
 // 自管客戶按次委託：到期項目對應的代辦服務；沒有對應的用「其他代辦要求」
 const entrustServices = { approval: 'renewal', hk_crp: 'renewal', mo_permit: 'renewal', inspection: 'inspection', mo_inspection: 'inspection', customs_filing: 'filing', new_card_filing: 'filing' }
+// 未填的資料：托管客戶由顧問整理（確認中）；自管客戶自己填，直接寫「未填寫」
+export const unsetWord = () => isSelfManaged() ? '未填寫' : '確認中'
+export const noDatesWord = () => isSelfManaged() ? '未填到期日' : '資料整理中'
 export const canEntrust = item => isSelfManaged() && item.handledBy === 'you' && item.code !== 'crossing_90'
 export function startEntrust(item) { uni.navigateTo({ url: '/pages/requests/requests?entrust=item&service=' + (entrustServices[item.code] || 'other') + '&item=' + encodeURIComponent(item.name) + (item.plateId ? '&plate=' + encodeURIComponent(item.plateId) : '') }) }
 export function startLongTerm() { uni.navigateTo({ url: '/pages/requests/requests?entrust=long' }) }
