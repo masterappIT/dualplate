@@ -29,10 +29,13 @@ async function submit() {
     if (formError.value) return
     creating.value = true
     try {
+      // 自管客戶自己管理牌照，沒有我們代辦的工單；歡迎訊息按委託方式寫
+      const selfManaged = selectedCustomer.value?.service_mode === '自管'
       const created = await createCustomerUser()
       if (created) {
         const entry = import.meta.env.VITE_CLIENT_LOGIN_URL || '微信小程序「車牌管家」'
-        welcome.value = `您好，${created.name}：\n已為您開通「車牌管家」客戶登入。\n登入入口：${entry}\n帳號：${created.email || created.phone}\n初始密碼：${created.password}\n首次登入請開啟入口，輸入帳號及初始密碼，即可查看工單進度和待辦事項。請妥善保管密碼。`
+        const after = selfManaged ? '登入後拍下批文卡，即可建立牌照，系統會在到期前提醒你。' : '登入後即可查看辦理進度和待辦事項。'
+        welcome.value = `你好，${created.name}：\n已為你開通「車牌管家」客戶登入。\n登入入口：${entry}\n帳號：${created.email || created.phone}\n初始密碼：${created.password}\n${after}請妥善保管密碼，不要使用其他網站用的密碼。`
       }
     } finally {
       creating.value = false
