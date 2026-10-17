@@ -2,7 +2,7 @@
 // 今日工作的「托管合約到期」（docs/requirements.md 5.6.2）：合約 30 天內結束或已結束、仍標為托管的客戶。只給管理者，沒有時不顯示。
 import { ref, onMounted } from 'vue'
 import DataTable from '../ui/DataTable.vue'
-import Tag from '../ui/Tag.vue'
+import DueDate from '../ui/DueDate.vue'
 import Button from '../ui/Button.vue'
 import { api, user } from '../../api'
 import { useAdminStore } from '../../store'
@@ -22,7 +22,7 @@ function open(row) { const customer = customers.value.find(item => item.id === r
     <p v-if="loadError" role="alert">合約到期載入失敗：{{ loadError }} <Button size="sm" @click="load">重試</Button></p>
     <DataTable v-else :columns="columns" :data="rows" row-key="customerId" :min-width="520">
       <template #cell-name="{ row }"><button class="text-button" @click="open(row)">{{ row.name }}</button></template>
-      <template #cell-endsOn="{ row }"><span class="num">{{ row.contractEndsOn }}</span> <Tag :tone="row.daysLeft < 0 ? 'danger' : 'warning'">{{ row.daysLeft < 0 ? `已過 ${-row.daysLeft} 天` : row.daysLeft === 0 ? '今天結束' : `尚餘 ${row.daysLeft} 天` }}</Tag></template>
+      <template #cell-endsOn="{ row }"><DueDate :date="row.contractEndsOn" /></template>
       <template #cell-action="{ row }"><button class="text-button" @click="open(row)">查看客戶 →</button></template>
     </DataTable>
   </section>
