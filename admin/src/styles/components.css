@@ -94,12 +94,30 @@
 .scope-matrix-empty { color: var(--ink-3); }
 /* 價目表（PriceTable.vue）：每件事一行，粵港／粵澳各一格，窄螢幕換行 */
 .price-section { display: grid; gap: 4px; margin-bottom: 16px; }
-.price-row { align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.price-cells { display: flex; flex-wrap: wrap; gap: 8px; }
-.price-cell { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: var(--r-control); padding: 4px 8px; background: var(--surface); cursor: pointer; }
-.price-cell:hover { background: var(--paper); }
-.price-cell:focus-visible { outline: 2px solid var(--plate-yellow); outline-offset: 2px; }
-.price-cell small { color: var(--ink-muted); }
+/* 價目表：每段一張表（事項＋粵港／粵澳或「收費」欄），每格就地編輯；未儲存的格淡橙底，缺金額紅框 */
+.price-section h3 { margin: 8px 0; font-size: 16px; }
+.price-grid { display: grid; border: 1px solid var(--border); border-radius: var(--r-card); overflow: hidden; }
+.price-grid-row { display: grid; grid-template-columns: minmax(160px, 1fr) repeat(var(--routes, 1), minmax(260px, 1.4fr)); border-top: 1px solid var(--border); }
+.price-grid-row:first-child { border-top: 0; }
+.price-grid-row > div { min-width: 0; padding: 8px 12px; }
+.price-grid-head { background: var(--paper); color: var(--ink-2); font-size: 12px; font-weight: 600; }
+.price-grid-name { display: flex; align-items: center; font-weight: 600; overflow-wrap: anywhere; }
+.price-edit { display: grid; gap: 4px; align-content: center; }
+.price-edit.is-pending { background: var(--status-due-bg); }
+.price-edit.is-invalid .price-amount { outline: 2px solid var(--status-overdue); border-radius: var(--r-control); }
+.price-edit-fields { display: grid; grid-template-columns: minmax(110px, 1fr) 84px minmax(90px, 1fr); gap: 8px; align-items: center; }
+.price-edit-fields > :first-child:last-child { grid-column: 1 / 2; }
+.price-edit-note { display: flex; align-items: center; gap: 8px; color: var(--ink-2); font-size: 12px; }
+.price-na { color: var(--ink-3); }
+.price-savebar { position: sticky; bottom: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 12px; padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--r-card); background: var(--surface); }
+.price-savebar > span:first-child { margin-right: auto; font-weight: 600; }
+@media (max-width: 760px) {
+  .price-grid-row { grid-template-columns: 1fr; }
+  .price-grid-head { display: none; }
+  .price-edit::before { content: attr(data-label); color: var(--ink-2); font-size: 12px; }
+  .price-edit-fields { grid-template-columns: 1fr 84px; }
+  .price-edit-fields .price-amount { grid-column: 1 / -1; }
+}
 /* 委託範圍分段矩陣（ServiceScopeMatrix.vue）：欄數按段而定，窄螢幕改為每個對象一張卡 */
 .scope-section { display: grid; gap: 8px; margin-bottom: 24px; }
 .scope-section > .panel-head { margin: 0; }

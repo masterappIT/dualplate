@@ -5,7 +5,7 @@
   <Sources v-else-if="tab === 'sources'" />
   <Staff v-else-if="tab === 'staff'" @saved="$emit('saved', $event)" @error="$emit('error', $event)" />
   <AuditLog v-else-if="tab === 'audit'" @error="$emit('error', $event)" />
-  <section v-else-if="tab === 'prices'" class="panel"><div class="panel-head"><div><h2>價目表</h2><p>每件事和每種按次業務的預設收費；粵港、粵澳分開。客戶的特別價在客戶詳情的「委託範圍」設定。</p></div></div><PriceTable @saved="$emit('saved', $event)" @error="$emit('error', $event)" /></section>
+  <section v-else-if="tab === 'prices'" class="panel"><div class="panel-head"><div><h2>價目表</h2><p>每件事和每種按次業務的預設收費；粵港、粵澳分開。直接在表內修改，改完在表底按「儲存」。客戶的特別價在客戶詳情「委託範圍」的「收費方式」頁設定。</p></div></div><PriceTable @saved="$emit('saved', $event)" @error="$emit('error', $event)" /></section>
   <MyAccount v-else-if="tab === 'account'" @saved="$emit('saved', $event)" @error="$emit('error', $event)" />
   <WorkTemplates v-else @saved="$emit('saved', $event)" @error="$emit('error', $event)" />
 </template>

@@ -43,7 +43,7 @@
     <template v-else-if="matrix">
       <Segmented v-model="matrixTab" :options="matrixTabs" label="委託範圍分類" class="matrix-tabs" />
       <ServiceScopeMatrix v-if="matrixTab !== 'prices'" :data="matrix" :pending="pending" :is-self="!!selectedCustomer?.is_self" :saving="matrixSaving" :category="matrixTab" @change="setMatrix" @column="setColumn" @items="openItems" />
-      <section v-else class="scope-section"><div class="panel-head"><div><h2>收費方式</h2><p>只有管理者看得到，客戶端不顯示價錢。每行改完即儲存，只影響這位客戶，其餘沿用價目表。</p></div></div><PriceTable :customer-id="selectedCustomer.id" @saved="showSuccess" @error="showError" /></section>
+      <section v-else class="scope-section"><div class="panel-head"><div><h2>收費方式</h2><p>只有管理者看得到，客戶端不顯示價錢。改動在表底按「儲存」一次儲存，只影響這位客戶，其餘沿用價目表。</p></div></div><PriceTable :customer-id="selectedCustomer.id" @saved="showSuccess" @error="showError" /></section>
     </template>
   </Drawer>
   <Teleport to="body"><div v-if="matrixOpen && Object.keys(pending).length && !impact && !itemsSection" class="float-bar in-drawer"><span>{{ Object.keys(pending).length }} 格待提交</span><Button @click="pending = {}">放棄</Button><Button variant="primary" :disabled="matrixSaving" @click="reviewMatrix">{{ matrixSaving ? '處理中…' : '提交變更' }}</Button></div></Teleport>
