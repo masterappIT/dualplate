@@ -52,18 +52,20 @@ before(async () => {
 after(() => { state.db?.close(); state.server?.close(); if (state.directory) rmSync(state.directory, { recursive: true, force: true }) })
 
 test('委託範圍新增並回傳目前負責方', async () => {
-  const result = await request('/service-scopes', 'PUT', { ownerType: 'company', ownerId: state.hkCompany, service: 'secretary', handler: 'outsourced', providerName: '香港秘書公司', notes: '年度合約' })
+  // 2026-10-17 改為逐件委託：原「公司秘書」大項的唯一事項是註冊地址／秘書合約（hk_registered_office）
+  const result = await request('/service-scopes', 'PUT', { ownerType: 'company', ownerId: state.hkCompany, item: 'hk_registered_office', handler: 'outsourced', providerName: '香港秘書公司', notes: '年度合約' })
   assert.equal(result.status, 200)
-  assert.equal(result.body.services.find(item => item.service === 'secretary').handler, 'outsourced')
-  assert.equal(result.body.services.find(item => item.service === 'secretary').providerName, '香港秘書公司')
+  assert.equal(result.body.items.find(item => item.item === 'hk_registered_office').handler, 'outsourced')
+  assert.equal(result.body.items.find(item => item.item === 'hk_registered_office').providerName, '香港秘書公司')
 })
 test('委託範圍修改會結束舊記錄並保留歷史', async () => {
-  assert.equal((await request('/service-scopes', 'PUT', { ownerType: 'company', ownerId: state.hkCompany, service: 'secretary', handler: 'us' })).status, 200)
+  assert.equal((await request('/service-scopes', 'PUT', { ownerType: 'company', ownerId: state.hkCompany, item: 'hk_registered_office', handler: 'client' })).status, 200)
   const result = await request('/service-scopes?ownerType=company&ownerId=' + state.hkCompany)
   assert.equal(result.status, 200)
-  assert.equal(result.body.history.filter(item => item.service === 'secretary').length, 2)
-  assert.equal(result.body.history.filter(item => item.service === 'secretary' && !item.endedOn).length, 1)
-  assert.equal(state.db.prepare("SELECT COUNT(*) count FROM service_scopes WHERE tenant_id=? AND owner_type='company' AND owner_id=? AND service=? AND ended_on IS NULL").get(state.tenant, state.hkCompany, 'secretary').count, 1)
+  assert.equal(result.body.history.filter(item => item.item === 'hk_registered_office').length, 2)
+  assert.equal(result.body.history.filter(item => item.item === 'hk_registered_office' && !item.endedOn).length, 1)
+  assert.equal(state.db.prepare("SELECT COUNT(*) count FROM service_scopes WHERE tenant_id=? AND owner_type='company' AND owner_id=? AND service=? AND ended_on IS NULL").get(state.tenant, state.hkCompany, 'hk_registered_office').count, 1)
+  assert.equal((await request('/service-scopes', 'PUT', { ownerType: 'company', ownerId: state.hkCompany, item: 'hk_registered_office', handler: 'us' })).status, 200)
 })
 test('委託範圍不適用組合回 400', async () => {
   const result = await request('/service-scopes', 'PUT', { ownerType: 'company', ownerId: state.cnCompany, service: 'secretary', handler: 'us' })

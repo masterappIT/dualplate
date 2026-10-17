@@ -172,14 +172,15 @@ export function rentOverview(tenantId) {
   refreshTenant(tenantId)
   const day = today(), month = day.slice(0, 7), scopes = scopeMap(tenantId)
   const rows = db.prepare("SELECT i.*, c.plate_asset_id, c.currency, c.renter_name, p.mainland_plate, p.local_plate, p.customer_id, cu.name customer_name FROM rent_invoices i JOIN rental_contracts c ON c.id=i.contract_id JOIN plate_assets p ON p.id=c.plate_asset_id JOIN customers cu ON cu.id=p.customer_id WHERE c.tenant_id=? AND i.voided=0").all(tenantId)
-  const handlerOf = row => scopes.get(`plate:${row.plate_asset_id}:rental_management`)?.handler || 'us'
+  // Rent follow-up off the customer's list counts as the client's own, so it leaves our numbers.
+  const handlerOf = row => scopes.handling('plate', row.plate_asset_id, 'rent_overdue', row.customer_id)?.handler ?? 'client'
   const ours = rows.filter(row => handlerOf(row) !== 'client')
   const sum = list => Object.fromEntries(currencies.map(currency => [currency, list.filter(row => row.currency === currency).reduce((total, row) => total + row.amount, 0)]).filter(([, total]) => total))
   const thisMonth = ours.filter(row => row.due_on.slice(0, 7) === month)
   const late = row => invoiceStatus(row, day) === '逾期' || (invoiceStatus(row, day) === '部分收' && row.due_on < day)
   const overdue = ours.filter(late)
   // 到期列表照樣列出客戶自理的逾期租金（handler=client），但不計入我們的數字
-  const deadlines = rows.filter(late).map(row => ({ ruleCode: 'rent_overdue', name: '租金逾期', method: 'rent', service: 'rental_management', handler: handlerOf(row), providerName: '', ownerType: 'plate', ownerId: row.plate_asset_id, ownerLabel: [row.mainland_plate, row.local_plate].filter(Boolean).join(' · ') || '車牌待補', customerId: row.customer_id, customerName: row.customer_name,
+  const deadlines = rows.filter(row => late(row) && scopes.handling('plate', row.plate_asset_id, 'rent_overdue', row.customer_id)).map(row => ({ ruleCode: 'rent_overdue', name: '租金逾期', method: 'rent', service: 'rental_management', item: 'rent_overdue', handler: handlerOf(row), providerName: '', ownerType: 'plate', ownerId: row.plate_asset_id, ownerLabel: [row.mainland_plate, row.local_plate].filter(Boolean).join(' · ') || '車牌待補', customerId: row.customer_id, customerName: row.customer_name,
     dueOn: row.due_on, daysLeft: Math.round((Date.parse(row.due_on) - Date.parse(day)) / 86400000), level: 'overdue', period: row.period, detail: `${row.renter_name} · ${row.currency} ${(row.amount / 100).toFixed(2)}`, invoiceId: row.id, contractId: row.contract_id }))
   return { rent: { month, due: { count: thisMonth.length, amount: sum(thisMonth) }, received: { count: thisMonth.filter(row => ['已收'].includes(invoiceStatus(row, day))).length, amount: sum(thisMonth.filter(row => invoiceStatus(row, day) === '已收')) }, overdue: { count: overdue.length, amount: sum(overdue) } }, deadlines }
 }

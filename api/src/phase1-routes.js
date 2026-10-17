@@ -5,7 +5,7 @@ import { driverFor } from './drivers.js'
 import { rentOverview } from './rentals.js'
 import { filingDeadlines } from './bookkeeping.js'
 import { scopeMap } from './entrustment.js'
-import { computeDeadlines, ruleMatches, ruleScopes, ruleMethods, matchKeys, dateFields } from './rules.js'
+import { computeDeadlines, ruleMatches, ruleScopes, ruleMethods, matchKeys, dateFields, itemGroups, defaultGroup, defaultService } from './rules.js'
 
 const date = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value + 'T00:00:00Z')) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -22,7 +22,7 @@ const validParams = (method, value) => {
   if (method === 'periodic') return keys.every(key => ['months', 'officialUrl'].includes(key)) && Array.isArray(value.months) && value.months.length > 0 && value.months.every(month => integer(month, 1, 12)) && (!('officialUrl' in value) || typeof value.officialUrl === 'string' && /^https?:\/\//.test(value.officialUrl))
   return false
 }
-const decoded = row => ({ ...row, match: JSON.parse(row.match_json), params: JSON.parse(row.params_json), remindDays: row.remind_days, customerVisible: Boolean(row.customer_visible) })
+const decoded = row => ({ ...row, match: JSON.parse(row.match_json), params: JSON.parse(row.params_json), remindDays: row.remind_days, customerVisible: Boolean(row.customer_visible), itemGroup: row.item_group || null })
 
 export async function phase1Routes(req, res, url, user, h) {
   const { json, fail, parseBody, canAccessCustomer, vehicleFor, plateFor, query, one, clean } = h
@@ -160,13 +160,23 @@ export async function phase1Routes(req, res, url, user, h) {
     if (params.field === 'cardExpiresOn' && scope !== 'plate') return error(400, '批文卡有效期來源只適用於兩地牌')
     if (['since_last', 'after_field'].includes(ruleMethod) && scope !== 'plate') return error(400, '過關及批文日期計算只適用於兩地牌')
     if (!clean(body.name ?? old?.name) || !integer(remindDays, 0, 730) || !validMatch(match) || !validParams(ruleMethod, params) || body.active !== undefined && typeof body.active !== 'boolean' || typeof customerVisible !== 'boolean') return error(400, '規則內容無效')
+    // Plate-side items sit in a matrix group (docs/tasks/scope-items-design.md §3); company rules have none.
+    if (body.itemGroup !== undefined && (scope === 'company' ? body.itemGroup !== null : !Object.hasOwn(itemGroups, body.itemGroup))) return error(400, '事項小組無效')
+    if (body.addToAll !== undefined && (old || typeof body.addToAll !== 'boolean')) return error(400, '規則內容無效')
+    const itemGroup = scope === 'company' ? null : body.itemGroup ?? old?.item_group ?? defaultGroup(scope)
     if (old) {
-      db.prepare('UPDATE rules SET name=?,remind_days=?,active=?,customer_visible=?,match_json=?,params_json=? WHERE id=? AND tenant_id=?').run(clean(body.name ?? old.name, 160), remindDays, body.active === undefined ? old.active : Number(body.active), Number(customerVisible), JSON.stringify(match), JSON.stringify(params), old.id, tenant)
+      db.prepare('UPDATE rules SET name=?,remind_days=?,active=?,customer_visible=?,match_json=?,params_json=?,item_group=? WHERE id=? AND tenant_id=?').run(clean(body.name ?? old.name, 160), remindDays, body.active === undefined ? old.active : Number(body.active), Number(customerVisible), JSON.stringify(match), JSON.stringify(params), itemGroup, old.id, tenant)
       return send(200, decoded(one('SELECT * FROM rules WHERE id=?', old.id)))
     }
-    if (one('SELECT id FROM rules WHERE tenant_id=? AND code=?', tenant, code)) return error(409, '規則代碼已存在')
+    if (one('SELECT id FROM rules WHERE tenant_id=? AND code=?', tenant, code) || ['monthly_filing', 'rent_overdue'].includes(code)) return error(409, '規則代碼已存在')
     const ruleId = id()
-    db.prepare('INSERT INTO rules(id,tenant_id,code,name,scope,method,match_json,params_json,remind_days,active,customer_visible,sort) VALUES (?,?,?,?,?,?,?,?,?,1,?,?)').run(ruleId, tenant, code, clean(body.name, 160), scope, ruleMethod, JSON.stringify(match), JSON.stringify(params), remindDays, Number(customerVisible), 1000)
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      db.prepare('INSERT INTO rules(id,tenant_id,code,name,scope,method,match_json,params_json,remind_days,active,customer_visible,sort,service,item_group) VALUES (?,?,?,?,?,?,?,?,?,1,?,?,?,?)').run(ruleId, tenant, code, clean(body.name, 160), scope, ruleMethod, JSON.stringify(match), JSON.stringify(params), remindDays, Number(customerVisible), 1000, defaultService(scope), itemGroup)
+      // Customers on the default list get every active item anyway; customers with their own list get it unless told not to.
+      if (body.addToAll !== false) db.prepare('INSERT OR IGNORE INTO customer_items(customer_id,tenant_id,item_code,added_by,added_at) SELECT id, tenant_id, ?, ?, ? FROM customers WHERE tenant_id=? AND items_customized=1').run(code, user.id, now(), tenant)
+      db.exec('COMMIT')
+    } catch (failure) { db.exec('ROLLBACK'); throw failure }
     return send(201, decoded(one('SELECT * FROM rules WHERE id=?', ruleId)))
   }
   if (path === '/api/tracked-items' && method === 'GET') {

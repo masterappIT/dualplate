@@ -3,34 +3,37 @@
 export const ruleScopes = ['plate', 'company', 'vehicle', 'driver']
 // Which entrusted service each rule belongs to (docs/tasks/entrustment-brief.md §2). Custom rules default by scope.
 export const defaultService = scope => scope === 'company' ? 'company_upkeep' : 'plate_service'
+// Plate-side items are grouped in the entrustment matrix (docs/tasks/scope-items-design.md §3); company rules have no group.
+export const itemGroups = { permit: '批文與通行證', filing: '備案', vehicle: '車輛', driver: '司機', crossing: '過關', rental: '出租', other: '其他' }
+export const defaultGroup = scope => scope === 'vehicle' ? 'vehicle' : scope === 'driver' ? 'driver' : scope === 'plate' ? 'permit' : null
 export const ruleMethods = ['expiry', 'anniversary', 'yearly', 'inspection', 'periodic', 'since_last', 'after_field']
 // Date facts that since_last / after_field rules may count from.
 export const dateFields = { since_last: ['lastCrossedOn'], after_field: ['cardValidFrom'] }
 export const matchKeys = ['route', 'jurisdiction', 'indicatorCategory', 'port', 'origin', 'companyStatus', 'crossingReminder']
 
 export const defaultRules = [
-  { code: 'approval', name: '批文／指標有效期', scope: 'plate', method: 'expiry', match: {}, params: { field: 'cardExpiresOn' }, remindDays: 60, service: 'plate_service', customerVisible: true },
-  { code: 'hk_crp', name: '香港封閉道路通行許可證（CRP）', scope: 'plate', method: 'expiry', match: { route: '粵港' }, params: {}, remindDays: 120, service: 'plate_service', customerVisible: true },
-  { code: 'mo_permit', name: '澳門車輛邊境通行證', scope: 'plate', method: 'expiry', match: { route: '粵澳' }, params: {}, remindDays: 60, service: 'plate_service', customerVisible: true },
-  { code: 'hk_licence', name: '香港車輛牌照', scope: 'vehicle', method: 'expiry', match: { origin: '香港' }, params: {}, remindDays: 30, service: 'plate_service', customerVisible: true },
-  { code: 'local_insurance', name: '港澳車輛保險', scope: 'vehicle', method: 'expiry', match: {}, params: {}, remindDays: 30, service: 'plate_service', customerVisible: true },
-  { code: 'cn_ctpl', name: '內地交強險', scope: 'vehicle', method: 'expiry', match: {}, params: {}, remindDays: 30, service: 'plate_service', customerVisible: true },
-  { code: 'inspection', name: '內地驗車／檢驗標誌', scope: 'vehicle', method: 'inspection', match: {}, params: { markYears: [2, 4, 8], inspectYears: [6], yearlyFrom: 10 }, remindDays: 60, service: 'plate_service', customerVisible: true },
+  { code: 'approval', name: '批文／指標有效期', scope: 'plate', method: 'expiry', match: {}, params: { field: 'cardExpiresOn' }, remindDays: 60, service: 'plate_service', group: 'permit', customerVisible: true },
+  { code: 'hk_crp', name: '香港封閉道路通行許可證（CRP）', scope: 'plate', method: 'expiry', match: { route: '粵港' }, params: {}, remindDays: 120, service: 'plate_service', group: 'permit', customerVisible: true },
+  { code: 'mo_permit', name: '澳門車輛邊境通行證', scope: 'plate', method: 'expiry', match: { route: '粵澳' }, params: {}, remindDays: 60, service: 'plate_service', group: 'permit', customerVisible: true },
+  { code: 'hk_licence', name: '香港車輛牌照', scope: 'vehicle', method: 'expiry', match: { origin: '香港' }, params: {}, remindDays: 30, service: 'plate_service', group: 'vehicle', customerVisible: true },
+  { code: 'local_insurance', name: '港澳車輛保險', scope: 'vehicle', method: 'expiry', match: {}, params: {}, remindDays: 30, service: 'plate_service', group: 'vehicle', customerVisible: true },
+  { code: 'cn_ctpl', name: '內地交強險', scope: 'vehicle', method: 'expiry', match: {}, params: {}, remindDays: 30, service: 'plate_service', group: 'vehicle', customerVisible: true },
+  { code: 'inspection', name: '內地驗車／檢驗標誌', scope: 'vehicle', method: 'inspection', match: {}, params: { markYears: [2, 4, 8], inspectYears: [6], yearlyFrom: 10 }, remindDays: 60, service: 'plate_service', group: 'vehicle', customerVisible: true },
   { code: 'hk_nar1', name: '香港周年申報表 NAR1', scope: 'company', method: 'anniversary', match: { jurisdiction: '香港' }, params: { offsetDays: 42 }, remindDays: 30, service: 'company_upkeep', customerVisible: true },
   { code: 'hk_br', name: '香港商業登記證', scope: 'company', method: 'expiry', match: { jurisdiction: '香港' }, params: {}, remindDays: 30, service: 'company_upkeep', customerVisible: true },
   { code: 'mo_tax', name: '澳門營業稅／所得補充稅申報', scope: 'company', method: 'expiry', match: { jurisdiction: '澳門' }, params: {}, remindDays: 30, service: 'bookkeeping', customerVisible: true },
   { code: 'cn_annual_report', name: '內地工商年報', scope: 'company', method: 'yearly', match: { jurisdiction: '內地' }, params: { month: 6, day: 30 }, remindDays: 60, service: 'company_upkeep', customerVisible: true },
   { code: 'cn_cit_annual', name: '內地企業所得稅匯算清繳', scope: 'company', method: 'yearly', match: { jurisdiction: '內地' }, params: { month: 5, day: 31 }, remindDays: 45, service: 'bookkeeping', customerVisible: true },
-  { code: 'customs_filing', name: '海關及邊檢備案', scope: 'plate', method: 'expiry', match: {}, params: {}, remindDays: 30, service: 'plate_service', customerVisible: true },
-  { code: 'new_card_filing', name: '新批文備案期限', scope: 'plate', method: 'after_field', match: {}, params: { field: 'cardValidFrom', days: 183 }, remindDays: 30, service: 'plate_service', customerVisible: true },
-  { code: 'crossing_90', name: '90 天過關', scope: 'plate', method: 'since_last', match: { crossingReminder: 1 }, params: { field: 'lastCrossedOn', days: 90 }, remindDays: 15, service: 'plate_service', customerVisible: true },
+  { code: 'customs_filing', name: '海關及邊檢備案', scope: 'plate', method: 'expiry', match: {}, params: {}, remindDays: 30, service: 'plate_service', group: 'filing', customerVisible: true },
+  { code: 'new_card_filing', name: '新批文備案期限', scope: 'plate', method: 'after_field', match: {}, params: { field: 'cardValidFrom', days: 183 }, remindDays: 30, service: 'plate_service', group: 'filing', customerVisible: true },
+  { code: 'crossing_90', name: '90 天過關', scope: 'plate', method: 'since_last', match: { crossingReminder: 1 }, params: { field: 'lastCrossedOn', days: 90 }, remindDays: 15, service: 'plate_service', group: 'crossing', customerVisible: true },
   { code: 'hk_registered_office', name: '香港公司註冊地址／秘書服務合約', scope: 'company', method: 'expiry', match: { jurisdiction: '香港' }, params: {}, remindDays: 30, service: 'secretary', customerVisible: true },
   { code: 'cn_registered_address', name: '內地公司註冊地址（掛靠）合約', scope: 'company', method: 'expiry', match: { jurisdiction: '內地' }, params: {}, remindDays: 30, service: 'company_upkeep', customerVisible: true },
-  { code: 'hk_audit_tax', name: '香港公司審計及利得稅報稅', scope: 'company', method: 'expiry', match: { jurisdiction: '香港' }, params: {}, remindDays: 60, service: 'audit_tax', customerVisible: true },
+  { code: 'hk_audit_tax', name: '香港公司審計及利得稅報稅', scope: 'company', method: 'expiry', match: { jurisdiction: '香港' }, params: {}, remindDays: 60, service: 'audit_tax', customerVisible: true, active: false },
   // 司機證件（docs/tasks/drivers-brief.md）：手動填寫到期日，委託範圍跟隨主司機所在牌照
-  { code: 'home_return_permit', name: '回鄉證', scope: 'driver', method: 'expiry', match: {}, params: {}, remindDays: 60, service: 'plate_service', customerVisible: true },
-  { code: 'hk_driving_licence', name: '香港駕駛執照', scope: 'driver', method: 'expiry', match: {}, params: {}, remindDays: 60, service: 'plate_service', customerVisible: true },
-  { code: 'cn_driving_licence', name: '內地駕駛證', scope: 'driver', method: 'expiry', match: {}, params: {}, remindDays: 60, service: 'plate_service', customerVisible: true },
+  { code: 'home_return_permit', name: '回鄉證', scope: 'driver', method: 'expiry', match: {}, params: {}, remindDays: 60, service: 'plate_service', group: 'driver', customerVisible: true },
+  { code: 'hk_driving_licence', name: '香港駕駛執照', scope: 'driver', method: 'expiry', match: {}, params: {}, remindDays: 60, service: 'plate_service', group: 'driver', customerVisible: true },
+  { code: 'cn_driving_licence', name: '內地駕駛證', scope: 'driver', method: 'expiry', match: {}, params: {}, remindDays: 60, service: 'plate_service', group: 'driver', customerVisible: true },
   { code: 'cn_status_check', name: '核對內地公司登記狀態', scope: 'company', method: 'periodic', match: { jurisdiction: '內地', companyStatus: ['存續', '經營異常', '註銷中'] }, params: { months: [1, 4, 7, 10], officialUrl: 'https://www.gsxt.gov.cn/' }, remindDays: 30, service: 'company_upkeep', customerVisible: false }
 ]
 
@@ -102,7 +105,8 @@ function level(daysLeft, remindDays, windowDays) {
 // owners: [{ ownerType, ownerId, label, customerId, customerName, facts }]
 // tracked: Map key `${ownerType}:${ownerId}:${code}` → { expires_on, notes }
 // completions: Set of `${code}:${ownerId}:${period}`
-// scopes (optional): Map `${type}:${id}:${service}` → current service_scopes row; missing means 'us'.
+// scopes (optional): the book from entrustment.js scopeMap(); handling() returns null when the item is not on the
+// customer's list, which drops it entirely. Without a book everything is ours.
 export function computeDeadlines({ rules, owners, tracked, completions, scopes = null, today = businessToday(), windowDays = 90 }) {
   const day = parse(iso(today))
   const result = []
@@ -110,10 +114,10 @@ export function computeDeadlines({ rules, owners, tracked, completions, scopes =
     if (owner.ownerType === 'company' && owner.facts.status === '已註銷') continue
     for (const rule of rules) {
       if (!rule.active || rule.scope !== owner.ownerType || !ruleMatches(rule, owner.facts)) continue
-      const service = rule.service || defaultService(rule.scope)
       const scopeOwner = owner.scopeOwner || { type: owner.ownerType, id: owner.ownerId }
-      const scope = scopes?.get(`${scopeOwner.type}:${scopeOwner.id}:${service}`)
-      const handling = { service, handler: scope?.handler || 'us', providerName: scope?.provider_name || '' }
+      const scope = scopes ? scopes.handling(scopeOwner.type, scopeOwner.id, rule.code, owner.customerId) : { handler: 'us', providerName: '' }
+      if (!scope) continue
+      const handling = { service: rule.service || defaultService(rule.scope), item: rule.code, handler: scope.handler, providerName: scope.providerName }
       const base = { ...handling, ruleId: rule.id, ruleCode: rule.code, name: rule.name, method: rule.method, ownerType: owner.ownerType, ownerId: owner.ownerId, ownerLabel: owner.label, customerId: owner.customerId, customerName: owner.customerName, remindDays: rule.remindDays, ...(rule.params?.officialUrl ? { officialUrl: rule.params.officialUrl } : {}) }
       if (rule.method === 'expiry') {
         const item = tracked.get(`${owner.ownerType}:${owner.ownerId}:${rule.code}`)

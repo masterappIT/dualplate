@@ -68,8 +68,8 @@ export function seedDemo() {
 
     // ── 委託範圍：李先生香港公司客戶自理、內地公司我們做（報帳外包給會計公司） ──
     for (const { hk, cn } of groups.filter(item => item.customer === li)) {
-      for (const service of ['company_upkeep', 'audit_tax', 'secretary']) writeScope({ tenantId: tenant, ownerType: 'company', ownerId: hk, service, handler: 'client', userId: admin.id })
-      writeScope({ tenantId: tenant, ownerType: 'company', ownerId: cn, service: 'bookkeeping', handler: 'outsourced', providerName: '信達會計（廣州）', userId: admin.id })
+      for (const item of ['hk_nar1', 'hk_br', 'hk_registered_office']) writeScope({ tenantId: tenant, ownerType: 'company', ownerId: hk, item, handler: 'client', userId: admin.id })
+      for (const item of ['monthly_filing', 'cn_cit_annual']) writeScope({ tenantId: tenant, ownerType: 'company', ownerId: cn, item, handler: 'outsourced', providerName: '信達會計（廣州）', userId: admin.id })
     }
 
     // ── 工單：一張等客戶交文件、一張辦理中、一張上月已完成 ──
