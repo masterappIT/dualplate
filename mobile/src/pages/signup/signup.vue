@@ -7,7 +7,8 @@
         <text class="notice-title">暫時不能在網上申請</text>
         <text class="subtle">請用 WhatsApp 或微信聯絡我們，我們會為你開通帳戶。</text>
       </view>
-      <view v-else class="card">
+      <!-- 條款載入完才決定顯示表格或提示，避免表格先閃出再換成提示 -->
+      <view v-else-if="terms" class="card">
         <text class="field-label first">手機號碼</text>
         <view class="phone-row">
           <picker :range="areaCodes" range-key="label" :value="areaIndex" @change="pickArea"><view class="field picker area"><text>{{ areaCodes[areaIndex].label }}</text><text class="chev">›</text></view></picker>
@@ -35,7 +36,7 @@
       <button class="btn-line back" @click="goLogin">返回登入</button>
     </view>
     <ContactCard v-if="sent || (loaded && !terms)" public :messages="false" />
-    <text v-if="!sent" class="help">已有帳戶？<text class="link" @click="goLogin">返回登入</text></text>
+    <text v-if="!sent && loaded" class="help">已有帳戶？<text class="link" @click="goLogin">返回登入</text></text>
   </view>
 </template>
 <script setup>
