@@ -120,7 +120,7 @@ test('不能刪除別的租戶的客戶帳號', async () => { assert.equal((awai
 
 // ── 刪除客戶 ──
 const removeCustomer = (id, token = 'admin') => request(`/customers/${id}`, 'DELETE', undefined, token)
-test('有登入帳號的客戶不能刪除', async () => { const r = await removeCustomer(state.withAccount); assert.equal(r.status, 409); assert.equal(r.body.error, '請先刪除這位客戶的登入帳號') })
+test('有登入帳號的客戶未確認登入數目不能刪除', async () => { const r = await removeCustomer(state.withAccount); assert.equal(r.status, 409); assert.equal(r.body.error, '這位客戶有 1 個登入帳號，請確認一併刪除') })
 test('名下有公司組的客戶不能刪除，並說明原因', async () => { const r = await removeCustomer(state.withGroup); assert.equal(r.status, 409); assert.equal(r.body.error, '客戶名下仍有公司組，不能刪除') })
 test('員工不能刪除客戶', async () => { assert.equal((await removeCustomer(state.empty, 'staff')).status, 403) })
 test('不能刪除別的租戶的客戶', async () => { assert.equal((await removeCustomer(state.foreign)).status, 404) })

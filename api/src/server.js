@@ -71,6 +71,12 @@ function auth(req) {
   return authenticate((req.headers.authorization || '').replace(/^Bearer /, ''))
 }
 // Every customer belongs to one tenant; admins see their tenant only, customers see themselves only.
+// 刪除客戶前的檢查：名下有業務資料（帳目、牌照、公司、工單、訊息等）就不能刪；登入帳號可以一併刪除
+const customerDeletionTables = [['plate_assets', '牌照'], ['company_groups', '公司組'], ['companies', '公司'], ['vehicles', '車輛'], ['drivers', '司機'], ['requests', '工單'], ['fee_items', '收費'], ['installment_plans', '分期'], ['customer_billing', '收費設定'], ['quotes', '報價'], ['monthly_reports', '月報'], ['rent_settlements', '租金結算'], ['self_handled', '自行辦理記錄'], ['support_messages', '訊息']]
+function customerDeletion(customerId) {
+  const blockers = customerDeletionTables.filter(([table]) => one(`SELECT 1 FROM ${table} WHERE customer_id=? LIMIT 1`, customerId)).map(([, label]) => label)
+  return { blockers, logins: query("SELECT * FROM users WHERE customer_id=? AND role='customer' ORDER BY active DESC, name", customerId) }
+}
 function canAccessCustomer(user, customerId) {
   const customer = customerId && one('SELECT tenant_id FROM customers WHERE id=?', customerId)
   return !!customer && customer.tenant_id === user.tenant_id && (user.role === 'admin' || user.role === 'staff' || user.customer_id === customerId)
@@ -590,21 +596,40 @@ export const server = http.createServer(async (req, res) => {
       db.prepare('UPDATE customers SET name=?,kind=?,phone=? WHERE id=? AND tenant_id=?').run(name, kind, phone, customer.id, user.tenant_id)
       return json(res, 200, one('SELECT * FROM customers WHERE id=? AND tenant_id=?', customer.id, user.tenant_id))
     }
+    const deletionMatch = path.match(/^\/api\/customers\/([^/]+)\/deletion$/)
+    if (deletionMatch && req.method === 'GET') {
+      if (user.role !== 'admin') return fail(res, 403, '無權限')
+      const customer = one('SELECT * FROM customers WHERE id=? AND tenant_id=?', deletionMatch[1], user.tenant_id)
+      if (!customer) return fail(res, 404, '客戶不存在')
+      if (customer.is_self) return json(res, 200, { canDelete: false, blockers: [], logins: [], reason: '本公司（自有）客戶不可刪除' })
+      const { blockers, logins } = customerDeletion(customer.id)
+      return json(res, 200, { canDelete: !blockers.length, blockers, logins: logins.map(row => ({ id: row.id, name: row.name, email: row.email?.endsWith('@phone.invalid') ? '' : row.email || '', phone: row.phone || '', active: Boolean(row.active) })) })
+    }
     if (customerMatch && req.method === 'DELETE') {
       if (user.role !== 'admin') return fail(res, 403, '無權限')
       const customer = one('SELECT * FROM customers WHERE id=? AND tenant_id=?', customerMatch[1], user.tenant_id)
       if (!customer) return fail(res, 404, '客戶不存在')
       if (customer.is_self) return fail(res, 409, '本公司（自有）客戶不可刪除')
-      // 只刪完全空白的客戶（例如建錯或測試用）；有任何業務資料或登入帳號都不准刪，避免失去歷史
-      if (one("SELECT id FROM users WHERE customer_id=? AND role='customer'", customer.id)) return fail(res, 409, '請先刪除這位客戶的登入帳號')
-      const linked = [['plate_assets', '牌照'], ['company_groups', '公司組'], ['companies', '公司'], ['vehicles', '車輛'], ['drivers', '司機'], ['requests', '工單'], ['fee_items', '收費'], ['installment_plans', '分期'], ['customer_billing', '收費設定'], ['quotes', '報價'], ['monthly_reports', '月報'], ['rent_settlements', '租金結算']]
-        .filter(([table]) => one(`SELECT 1 FROM ${table} WHERE customer_id=? LIMIT 1`, customer.id)).map(([, label]) => label)
-      if (linked.length) return fail(res, 409, `客戶名下仍有${linked.join('、')}，不能刪除`)
-      db.prepare("DELETE FROM service_scopes WHERE owner_type='customer' AND owner_id=?").run(customer.id)
-      db.prepare("DELETE FROM tracked_items WHERE owner_type='customer' AND owner_id=?").run(customer.id)
-      db.prepare('DELETE FROM notifications WHERE customer_id=?').run(customer.id)
-      db.prepare('DELETE FROM customers WHERE id=? AND tenant_id=?').run(customer.id, user.tenant_id)
-      return json(res, 200, { ok: true })
+      // 只刪空白客戶（例如建錯或測試用）：有任何業務資料都不准刪，避免失去帳目和歷史。登入帳號可一併刪除，
+      // 但要確認刪除的數目與現在相同（例如確認框打開後別人又開了登入，就要重新確認）
+      const body = await parseBody(req)
+      const { blockers, logins } = customerDeletion(customer.id)
+      if (blockers.length) return fail(res, 409, `客戶名下仍有${blockers.join('、')}，不能刪除`)
+      if (logins.length && body.logins !== logins.length) return fail(res, 409, `這位客戶有 ${logins.length} 個登入帳號，請確認一併刪除`)
+      db.exec('BEGIN IMMEDIATE')
+      try {
+        const userIds = JSON.stringify(logins.map(row => row.id))
+        for (const table of ['terms_acceptances', 'sessions', 'wechat_bind_codes']) db.prepare(`DELETE FROM ${table} WHERE user_id IN (SELECT value FROM json_each(?))`).run(userIds)
+        db.prepare("DELETE FROM users WHERE customer_id=? AND role='customer'").run(customer.id)
+        db.prepare("DELETE FROM service_scopes WHERE owner_type='customer' AND owner_id=?").run(customer.id)
+        db.prepare("DELETE FROM tracked_items WHERE owner_type='customer' AND owner_id=?").run(customer.id)
+        db.prepare('DELETE FROM rule_completions WHERE tenant_id=? AND owner_id=?').run(user.tenant_id, customer.id)
+        for (const table of ['notifications', 'customer_items', 'customer_prices', 'customer_mode_changes', 'customer_changes', 'signup_applications']) db.prepare(`DELETE FROM ${table} WHERE customer_id=?`).run(customer.id)
+        db.prepare('DELETE FROM customers WHERE id=? AND tenant_id=?').run(customer.id, user.tenant_id)
+        db.exec('COMMIT')
+      } catch (error) { db.exec('ROLLBACK'); throw error }
+      for (const row of logins) for (const login of [row.email?.endsWith('@phone.invalid') ? '' : row.email, row.phone]) if (login) clearFailures('customer', login)
+      return json(res, 200, { ok: true, deletedLogins: logins.length })
     }
     if (path === '/api/customer-users' && req.method === 'POST') {
       if (user.role !== 'admin') return fail(res, 403, '無權限')

@@ -175,6 +175,9 @@ body { background: var(--canvas); color: var(--ink); font-family: var(--font-bod
 .danger-zone { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
 .danger-zone p { margin: 4px 0 0; color: var(--ink-2); }
 @media (max-width: 600px) { .danger-zone { flex-direction: column; align-items: flex-start; } }
+.delete-logins { margin: 0 0 12px; padding: 0; list-style: none; border-top: 1px solid var(--border); }
+.delete-logins li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.delete-logins span { color: var(--ink-2); overflow-wrap: anywhere; }
 .button.on-dark { background: transparent; border-color: var(--canvas-line); color: var(--card); }
 .button.on-dark option { color: var(--ink); }
 .stat-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
