@@ -42,9 +42,15 @@
         <template v-else>
           <text class="subtle">已按你填的資料寫好，可以按實際情況修改。{{ r.agreement.version ? '發出後再改，要重新發出，承租人要重新確認。' : '' }}</text>
           <textarea v-model="draft" class="field agreement" :maxlength="20000" :disabled="!r.canSend" auto-height />
+          <!-- 手寫簽名（管理者 2026-10-18）：每一版協議出租人先簽，才發給承租人；沒有改動只是重發連結，不用再簽 -->
+          <view v-if="r.canSend && needSign" class="sign-box">
+            <text class="field-label">出租人簽名</text>
+            <text class="subtle">出租人：{{ r.lessor }}。請用手指或滑鼠在框內簽名，簽好後按「發給承租人」。</text>
+            <SignaturePad ref="pad" />
+          </view>
           <view v-if="r.canSend" class="actions">
             <button class="btn-sm" :disabled="busy || draft === r.agreement.body" @click="save">儲存修改</button>
-            <button class="btn-sm solid" :disabled="busy" @click="send">{{ r.agreement.version && !changed ? '重新發送連結' : '發給承租人' }}</button>
+            <button class="btn-sm solid" :disabled="busy" @click="send">{{ needSign ? '發給承租人' : '重新發送連結' }}</button>
           </view>
           <view v-if="link" class="link-box">
             <text class="line-sub">連結只顯示這一次，請現在傳給承租人。承租人打開時要輸入電話最後 4 位。</text>
@@ -54,9 +60,21 @@
         </template>
       </view>
 
+      <view v-if="r.agreement.version" class="card">
+        <text class="step-title">第 {{ r.agreement.version }} 版的簽名</text>
+        <view class="signs">
+          <view v-for="p in signParties" :key="p.key" class="sign">
+            <text class="subtle">{{ p.label }}</text>
+            <image v-if="signImages[p.key]" class="sign-image" :src="signImages[p.key]" mode="widthFix" />
+            <view v-else class="sign-blank" />
+            <text class="subtle">{{ r.agreement[p.key + 'Signed'] ? r.agreement[p.key + 'Signed'].name + ' · ' + when(r.agreement[p.key + 'Signed'].at) : '未簽' }}</text>
+          </view>
+        </view>
+      </view>
+
       <view class="card">
-        <text class="step-title">雙方簽署的協議</text>
-        <text class="subtle">另外簽了紙本的，可以拍照或上傳 PDF 保存。</text>
+        <text class="step-title">另外簽了紙本？</text>
+        <text class="subtle">雙方已在網上簽名，不用紙本。另外簽了紙本的，可以拍照或上傳 PDF 保存。</text>
         <view class="actions"><button class="btn-sm" :disabled="busy" @click="uploadSigned('photo')">{{ r.signed ? '重新拍照' : '拍照上傳' }}</button><button class="btn-sm" :disabled="busy" @click="uploadSigned('pdf')">上傳 PDF</button></view>
         <text v-if="r.signed" class="link view-signed" @click="viewSigned">已上傳，查看 ›</text>
       </view>
@@ -76,13 +94,17 @@ import { ref, computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { api, getUser, money, copyText, openLink, pickPhotos, pickPdf, readBase64, privateImage } from '../../lib/api'
 import { useConfirm } from '../../lib/choice'
+import SignaturePad from '../../components/SignaturePad.vue'
 const confirmBox = useConfirm()
 let rentalId = ''
-const r = ref(null), draft = ref(''), busy = ref(false), link = ref(null)
+const r = ref(null), draft = ref(''), busy = ref(false), link = ref(null), pad = ref(null), signImages = ref({ lessor: '', renter: '' })
+const signParties = [{ key: 'lessor', label: '出租人' }, { key: 'renter', label: '承租人' }]
 const cycleLabel = { monthly: '每月', quarterly: '每季', yearly: '每年' }, feeTone = { 已收: 'gray', 逾期: 'red', 部分收: 'amber', 待收: '' }
 const feeLabel = i => i.status === '已收' ? (r.value.collectionMode === '代收' ? '我們已收到' : '已確認收到') : i.status === '逾期' ? '未收到（已過期）' : i.status === '部分收' ? '部分收到' : '未到期'
 const tone = computed(() => r.value.status === '生效' ? '' : ['草擬', '待換車'].includes(r.value.status) ? 'amber' : 'gray')
 const changed = computed(() => draft.value.trim() !== (r.value?.agreement.body || '').trim() || r.value?.agreement.changed)
+// 第一次發、協議改了、或這一版還沒有出租人簽名：要先簽名
+const needSign = computed(() => !r.value?.agreement.version || changed.value || !r.value?.agreement.lessorSigned)
 // 「10月18日 08:41」（香港時間）
 const when = value => { if (!value) return ''; const t = new Date(Date.parse(value) + 8 * 3600000).toISOString(); return `${Number(t.slice(5, 7))}月${Number(t.slice(8, 10))}日 ${t.slice(11, 16)}` }
 // 現在要做的事
@@ -101,18 +123,28 @@ const next = computed(() => {
 onLoad(query => { rentalId = decodeURIComponent(query.id || '') })
 async function load() {
   if (!getUser()) return uni.navigateTo({ url: '/pages/login/login' })
-  try { const fresh = await api('/my/rentals/' + rentalId); const keepDraft = r.value && draft.value !== r.value.agreement.body; r.value = fresh; if (!keepDraft) draft.value = fresh.agreement.body } catch (e) { uni.showToast({ title: e.message, icon: 'none' }) }
+  try { const fresh = await api('/my/rentals/' + rentalId); const keepDraft = r.value && draft.value !== r.value.agreement.body; r.value = fresh; if (!keepDraft) draft.value = fresh.agreement.body; loadSigns() } catch (e) { uni.showToast({ title: e.message, icon: 'none' }) }
 }
 async function save() {
   busy.value = true
   try { r.value = await api('/my/rentals/' + rentalId + '/agreement', 'PUT', { body: draft.value }); draft.value = r.value.agreement.body; uni.showToast({ title: '已儲存', icon: 'none' }) } catch (e) { uni.showToast({ title: e.message, icon: 'none' }) } finally { busy.value = false }
 }
+// 這一版的雙方簽名相片
+async function loadSigns() {
+  for (const p of signParties) { signImages.value[p.key] = ''; if (r.value.agreement[p.key + 'Signed']) privateImage('/my/rentals/' + rentalId + '/signature-' + p.key).then(src => { signImages.value[p.key] = src }).catch(() => {}) }
+}
+// 要簽名時連同簽名相片發出；不用簽名（協議沒改、這一版已簽）就直接重發連結
 async function send() {
+  if (!needSign.value) return deliver(null)
+  if (pad.value?.isEmpty()) return uni.showToast({ title: '請先在框內簽名', icon: 'none' })
+  try { deliver(await pad.value.toDataURL()) } catch (e) { uni.showToast({ title: e.message, icon: 'none' }) }
+}
+async function deliver(signature) {
   busy.value = true
   try {
     if (draft.value !== r.value.agreement.body) await api('/my/rentals/' + rentalId + '/agreement', 'PUT', { body: draft.value })
-    const result = await api('/my/rentals/' + rentalId + '/send', 'POST', {})
-    link.value = result.link; r.value = result; draft.value = result.agreement.body
+    const result = await api('/my/rentals/' + rentalId + '/send', 'POST', signature ? { signature } : {})
+    link.value = result.link; r.value = result; draft.value = result.agreement.body; loadSigns()
   } catch (e) { uni.showToast({ title: e.message, icon: 'none' }) } finally { busy.value = false }
 }
 function whatsapp() { openLink('https://wa.me/?text=' + encodeURIComponent(`${r.value.renter.name} 你好，這是 ${r.value.plateLabel} 的出租協議，請打開連結核對並確認（要輸入你電話最後 4 位）：${link.value.url}`)) }
@@ -152,4 +184,7 @@ onShow(load)
 .view-signed{display:block;margin-top:12px}
 .fee-row{padding:4px 0;font-size:var(--fs-body);color:var(--ink-2)}
 .cancel{width:100%;margin-top:8px}
+.sign-box{margin-top:16px}.sign-box .field-label{margin-top:0}
+.signs{display:flex;flex-wrap:wrap;gap:16px;margin-top:8px}.sign{flex:1;min-width:140px}
+.sign-image{display:block;width:100%;max-width:280px;margin:4px 0;border-bottom:1px solid var(--ink-3)}.sign-blank{height:64px;margin:4px 0;border-bottom:1px solid var(--ink-3)}
 </style>

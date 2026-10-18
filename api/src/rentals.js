@@ -21,7 +21,20 @@ for (const column of ['handling', 'renter_id_no', 'agreement_body', 'agreement_s
 addColumn('rental_contracts', 'agreement_version', 'INTEGER NOT NULL DEFAULT 0')
 // 出租要辦的換車、換司機：handler＝us 開工單（request_id），client 由客戶自行辦理後在「有變動？」回報
 db.exec(`CREATE TABLE IF NOT EXISTS rental_procedures(id TEXT PRIMARY KEY, contract_id TEXT NOT NULL, kind TEXT NOT NULL, handler TEXT NOT NULL, request_id TEXT, detail TEXT, created_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS rental_signed_files(contract_id TEXT PRIMARY KEY, mime TEXT NOT NULL, data BLOB NOT NULL, uploaded_at TEXT NOT NULL);`)
+CREATE TABLE IF NOT EXISTS rental_signed_files(contract_id TEXT PRIMARY KEY, mime TEXT NOT NULL, data BLOB NOT NULL, uploaded_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS rental_signatures(contract_id TEXT NOT NULL, version INTEGER NOT NULL, party TEXT NOT NULL, signer_name TEXT NOT NULL, data BLOB NOT NULL, signed_at TEXT NOT NULL, ip TEXT, PRIMARY KEY(contract_id, version, party));`)
+
+// 手寫簽名（管理者 2026-10-18）：每一版協議出租人和承租人各簽一次；協議改了重新發出，雙方要重簽。只收 PNG
+export const signatureParties = { lessor: '出租人', renter: '承租人' }
+export function signatureImage(value) {
+  if (typeof value !== 'string') return null
+  const data = Buffer.from(value.replace(/^data:image\/png;base64,/, ''), 'base64')
+  return data.length >= 200 && data.length <= 600 * 1024 && data.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')) ? data : null
+}
+export const signatureOf = (contract, party, version = contract.agreement_version) => db.prepare('SELECT signer_name, signed_at, data FROM rental_signatures WHERE contract_id=? AND version=? AND party=?').get(contract.id, version, party) || null
+export function saveSignature(contract, party, signerName, data, ip = null) {
+  db.prepare('INSERT INTO rental_signatures(contract_id,version,party,signer_name,data,signed_at,ip) VALUES (?,?,?,?,?,?,?) ON CONFLICT(contract_id,version,party) DO UPDATE SET signer_name=excluded.signer_name, data=excluded.data, signed_at=excluded.signed_at, ip=excluded.ip').run(contract.id, contract.agreement_version, party, signerName, data, now(), ip)
+}
 
 export const currencies = ['HKD', 'RMB', 'MOP']
 const cycles = { monthly: 1, quarterly: 3, yearly: 12 }

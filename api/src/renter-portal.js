@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { db, id, now } from './db.js'
 import { businessToday } from './rules.js'
 import { sniff } from './client-portal.js'
-import { contractFor, contractView, receiveInvoice, refreshContract, currencies, advanceClientRental } from './rentals.js'
+import { contractFor, contractView, receiveInvoice, refreshContract, currencies, advanceClientRental, saveSignature, signatureImage, signatureOf, signatureParties } from './rentals.js'
 
 // 出租第 B 輪（docs/tasks/rentals-brief.md）：承租方專屬連結、合約範本、承租方上傳憑證待確認、代收結算。
 // 用語（管理者 2026-10-18）：對外寫「出租、租金、承租人」。承租人不登入，用連結＋電話末 4 碼。
@@ -107,9 +107,7 @@ export const agreementTemplate = `兩地牌照出租協議
 十二、其他
 1. 本協議受香港特別行政區法律管轄。因本協議引起的爭議，雙方先友好協商；協商不成的，交由香港法院處理。
 2. 本協議的修改須經雙方書面同意。
-3. 承租人在網上確認本協議，與簽署具同等效力。雙方亦可另行簽署紙本，紙本與網上確認的版本內容須一致。
-
-出租人簽署：＿＿＿＿＿＿＿＿　　承租人簽署：＿＿＿＿＿＿＿＿`
+3. 承租人在網上確認本協議，與簽署具同等效力。雙方亦可另行簽署紙本，紙本與網上確認的版本內容須一致。`
 export const agreementPlaceholders = ['協議編號', '簽署日期', '出租人', '出租人身份', '承租人', '承租人證件', '承租人電話', '牌照', '批文卡編號', '持牌公司', '使用車輛', '司機', '開始日期', '結束日期', '租金', '週期', '收款日', '押金', '收款方式', '手續辦理方', '手續費用承擔方', '通知期', '代辦公司']
 // 時間以香港時間顯示（伺服器存 UTC；香港沒有夏令時間）
 const hkTime = value => new Date(Date.parse(value) + 8 * 3600000).toISOString().slice(0, 16).replace('T', ' ')
@@ -169,7 +167,7 @@ h1{margin:6px 0 2px;font-size:22px;color:#fff}h2{font-size:16px;color:var(--jade
 .pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:700;background:#E5F2EA;color:var(--ok);white-space:nowrap}.period{font-size:16px}.due{display:block;color:var(--ink2);font-size:12px}.status{text-align:right;flex:none;max-width:55%}.status a{display:inline-block;margin-top:4px;color:var(--jade);font-size:13px;white-space:nowrap}.pill.red{background:#FBE9E7;color:var(--red)}.pill.amber{background:#FDF1DC;color:var(--amber)}.pill.gray{background:#EEEEE9;color:var(--ink2)}
 input,button{font:inherit}input[type=text],input[type=tel],input[type=date],input[type=number]{width:100%;padding:10px 12px;border:1px solid var(--rule);border-radius:8px;background:#fff}label{display:block;margin:12px 0 4px;font-size:13px;font-weight:700;color:var(--ink2)}
 button{width:100%;margin-top:14px;padding:12px;border:0;border-radius:8px;background:var(--jade);color:#fff;font-weight:700;cursor:pointer}button.secondary{background:#E3EFEA;color:var(--jade)}.error{color:var(--red);font-weight:700}.ok{color:var(--ok);font-weight:700}
-pre{white-space:pre-wrap;font-family:inherit;margin:0}@media print{.noprint{display:none}body{background:#fff}.head{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+pre{white-space:pre-wrap;font-family:inherit;margin:0}.signs{display:flex;flex-wrap:wrap;gap:16px;margin-top:16px;padding-top:12px;border-top:1px solid var(--rule)}.sign{flex:1;min-width:200px}.sign img{display:block;width:100%;max-width:280px;height:auto;margin:4px 0;border-bottom:1px solid var(--ink2)}.sign-blank{height:72px;margin:4px 0;border-bottom:1px solid var(--ink2)}.pad{margin-top:4px;border:1px solid var(--rule);border-radius:8px;background:#fff;touch-action:none}.pad canvas{display:block;width:100%;height:160px}.pad-row{display:flex;justify-content:space-between;align-items:center;margin-top:6px}.pad-row button{width:auto;margin:0;padding:6px 14px}@media print{.noprint{display:none}body{background:#fff}.head{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style></head><body><div class="wrap">${body}</div></body></html>`
 const send = (res, status, title, body) => { res.writeHead(status, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer' }); res.end(page(title, body)) }
 const gone = res => send(res, 404, '連結無效', '<div class="card"><h1 style="color:var(--jade-deep)">連結無效或已過期</h1><p class="muted">請聯絡出租人，索取新的連結。</p></div>')
@@ -178,6 +176,23 @@ function verifyForm(token, message = '') {
   return `<div class="head"><div class="kicker">出租</div><h1>請先核對身份</h1><div>輸入你登記的電話號碼最後 4 位數字</div></div>
 <form class="card" method="post" action="/r/${token}/verify"><label for="tail">電話最後 4 位</label><input id="tail" name="tail" type="tel" inputmode="numeric" maxlength="4" pattern="\\d{4}" required autofocus>${message ? `<p class="error">${html(message)}</p>` : ''}<button type="submit">繼續</button></form>`
 }
+// 協議下方的簽署欄：出租人、承租人各一；未簽留空線，列印後也可以手簽
+function signatureBlock(contract) {
+  return `<div class="signs">${Object.entries(signatureParties).map(([party, label]) => { const sign = signatureOf(contract, party); return `<div class="sign"><span class="muted">${label}簽署</span>${sign ? `<img alt="${label}簽名" src="data:image/png;base64,${Buffer.from(sign.data).toString('base64')}"><span class="muted">${html(sign.signer_name)} · ${html(hkTime(sign.signed_at))}</span>` : '<div class="sign-blank"></div><span class="muted">未簽</span>'}</div>` }).join('')}</div>`
+}
+// 承租人手寫簽名框（手指或滑鼠）；提交時轉成 PNG 放進表單
+const signaturePad = () => `<label>你的簽名</label><div class="pad"><canvas id="pad"></canvas></div><div class="pad-row"><span class="muted">請用手指或滑鼠在框內簽名</span><button type="button" class="secondary" onclick="clearPad()">重簽</button></div><input type="hidden" name="signature" id="signature">
+<script>
+const pad=document.getElementById('pad'),ctx=pad.getContext('2d');let drawing=false,strokes=0
+function fit(){const r=pad.getBoundingClientRect(),d=window.devicePixelRatio||1;pad.width=r.width*d;pad.height=r.height*d;ctx.scale(d,d);ctx.lineWidth=2.5;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#14201B';strokes=0}
+fit()
+const at=e=>{const r=pad.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top]}
+pad.addEventListener('pointerdown',e=>{drawing=true;pad.setPointerCapture(e.pointerId);const[x,y]=at(e);ctx.beginPath();ctx.moveTo(x,y);e.preventDefault()})
+pad.addEventListener('pointermove',e=>{if(!drawing)return;const[x,y]=at(e);ctx.lineTo(x,y);ctx.stroke();e.preventDefault()})
+pad.addEventListener('pointerup',()=>{if(drawing)strokes++;drawing=false})
+function clearPad(){ctx.clearRect(0,0,pad.width,pad.height);strokes=0}
+function signed(e){if(!strokes){alert('請先在框內簽名');e.preventDefault();return false}document.getElementById('signature').value=pad.toDataURL('image/png');return true}
+</script>`
 function contractPage(token, key, contract, notice = '') {
   const view = contractView(contract)
   // 客戶發出的協議要按最新版本確認；員工舊合約沒有版本
@@ -199,8 +214,8 @@ ${invoices.some(item => item.status !== '已收') ? `<h2 id="upload" class="nopr
 <form class="card noprint" onsubmit="return upload(event)"><label for="invoice">付款期數</label><select id="invoice" style="width:100%;padding:10px;border:1px solid var(--rule);border-radius:8px">${invoices.filter(item => item.status !== '已收').map(item => `<option value="${item.id}"${item.id === firstOpen?.id ? ' selected' : ''}>${html(item.period)}（${money(view.currency, item.amount)}）</option>`).join('')}</select>
 <label for="paid">付款日期</label><input id="paid" type="date" value="${today()}" required><label for="amount">付款金額（${view.currency}）</label><input id="amount" type="number" step="0.01" min="0.01" value="${firstOpen ? (firstOpen.amount / 100).toFixed(2) : ''}" required>
 <label for="file">轉帳憑證（相片或 PDF，5 MB 以內）</label><input id="file" type="file" accept="image/png,image/jpeg,application/pdf" required><p id="msg" class="muted">上傳後由代辦公司核對，確認後狀態會改為「已確認收到」。</p><button type="submit">上傳</button></form>` : ''}
-<h2>出租協議${contract.agreement_version > 0 ? `（第 ${contract.agreement_version} 版）` : ''}</h2><div class="card"><pre>${html(agreementText(contract, view))}</pre><p class="muted noprint">這份頁面可以列印保存。</p><button class="secondary noprint" type="button" onclick="print()">列印</button></div>
-<h2 class="noprint">確認內容</h2>${ack ? `<div class="card ok">已由 ${html(ack.name)} 於 ${html(hkTime(ack.acknowledged_at))} ${contract.agreement_version > 0 ? `同意這份協議（第 ${contract.agreement_version} 版）` : '確認已閱讀'}。</div>` : `<form class="card noprint" method="post" action="/r/${token}/acknowledge"><input type="hidden" name="key" value="${key}"><label for="name">你的姓名</label><input id="name" name="name" type="text" maxlength="60" required><p class="muted">${contract.agreement_version > 0 ? '按下按鈕代表你已閱讀並同意上述協議；按協議第十二條，網上確認與簽署具同等效力。' : '按下按鈕代表你已閱讀並確認上述內容。這不是電子簽署。'}</p><button type="submit">${contract.agreement_version > 0 ? '我同意這份協議' : '我已閱讀並確認'}</button></form>`}
+<h2>出租協議${contract.agreement_version > 0 ? `（第 ${contract.agreement_version} 版）` : ''}</h2><div class="card"><pre>${html(agreementText(contract, view))}</pre>${contract.agreement_version > 0 ? signatureBlock(contract) : ''}<p class="muted noprint">這份頁面可以列印保存。</p><button class="secondary noprint" type="button" onclick="print()">列印</button></div>
+<h2 class="noprint">確認內容</h2>${ack ? `<div class="card ok">已由 ${html(ack.name)} 於 ${html(hkTime(ack.acknowledged_at))} ${contract.agreement_version > 0 ? `同意這份協議（第 ${contract.agreement_version} 版）` : '確認已閱讀'}。</div>` : `<form class="card noprint" method="post" action="/r/${token}/acknowledge"${contract.agreement_version > 0 ? ' onsubmit="return signed(event)"' : ''}><input type="hidden" name="key" value="${key}"><label for="name">你的姓名</label><input id="name" name="name" type="text" maxlength="60" required>${contract.agreement_version > 0 ? signaturePad() : ''}<p class="muted">${contract.agreement_version > 0 ? '按下按鈕代表你已閱讀並同意上述協議；按協議第十二條，網上確認與簽署具同等效力。' : '按下按鈕代表你已閱讀並確認上述內容。這不是電子簽署。'}</p><button type="submit">${contract.agreement_version > 0 ? '我同意這份協議' : '我已閱讀並確認'}</button></form>`}
 <p class="muted" style="margin-top:24px">如有疑問，請聯絡出租人。這個連結只供你本人使用，請勿轉發。</p>
 <script>
 async function upload(event){event.preventDefault();const msg=document.getElementById('msg');const file=document.getElementById('file').files[0];if(!file){return false}
@@ -245,6 +260,10 @@ export async function renterPublicRoutes(req, res, url) {
     if (!validVisit(link, key)) return send(res, 401, '核對身份', verifyForm(token, '頁面已逾時，請重新核對')), true
     if (!name) return send(res, 400, '出租', contractPage(token, key, contract, '!請填寫你的姓名')), true
     const version = contract.agreement_version || 0
+    // 客戶發出的協議要手寫簽名（管理者 2026-10-18）
+    const image = version > 0 ? signatureImage(form.get('signature')) : null
+    if (version > 0 && !image) return send(res, 400, '出租', contractPage(token, key, contract, '!請在簽名框內簽名')), true
+    if (image && !signatureOf(contract, 'renter')) saveSignature(contract, 'renter', name, image, String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0])
     if (!db.prepare('SELECT 1 FROM rental_acknowledgements WHERE contract_id=? AND version=?').get(contract.id, version)) db.prepare('INSERT INTO rental_acknowledgements(contract_id,name,acknowledged_at,ip,version) VALUES (?,?,?,?,?)').run(contract.id, name, now(), String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0], version)
     // 客戶新增的出租：確認後轉為待換車或出租中
     advanceClientRental(db.prepare('SELECT * FROM rental_contracts WHERE id=?').get(contract.id))

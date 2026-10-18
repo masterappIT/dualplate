@@ -4,7 +4,7 @@ import { selfManaged } from './entrustment.js'
 import { priceFor } from './pricing.js'
 import { sniff } from './client-portal.js'
 import { createClientRequest } from './request-tasks.js'
-import { advanceClientRental, confirmedVersion, contractFor, contractView, currencies, procedureNames, proceduresOf, refreshContract, statusWord } from './rentals.js'
+import { advanceClientRental, confirmedVersion, contractFor, contractView, currencies, procedureNames, proceduresOf, refreshContract, saveSignature, signatureImage, signatureOf, statusWord } from './rentals.js'
 import { agreementTemplate, fillTemplate, issueRenterLink } from './renter-portal.js'
 
 // 客戶自行新增出租（docs/tasks/custody-feedback-2026-10-18.md 第 5A 項，協議見 docs/tasks/rental-agreement-draft.md）。
@@ -47,6 +47,7 @@ const requestWord = status => ({ 新要求: '已收到', 待開始: '已收到',
 function detailView(customer, contract) {
   const view = contractView(contract)
   const ack = db.prepare('SELECT name, acknowledged_at FROM rental_acknowledgements WHERE contract_id=? AND version=? ORDER BY acknowledged_at DESC').get(contract.id, contract.agreement_version)
+  const lessorSign = contract.agreement_version ? signatureOf(contract, 'lessor') : null, renterSign = contract.agreement_version ? signatureOf(contract, 'renter') : null
   const link = db.prepare('SELECT expires_at FROM rental_links WHERE contract_id=? AND revoked_at IS NULL AND expires_at>? ORDER BY created_at DESC').get(contract.id, now())
   const plate = db.prepare('SELECT * FROM plate_assets WHERE id=?').get(contract.plate_asset_id)
   return {
@@ -54,7 +55,8 @@ function detailView(customer, contract) {
     renter: { name: contract.renter_name, phone: contract.renter_phone || '', idNo: contract.renter_id_no || '', vehiclePlate: contract.renter_vehicle_plate || '', driver: contract.renter_driver || '' },
     lessor: contract.lessor_type === 'company' ? db.prepare('SELECT name FROM companies WHERE id=?').get(contract.lessor_company_id)?.name || '' : customer.name,
     startsOn: contract.starts_on, endsOn: contract.ends_on, rentAmount: contract.rent_amount, depositAmount: contract.deposit_amount, currency: contract.currency, cycle: contract.cycle, dueDay: contract.due_day, collectionMode: contract.collection_mode,
-    agreement: { body: contract.agreement_body || '', version: contract.agreement_version, sentAt: contract.agreement_sent_at, changed: contract.agreement_version > 0 && contract.agreement_body !== contract.agreement_sent_body, confirmed: confirmedVersion(contract), confirmedBy: ack?.name || '', confirmedAt: ack?.acknowledged_at || null, linkActive: Boolean(link), linkExpiresAt: link?.expires_at || null },
+    agreement: { body: contract.agreement_body || '', version: contract.agreement_version, sentAt: contract.agreement_sent_at, changed: contract.agreement_version > 0 && contract.agreement_body !== contract.agreement_sent_body, confirmed: confirmedVersion(contract), confirmedBy: ack?.name || '', confirmedAt: ack?.acknowledged_at || null, linkActive: Boolean(link), linkExpiresAt: link?.expires_at || null,
+      lessorSigned: lessorSign ? { name: lessorSign.signer_name, at: lessorSign.signed_at } : null, renterSigned: renterSign ? { name: renterSign.signer_name, at: renterSign.signed_at } : null },
     procedures: proceduresOf(contract).map(item => {
       const request = item.request_id ? db.prepare('SELECT status FROM requests WHERE id=?').get(item.request_id) : null
       return { id: item.id, kind: item.kind, name: procedureNames[item.kind], handler: item.handler, state: item.state, requestId: item.request_id, requestStatus: request ? requestWord(request.status) : '', price: item.handler === 'us' ? priceText(customer, serviceCode[item.kind], plate.route) : '' }
@@ -115,7 +117,7 @@ function checkNew(customer, plate, body) {
 export async function clientRentalRoutes(req, res, url, user, { json, fail, parseBody }) {
   const path = url.pathname, method = req.method
   const optionsMatch = path.match(/^\/api\/my\/plates\/([^/]+)\/(rental-options|rentals)$/)
-  const rentalMatch = path.match(/^\/api\/my\/rentals\/([^/]+)(?:\/(agreement|send|cancel|signed))?$/)
+  const rentalMatch = path.match(/^\/api\/my\/rentals\/([^/]+)(?:\/(agreement|send|cancel|signed|signature-lessor|signature-renter))?$/)
   const panelMatch = path.match(/^\/api\/client-rentals(?:\/([^/]+)\/seen)?$/)
   if (!optionsMatch && !rentalMatch && !panelMatch) return false
 
@@ -180,6 +182,13 @@ export async function clientRentalRoutes(req, res, url, user, { json, fail, pars
     if (method !== 'GET') return fail(res, 405, '不支援此操作'), true
     return json(res, 200, detailView(customer, refreshContract(advanceClientRental(contract)))), true
   }
+  // 這一版協議的簽名相片
+  if (action?.startsWith('signature-')) {
+    if (method !== 'GET') return fail(res, 405, '不支援此操作'), true
+    const sign = contract.agreement_version ? signatureOf(contract, action.slice(10)) : null
+    if (!sign) return fail(res, 404, '還沒有簽名'), true
+    res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'no-store' }); res.end(sign.data); return true
+  }
   if (action === 'signed' && method === 'GET') {
     const file = db.prepare('SELECT * FROM rental_signed_files WHERE contract_id=?').get(contract.id)
     if (!file) return fail(res, 404, '還沒有上傳簽署本'), true
@@ -209,9 +218,19 @@ export async function clientRentalRoutes(req, res, url, user, { json, fail, pars
     db.prepare('UPDATE rental_contracts SET agreement_body=?, updated_at=? WHERE id=?').run(body.body.trim(), now(), contract.id)
     return json(res, 200, detailView(customer, contractFor(customer.tenant_id, contract.id))), true
   }
-  // 發給承租人：協議有改動（或第一次發）就鎖定為新版本，承租人要重新確認；每次都產生新連結，舊連結作廢
+  // 發給承租人：協議有改動（或第一次發）就鎖定為新版本，出租人要先手寫簽名，承租人要重新確認並簽名；
+  // 沒有改動只是重發連結，沿用這一版的簽名。每次都產生新連結，舊連結作廢
   if (!contract.agreement_body?.trim()) return fail(res, 400, '協議內容不可為空'), true
-  if (!contract.agreement_version || contract.agreement_body !== contract.agreement_sent_body) db.prepare('UPDATE rental_contracts SET agreement_sent_body=agreement_body, agreement_version=agreement_version+1, agreement_sent_at=?, updated_at=? WHERE id=?').run(now(), now(), contract.id)
+  const newVersion = !contract.agreement_version || contract.agreement_body !== contract.agreement_sent_body
+  const image = body?.signature === undefined ? null : signatureImage(body.signature)
+  if (body?.signature !== undefined && !image) return fail(res, 400, '簽名無效，請重新簽名'), true
+  if (!image && (newVersion || !signatureOf(contract, 'lessor'))) return fail(res, 400, '請先在下面簽名，才可以發給承租人'), true
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    if (newVersion) db.prepare('UPDATE rental_contracts SET agreement_sent_body=agreement_body, agreement_version=agreement_version+1, agreement_sent_at=?, updated_at=? WHERE id=?').run(now(), now(), contract.id)
+    if (image) saveSignature(contractFor(customer.tenant_id, contract.id), 'lessor', user.name, image, String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0])
+    db.exec('COMMIT')
+  } catch (error) { db.exec('ROLLBACK'); throw error }
   const fresh = contractFor(customer.tenant_id, contract.id)
   const link = issueRenterLink(fresh, user.id, req, 90)
   return json(res, 200, { ...detailView(customer, fresh), link: { url: link.url, expiresAt: link.expiresAt } }), true

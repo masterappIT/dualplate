@@ -5,10 +5,20 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import { randomUUID } from 'node:crypto'
+import { deflateSync, crc32 } from 'node:zlib'
 
 // 客戶自行新增出租（docs/tasks/custody-feedback-2026-10-18.md 第 5A 項）：新增、協議發出與確認、換車換司機、狀態、後台面板
 const state = {}
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex').toString('base64')
+// 手寫簽名：一張真正的 PNG（帶一條斜線），以 data URL 送出，與瀏覽器 canvas.toDataURL 一樣
+function signaturePng(seed = 0) {
+  const width = 300, height = 100, rows = []
+  for (let y = 0; y < height; y++) { const row = Buffer.alloc(1 + width * 4); for (let x = 0; x < width; x++) if ((x * 7 + y * 13 + seed) % 17 < 3) row.writeUInt32BE(0x14201bff, 1 + x * 4); rows.push(row) }
+  const chunk = (type, data) => { const body = Buffer.concat([Buffer.from(type), data]), out = Buffer.alloc(8 + data.length + 4); out.writeUInt32BE(data.length, 0); body.copy(out, 4); out.writeUInt32BE(crc32(body) >>> 0, 8 + data.length); return out }
+  const header = Buffer.alloc(13); header.writeUInt32BE(width, 0); header.writeUInt32BE(height, 4); header[8] = 8; header[9] = 6
+  return 'data:image/png;base64,' + Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), chunk('IHDR', header), chunk('IDAT', deflateSync(Buffer.concat(rows))), chunk('IEND', Buffer.alloc(0))]).toString('base64')
+}
+const SIGN = signaturePng()
 const hk = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Hong_Kong' }).format(new Date())
 const shift = days => new Date(Date.parse(hk() + 'T00:00:00Z') + days * 86400000).toISOString().slice(0, 10)
 before(async () => {
@@ -63,8 +73,9 @@ async function confirmAsRenter(url) {
   const token = url.split('/r/')[1]
   const verified = await raw(`/r/${token}/verify`, 'POST', 'tail=6789')
   const key = new URL(verified.headers.location, 'https://x').searchParams.get('k')
-  return raw(`/r/${token}/acknowledge`, 'POST', `key=${key}&name=${encodeURIComponent('承租人乙')}`)
+  return raw(`/r/${token}/acknowledge`, 'POST', `key=${key}&name=${encodeURIComponent('承租人乙')}&signature=${encodeURIComponent(SIGN)}`)
 }
+const send = (id, signature = SIGN) => client(`/my/rentals/${id}/send`, 'POST', signature === null ? {} : { signature })
 
 // —— 新增前的選項與限制 ——
 test('托管客戶可以新增出租，列出出租人、現有車、登記司機和手續收費', async () => {
@@ -166,7 +177,7 @@ test('換新車和新司機交給我們辦：各開一張工單', async () => {
 })
 test('交給我們代理的出租，客戶不能自行改協議或發出', async () => {
   assert.equal((await client(`/my/rentals/${state.agentRental}/agreement`, 'PUT', { body: '改了' })).status, 409)
-  assert.equal((await client(`/my/rentals/${state.agentRental}/send`, 'POST', {})).status, 409)
+  assert.equal((await send(state.agentRental)).status, 409)
 })
 test('換車選自行辦理：不開工單，等客戶在「有變動？」回報', async () => {
   const result = await client(`/my/plates/${state.plates.selfDo}/rentals`, 'POST', form({ useCurrentVehicle: false, renterVehiclePlate: 'ZZ1111', driverIds: [], newDriverName: '王司機', procedures: { vehicle: 'client', driver: 'us' } }))
@@ -184,8 +195,17 @@ test('協議不可改成空白', async () => {
   assert.equal((await client(`/my/rentals/${state.mainRental}/agreement`, 'PUT', { body: '   ' })).status, 400)
   assert.equal((await client(`/my/rentals/${state.mainRental}/agreement`, 'PUT', { body: ['甲'] })).status, 400)
 })
+// —— 手寫簽名（管理者 2026-10-18）——
+test('沒有簽名不能發給承租人', async () => {
+  const result = await send(state.mainRental, null)
+  assert.equal(result.status, 400); assert.match(result.body.error, /簽名/)
+  assert.equal((await client(`/my/rentals/${state.mainRental}`)).body.agreement.version, 0)
+})
+test('簽名不是 PNG 相片時不能發出', async () => {
+  for (const signature of ['', 'abc', 'data:image/png;base64,' + Buffer.from('not png').toString('base64'), PNG, 123, ['x']]) assert.equal((await send(state.mainRental, signature)).status, 400, String(signature).slice(0, 20))
+})
 test('第一次發給承租人：鎖定為第 1 版並產生連結', async () => {
-  const result = await client(`/my/rentals/${state.mainRental}/send`, 'POST', {})
+  const result = await send(state.mainRental)
   assert.equal(result.status, 200)
   assert.equal(result.body.agreement.version, 1)
   assert.match(result.body.link.url, /^https:\/\/api\.example\.com\/r\/[0-9a-f]{64}$/)
@@ -193,9 +213,15 @@ test('第一次發給承租人：鎖定為第 1 版並產生連結', async () =>
   state.mainLink = result.body.link.url
 })
 test('協議沒有改動再發出，版本不變，舊連結作廢', async () => {
-  const result = await client(`/my/rentals/${state.mainRental}/send`, 'POST', {})
+  const result = await send(state.mainRental)
   assert.equal(result.body.agreement.version, 1)
   assert.equal((await raw(`/r/${state.mainLink.split('/r/')[1]}`)).status, 404)
+  state.mainLink = result.body.link.url
+})
+test('協議沒有改動只重發連結，不用再簽名', async () => {
+  const result = await send(state.mainRental, null)
+  assert.equal(result.status, 200); assert.equal(result.body.agreement.version, 1)
+  assert.equal(result.body.agreement.lessorSigned.name, 'client')
   state.mainLink = result.body.link.url
 })
 test('承租人看到的是發出的版本，不是之後改的稿', async () => {
@@ -209,14 +235,37 @@ test('承租人看到的是發出的版本，不是之後改的稿', async () =>
   assert.doesNotMatch(page.text, /未發出的新稿/)
   assert.match(page.text, /網上確認與簽署具同等效力/)
 })
+test('改了協議再發出一定要重新簽名', async () => {
+  assert.equal((await send(state.mainRental, null)).status, 400)
+  assert.equal((await client(`/my/rentals/${state.mainRental}`)).body.agreement.version, 1)
+})
 test('改了協議再發出：升為第 2 版，承租人要重新確認', async () => {
-  const result = await client(`/my/rentals/${state.mainRental}/send`, 'POST', {})
+  const result = await send(state.mainRental)
   assert.equal(result.body.agreement.version, 2)
   assert.equal(result.body.agreement.confirmed, false)
   state.mainLink = result.body.link.url
 })
 
 // —— 狀態：確認、待換車、出租中 ——
+test('承租人沒有簽名不能同意，也不記錄確認', async () => {
+  const token = state.mainLink.split('/r/')[1]
+  const verified = await raw(`/r/${token}/verify`, 'POST', 'tail=6789')
+  const key = new URL(verified.headers.location, 'https://x').searchParams.get('k')
+  for (const extra of ['', '&signature=', `&signature=${encodeURIComponent('data:image/png;base64,AAAA')}`]) {
+    const result = await raw(`/r/${token}/acknowledge`, 'POST', `key=${key}&name=${encodeURIComponent('承租人乙')}${extra}`)
+    assert.equal(result.status, 400); assert.match(result.text, /請在簽名框內簽名/)
+  }
+  assert.equal((await client(`/my/rentals/${state.mainRental}`)).body.agreement.confirmed, false)
+})
+test('承租人頁有簽名框，並顯示出租人已簽、承租人未簽', async () => {
+  const token = state.mainLink.split('/r/')[1]
+  const verified = await raw(`/r/${token}/verify`, 'POST', 'tail=6789')
+  const page = (await raw(verified.headers.location.replace('https://x', ''))).text
+  assert.match(page, /<canvas id="pad">/)
+  // 簽名相片要是真正的 PNG（base64 以 iVBORw0KGgo 開頭），不是一串數字
+  assert.match(page, /出租人簽署<\/span><img alt="出租人簽名" src="data:image\/png;base64,iVBORw0KGgo/)
+  assert.match(page, /承租人簽署<\/span><div class="sign-blank"><\/div><span class="muted">未簽/)
+})
 test('沒有手續的出租：承租人確認後直接出租中，牌照改為出租中，並通知客戶', async () => {
   assert.equal((await confirmAsRenter(state.mainLink)).status, 303)
   const detail = (await client(`/my/rentals/${state.mainRental}`)).body
@@ -225,10 +274,25 @@ test('沒有手續的出租：承租人確認後直接出租中，牌照改為�
   assert.equal(state.db.prepare('SELECT usage_status FROM plate_assets WHERE id=?').get(state.plates.main).usage_status, '出租中')
   assert.ok(state.db.prepare("SELECT 1 FROM notifications WHERE customer_id=? AND kind='rental' AND title LIKE '%已開始出租'").get(state.first))
 })
+test('承租人同意後，協議下方顯示雙方簽名', async () => {
+  const token = state.mainLink.split('/r/')[1]
+  const verified = await raw(`/r/${token}/verify`, 'POST', 'tail=6789')
+  const page = (await raw(verified.headers.location.replace('https://x', ''))).text
+  assert.match(page, /承租人簽署<\/span><img alt="承租人簽名" src="data:image\/png;base64,iVBORw0KGgo/)
+  assert.match(page, /承租人乙 · \d{4}-\d{2}-\d{2} \d{2}:\d{2}/)
+})
+test('客戶可以看雙方的簽名相片，別的客戶不行', async () => {
+  for (const party of ['lessor', 'renter']) {
+    const image = await client(`/my/rentals/${state.mainRental}/signature-${party}`)
+    assert.equal(image.status, 200); assert.equal(image.headers['content-type'], 'image/png')
+    assert.equal((await api(`/my/rentals/${state.mainRental}/signature-${party}`, 'GET', undefined, 'client2')).status, 404)
+  }
+  assert.equal((await client(`/my/rentals/${state.mainRental}/signature-someone`)).status, 404)
+})
 test('起租日已過才可以使用時，起租日改為可以使用的那天', async () => {
   const id = (await client(`/my/plates/${state.plates.plain}/rentals`, 'POST', form({ useCurrentVehicle: true, driverIds: [], newDriverName: '丁司機', startsOn: shift(-10), procedures: { driver: 'client' } }))).body.id
   state.plainRental = id
-  await confirmAsRenter((await client(`/my/rentals/${id}/send`, 'POST', {})).body.link.url)
+  await confirmAsRenter((await send(id)).body.link.url)
   assert.equal((await client(`/my/rentals/${id}`)).body.statusWord, '待換車')
   state.db.prepare("INSERT INTO self_handled(id,tenant_id,customer_id,plate_asset_id,kind,handled_on,details_json,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)").run(randomUUID(), 'default', state.first, state.plates.plain, 'driver_change', hk(), '{}', '待核對', new Date().toISOString())
   const detail = (await client(`/my/rentals/${id}`)).body
@@ -236,7 +300,7 @@ test('起租日已過才可以使用時，起租日改為可以使用的那天',
   assert.equal(detail.startsOn, hk())
 })
 test('有手續未辦妥：承租人確認後是待換車，並通知客戶', async () => {
-  await confirmAsRenter((await client(`/my/rentals/${state.selfRental}/send`, 'POST', {})).body.link.url)
+  await confirmAsRenter((await send(state.selfRental)).body.link.url)
   assert.equal((await client(`/my/rentals/${state.selfRental}`)).body.statusWord, '待換車')
   assert.ok(state.db.prepare("SELECT 1 FROM notifications WHERE customer_id=? AND kind='rental' AND title LIKE '%已確認出租協議'").get(state.first))
   assert.equal(state.db.prepare('SELECT usage_status FROM plate_assets WHERE id=?').get(state.plates.selfDo).usage_status, '自用')
@@ -257,9 +321,16 @@ test('換車、換司機都辦妥後轉為出租中', async () => {
 })
 test('出租中的協議改了再發出，未重新確認前仍是出租中', async () => {
   assert.equal((await client(`/my/rentals/${state.selfRental}/agreement`, 'PUT', { body: '補充條款' })).status, 200)
-  const result = await client(`/my/rentals/${state.selfRental}/send`, 'POST', {})
+  const result = await send(state.selfRental)
   assert.equal(result.body.agreement.confirmed, false)
   assert.equal(result.body.statusWord, '出租中')
+})
+test('協議改版後，承租人在新版要重新簽名', async () => {
+  const detail = (await client(`/my/rentals/${state.selfRental}`)).body
+  assert.equal(detail.agreement.version, 2)
+  assert.ok(detail.agreement.lessorSigned)
+  assert.equal(detail.agreement.renterSigned, null)
+  assert.equal((await client(`/my/rentals/${state.selfRental}/signature-renter`)).status, 404)
 })
 
 // —— 取消、簽署本 ——
