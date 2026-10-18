@@ -6,6 +6,7 @@ import { driverOwners, mainPlate } from './drivers.js'
 import { deadlineNotices } from './client-portal.js'
 import { services, planFor } from './catalog.js'
 import { companyGaps } from './plate-companies.js'
+import { canCancel, cancelBlock } from './request-cancel.js'
 
 // Customer-facing summaries for the client app. Customers only see their own records, never
 // internal "missing data" items, rule codes or tenant details.
@@ -34,7 +35,8 @@ export async function customerRoutes(req, res, url, user, h) {
     const clientTodos = tasks.filter(task => (task.owner === 'client' || task.status === '待客戶配合') && !['已完成', '不適用'].includes(task.status)).map(task => ({ id: task.id, title: task.title, owner: 'client', status: task.status, documents: task.documents }))
     const vehicle = item.vehicle_id ? one('SELECT * FROM vehicles WHERE id=? AND customer_id=?', item.vehicle_id, user.customer_id) : null
     const plateAsset = item.plate_asset_id ? plateFor(user, item.plate_asset_id) : null
-    return json(res, 200, { ...item, status: requestStatus(item.status), activities: query('SELECT a.*,u.name actor_name FROM activities a LEFT JOIN users u ON u.id=a.actor_id WHERE a.request_id=? ORDER BY a.created_at DESC', item.id).map(activity => ({ ...activity, detail: customerWords(activity.detail) })), tasks, clientTodos, vehicle, plateAsset, plan: service ? planFor(service, item.route) : null, inspectionGuidance: [] }), true
+    // 「已收到」的委託客戶可以自行取消（第 12 步）；不能時寫明原因
+    return json(res, 200, { ...item, canCancel: canCancel(item), cancelBlock: cancelBlock(item), status: requestStatus(item.status), activities: query('SELECT a.*,u.name actor_name FROM activities a LEFT JOIN users u ON u.id=a.actor_id WHERE a.request_id=? ORDER BY a.created_at DESC', item.id).map(activity => ({ ...activity, detail: customerWords(activity.detail) })), tasks, clientTodos, vehicle, plateAsset, plan: service ? planFor(service, item.route) : null, inspectionGuidance: [] }), true
   }
   if (!path.startsWith('/api/my/')) return false
   if (user.role !== 'customer') { fail(res, 403, '此功能只供客戶使用'); return true }

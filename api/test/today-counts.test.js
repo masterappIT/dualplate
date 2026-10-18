@@ -39,7 +39,7 @@ const message = (customer, tenant, fromStaff, readAt = null) => state.db.prepare
 const change = (customer, entityId, status = '待核對', tenant = 'default') => state.db.prepare('INSERT INTO customer_changes(id,tenant_id,customer_id,entity_type,entity_id,entity_label,field,field_label,changed_at,status) VALUES (?,?,?,?,?,?,?,?,?,?)').run(randomUUID(), tenant, customer, 'plate', entityId, '牌照', 'notes', '備註', at(), status)
 
 test('沒有任何待處理時全部為 0', async () => {
-  assert.deepEqual(await counts(), { signups: 0, messages: 0, changes: 0, selfHandled: 0, clientRentals: 0, closures: 0, total: 0 })
+  assert.deepEqual(await counts(), { signups: 0, messages: 0, changes: 0, selfHandled: 0, clientRentals: 0, clientCancels: 0, closures: 0, total: 0 })
 })
 test('審批中的註冊申請計入；已批准、已拒絕不計', async () => {
   signup('default', '審批中'); signup('default', '已批准'); signup('default', '已拒絕')
@@ -86,7 +86,7 @@ test('員工合計不含只限管理者的項目', async () => { assert.equal((a
 test('別的租戶的待處理不計入', async () => {
   signup('other', '審批中'); message(state.foreign, 'other', 0); change(state.foreign, randomUUID(), '待核對', 'other')
   assert.equal((await counts()).total, 7)
-  assert.deepEqual(await counts('foreign-admin'), { signups: 1, messages: 1, changes: 1, selfHandled: 0, clientRentals: 0, closures: 0, total: 3 })
+  assert.deepEqual(await counts('foreign-admin'), { signups: 1, messages: 1, changes: 1, selfHandled: 0, clientRentals: 0, clientCancels: 0, closures: 0, total: 3 })
 })
 test('客戶帳號不能讀取', async () => { assert.equal((await request('/today-counts', 'GET', 'client')).status, 403) })
 test('未登入不能讀取', async () => { assert.equal((await request('/today-counts', 'GET', '')).status, 401) })

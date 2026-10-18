@@ -36,6 +36,7 @@ import { supportRoutes } from './support.js'
 import { signupPublicRoutes, signupRoutes, applicationLogin } from './signup.js'
 import { accountClosureRoutes } from './account-closure.js'
 import { plateDeleteRoutes } from './plate-delete.js'
+import { requestCancelRoutes } from './request-cancel.js'
 import { customerLifecycleRoutes, endedPathBlock, endedBodyBlock, endedLogin } from './customer-lifecycle.js'
 import { todayCountRoutes } from './today-counts.js'
 import { passwordProblem, authenticate, createSession, lockedMinutes, recordFailure, clearFailures, loginPhone, PHONE_RULE, clientIp, audit, auditRoutes, logError, health } from './security.js'
@@ -199,6 +200,7 @@ export const server = http.createServer(async (req, res) => {
     if (await signupRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await accountClosureRoutes(req, res, url, user, { json, fail, parseBody, clientIp })) return
     if (await plateDeleteRoutes(req, res, url, user, { json, fail, parseBody })) return
+    if (await requestCancelRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await workOrderRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await driverRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await vehicleDocumentRoutes(req, res, url, user, { json, fail, parseBody })) return

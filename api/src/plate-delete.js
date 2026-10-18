@@ -21,7 +21,7 @@ function check(user, plateId) {
   if (!plate) return { status: 404, error: '牌照不存在' }
   if (customer.is_self || customer.service_mode !== '自管') return { status: 403, error: '托管客戶的牌照不能自行刪除，請聯絡我們處理' }
   const open = openRequests(plate.id)
-  if (open.length) return { status: 409, plate, error: `這個牌照有 ${open.length} 件委託仍在辦理，請先聯絡我們完成或取消，才可以刪除`, openRequests: open.map(row => ({ id: row.id, title: row.title, status: row.status })) }
+  if (open.length) return { status: 409, plate, error: `這個牌照有 ${open.length} 件委託仍在辦理，請先完成或取消才可以刪除；還未開始辦理的，可按進去自行取消`, openRequests: open.map(row => ({ id: row.id, title: row.title, status: row.status })) }
   // 由我們代收租金的出租是我們的業務記錄（托管時期留下的），要先由我們處理
   if (db.prepare("SELECT 1 FROM rental_contracts WHERE plate_asset_id=? AND collection_mode='代收' LIMIT 1").get(plate.id)) return { status: 409, plate, error: '這個牌照有由我們代收租金的出租，請先聯絡我們處理，才可以刪除', openRequests: [] }
   return { customer, plate }

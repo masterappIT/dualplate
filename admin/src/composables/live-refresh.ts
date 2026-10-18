@@ -47,11 +47,11 @@ export function useLiveRefresh(load: () => Promise<unknown> | unknown, { notify 
 }
 
 /** 今日工作待處理數目（客戶送來、要員工處理的事），導航和手機選單按鈕顯示；由 AppShell 讀取一次，各處共用。 */
-export interface TodayPending { signups: number; messages: number; changes: number; selfHandled: number; clientRentals: number; closures: number; total: number }
+export interface TodayPending { signups: number; messages: number; changes: number; selfHandled: number; clientRentals: number; clientCancels: number; closures: number; total: number }
 export const todayPending = ref<TodayPending | null>(null)
 export function useTodayPending() {
   return useLiveRefresh(async () => { try { todayPending.value = await api('/today-counts') } catch { /* 讀不到時不顯示數字，下次再讀 */ } }, { notify: false, onChanged: true })
 }
-const pendingLabels: Array<[keyof TodayPending, string]> = [['signups', '註冊申請'], ['messages', '客戶訊息'], ['changes', '客戶更新待核對'], ['selfHandled', '客戶自行辦理待核對'], ['clientRentals', '客戶新增出租'], ['closures', '帳戶已注銷']]
+const pendingLabels: Array<[keyof TodayPending, string]> = [['signups', '註冊申請'], ['messages', '客戶訊息'], ['changes', '客戶更新待核對'], ['selfHandled', '客戶自行辦理待核對'], ['clientRentals', '客戶新增出租'], ['clientCancels', '客戶取消的委託'], ['closures', '帳戶已注銷']]
 /** 例如「註冊申請 1 · 客戶訊息 2」，用作提示文字。 */
 export const pendingSummary = (value: TodayPending | null) => value ? pendingLabels.filter(([key]) => value[key]).map(([key, label]) => `${label} ${value[key]}`).join(' · ') : ''

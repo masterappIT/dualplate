@@ -5,7 +5,7 @@
     <view class="psteps"><view v-for="(step,index) in steps" :key="step" class="pstep" :class="{done:index<stepIndex,current:index===stepIndex}"><view class="pdot">{{ index<stepIndex ? '✓' : index+1 }}</view><text>{{ step }}</text></view></view>
     <view class="ticket-rule" />
     <view class="row"><text class="pill" :class="requestTone(item.status)">{{ item.status }}</text><text class="subtle num">最近更新 {{ friendlyDate(item.updated_at) }}</text></view>
-    <text class="now-stage">{{ clientStage(item.stage) }}</text>
+    <text class="now-stage">{{ item.status==='已取消' ? '已取消' : clientStage(item.stage) }}</text>
     <text class="next-line">{{ nextText }}</text>
   </view>
   <view v-if="waiting.length" class="card warn-card">
@@ -22,7 +22,11 @@
     <view class="section-head"><text class="section-title">辦理步驟</text><text class="subtle num">{{ item.tasks.length }} 步</text></view><view class="card list"><view v-for="(task,index) in item.tasks" :key="task.id" class="task"><view class="step" :class="task.status==='已完成'?'done':''">{{ task.status==='已完成'?'✓':index+1 }}</view><view class="grow"><text class="task-title">{{ todoTitle(task.title) }}</text><text class="line-sub">{{ task.jurisdiction }} · {{ task.status }}</text></view></view></view>
     <view v-if="selectedSources.length"><text class="section-title">官方依據</text><view class="card list"><view v-for="source in selectedSources" :key="source.id" class="official-row" @click="openSource(source.url)"><view class="grow"><text class="task-title">{{ source.title }}</text><text class="line-sub">{{ source.agency }} · 點擊複製官方連結</text></view><text class="chev">›</text></view></view></view>
   </view>
-  <wd-action-sheet custom-class="choice-sheet" v-model="sheet.show" :title="sheet.title" :actions="sheet.actions" cancel-text="取消" @select="onSelect" @close="onClose" />
+  <!-- 客戶自行取消（docs/tasks/self-managed-fixes-plan.md 第 12 步）：只限「已收到」；已開始或已報價的寫明要聯絡我們 -->
+  <text v-if="item.canCancel" class="link cancel-link" @click="cancelRequest">取消這個委託 ›</text>
+  <text v-else-if="item.cancelBlock" class="subtle cancel-note">{{ item.cancelBlock }}</text>
+  <!-- 這一頁有「取消委託」，選單的關閉鍵寫「返回」以免混淆 -->
+  <wd-action-sheet custom-class="choice-sheet" v-model="sheet.show" :title="sheet.title" :actions="sheet.actions" cancel-text="返回" @select="onSelect" @close="onClose" />
   <wd-message-box />
 </view></template>
 <script setup>
@@ -64,6 +68,13 @@ async function loadFiles(){try{files.value=await api('/my/requests/'+requestId+'
 let requestId=''
 async function load(){if(!requestId)return;try{const [record,catalog]=await Promise.all([api('/requests/'+requestId),api('/catalog')]);item.value=record;sources.value=catalog.sources;loadFiles()}catch(e){uni.showToast({title:e.message,icon:'none'})}}
 onLoad(options=>{requestId=options.id||'';load()})
+// 原因選填：先選原因（可不說明），再確認；取消後我們不再跟進，之後需要可重新提交
+async function cancelRequest(){
+  const reasons=['按錯了','改變主意','已自己辦好','不說明原因'],pick=await choose('為甚麼要取消？（選填）',reasons)
+  if(pick<0)return
+  if(await confirmBox.ask({title:'取消這個委託？',msg:'取消後我們不會再跟進；之後如有需要，可以重新提交。',ok:'取消委託',cancel:'返回',danger:true})!=='confirm')return
+  try{await api('/my/requests/'+requestId+'/cancel','POST',pick<3?{reason:reasons[pick]}:{});await load();uni.showToast({title:'委託已取消',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}
+}
 onShow(()=>{if(item.value)load()})
 </script>
 <style scoped>
@@ -96,4 +107,5 @@ onShow(()=>{if(item.value)load()})
 .step{display:flex;align-items:center;justify-content:center;flex:none;width:24px;height:24px;border-radius:50%;color:var(--jade);background:var(--jade-soft);font-size:var(--fs-cap);font-weight:800}.step.done{color:#fff;background:var(--jade)}
 .task-title{display:block;font-size:var(--fs-body);font-weight:700;line-height:1.5;color:var(--ink)}
 .official-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--rule)}.official-row:last-child{border:0}
+.cancel-link{display:block;text-align:center;padding:16px 0 4px;color:var(--ink-2)}.cancel-note{display:block;text-align:center;padding:16px 0 4px}
 </style>
