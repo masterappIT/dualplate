@@ -3,6 +3,7 @@
     <view class="profile-head" @click="goProfile"><view class="grow"><text class="page-title">{{ user?.name || '我的' }}</text><text class="subtle">{{ account }}</text></view><text class="link">我的資料 ›</text></view>
     <view class="card menu">
       <view class="menu-row" @click="goDeadlines"><text class="menu-name">到期提醒</text><text class="chev">›</text></view>
+      <view v-if="!selfManaged" class="menu-row" @click="goScope"><text class="menu-name">委託內容</text><text class="chev">›</text></view>
       <view class="menu-row" @click="goNotices"><text class="menu-name">通知</text><text v-if="unread" class="pill amber num">{{ unread }} 則未讀</text><text class="chev">›</text></view>
       <view v-if="!selfManaged || hasBills" class="menu-row" @click="goBilling"><text class="menu-name">帳單</text><text v-if="unpaid" class="pill amber">有未付款項</text><text class="chev">›</text></view>
       <view v-if="!selfManaged" class="menu-row" @click="goReports"><text class="menu-name">月報</text><text class="chev">›</text></view>
@@ -58,6 +59,7 @@ function entrustOne(){uni.navigateTo({url:'/pages/requests/requests?entrust=one'
 function goNotices(){uni.navigateTo({url:'/pages/notifications/notifications'})}
 function goReports(){uni.navigateTo({url:'/pages/reports/reports'})}
 function goBilling(){uni.navigateTo({url:'/pages/billing/billing'})}
+function goScope(){uni.navigateTo({url:'/pages/scope/scope'})}
 function goDeadlines(){uni.navigateTo({url:'/pages/deadlines/deadlines'})}
 async function logout(){if(await confirmBox.ask({title:'退出登入',msg:'確定要退出嗎？',ok:'退出',cancel:'取消'})!=='confirm')return;clearSession();uni.navigateTo({url:'/pages/login/login'})}
 onShow(load)

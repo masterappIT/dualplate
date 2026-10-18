@@ -9,7 +9,7 @@
         <text v-if="c.registrationNo" class="company-sub">{{ regLabel(c) }} <text class="num">{{ c.registrationNo }}</text></text>
         <text v-if="c.incorporatedOn" class="company-sub">成立日期 <text class="num">{{ c.incorporatedOn }}</text></text>
         <text v-if="isPending('company',c.id)" class="pill amber pending-tag">已修改，待核對</text>
-        <text class="link edit-link" @click="toggle(c.id)">{{ editingId===c.id ? '收起' : '修改公司資料 ›' }}</text>
+        <view class="company-links"><text class="link edit-link" @click="toggle(c.id)">{{ editingId===c.id ? '收起' : '修改公司資料 ›' }}</text><text v-if="!selfManagedMode" class="link edit-link" @click="openScope(c.id)">委託內容 ›</text></view>
         <CompanyEditor v-if="editingId===c.id" :company="c" @close="editingId=''" @saved="saved" />
         <view v-if="filings[c.id]?.length" class="filings"><text class="filing-title">每月報帳</text><view class="filing-cells"><view v-for="f in filings[c.id].slice(0,3)" :key="f.period" class="filing-cell"><text class="filing-month num">{{ Number(f.period.slice(5)) }}月</text><text class="pill" :class="filingTone(f)">{{ filingWord(f) }}</text></view></view></view>
       </view>
@@ -24,7 +24,7 @@
     </view>
     <view v-for="c in data.ungrouped" :id="'company-'+c.id" :key="c.id" class="card"><text class="side-label">{{ c.jurisdiction }}公司</text><text class="company-name">{{ c.name }}</text><text v-if="c.jurisdiction==='香港'" class="company-sub"><text :class="!c.nameEn?'note-amber':''">{{ c.nameEn || '未填英文名稱' }}</text></text><text v-if="c.registrationNo" class="company-sub">{{ regLabel(c) }} <text class="num">{{ c.registrationNo }}</text></text><text v-if="c.status!=='存續'" class="pill gray">{{ c.status }}</text>
       <text v-if="isPending('company',c.id)" class="pill amber pending-tag">已修改，待核對</text>
-      <text class="link edit-link" @click="toggle(c.id)">{{ editingId===c.id ? '收起' : '修改公司資料 ›' }}</text>
+      <view class="company-links"><text class="link edit-link" @click="toggle(c.id)">{{ editingId===c.id ? '收起' : '修改公司資料 ›' }}</text><text v-if="!selfManagedMode" class="link edit-link" @click="openScope(c.id)">委託內容 ›</text></view>
       <CompanyEditor v-if="editingId===c.id" :company="c" @close="editingId=''" @saved="saved" /></view>
     <view v-if="loaded && !data.groups.length && !data.ungrouped.length" class="card empty">公司資料由你的顧問整理後會顯示在這裡。</view>
   </view>
@@ -32,7 +32,9 @@
 <script setup>
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { api, getUser, openPlate, selfHandled } from '../../lib/api'
+import { api, getUser, openPlate, selfHandled, isSelfManaged } from '../../lib/api'
+const selfManagedMode = isSelfManaged()
+function openScope(id){uni.navigateTo({url:'/pages/scope/scope?id='+id})}
 import PlateChip from '../../components/PlateChip.vue'
 import CompanyEditor from '../../components/CompanyEditor.vue'
 const data=ref({groups:[],ungrouped:[]}),loaded=ref(false),filings=ref({})
@@ -69,6 +71,6 @@ import DueDate from '../../components/DueDate.vue'
 .block{padding:12px 0;border-bottom:1px solid var(--rule)}.block:last-child{border-bottom:0}
 .plate-line{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
 .plates{display:flex;flex-wrap:wrap;gap:8px}
-.edit-link{display:block;padding-top:8px}.date-edit{display:flex;align-items:center;gap:8px}.date-spacer{visibility:hidden}
+.edit-link{display:block;padding-top:8px}.company-links{display:flex;gap:20px}.date-edit{display:flex;align-items:center;gap:8px}.date-spacer{visibility:hidden}
 .deadline{padding:8px 0}.item-name{display:block;font-size:var(--fs-h);font-weight:700;line-height:1.4;color:var(--ink)}
 </style>

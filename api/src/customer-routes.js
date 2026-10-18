@@ -1,7 +1,7 @@
 import { computeDeadlines } from './rules.js'
 import { plateFacts, vehicleFacts } from './plate-facts.js'
 import { addCrossing, crossingSummary, setReminder } from './crossings.js'
-import { scopeMap } from './entrustment.js'
+import { scopeMap, clientScope } from './entrustment.js'
 import { driverOwners, mainPlate } from './drivers.js'
 import { deadlineNotices } from './client-portal.js'
 import { services, planFor } from './catalog.js'
@@ -125,6 +125,8 @@ export async function customerRoutes(req, res, url, user, h) {
       rentals: { active: summaries.filter(item => item.rental).length }
     }), true
   }
+  // 委託內容（docs/tasks/client-scope-view-design.md）：只能看；規則見 entrustment.js clientScope
+  if (path === '/api/my/scope') return json(res, 200, clientScope(customer.tenant_id, customer.id)), true
   if (path === '/api/my/companies') {
     const all = deadlines()
     const linked = new Set()

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { db } from './db.js'
-import { applyTemplate, changeItems, checkScope, customerScope, expandChange, loadOwner, scopeImpact, scopesFor, selfManaged, templateChanges, templates, writeScope } from './entrustment.js'
+import { applyTemplate, changeItems, checkScope, clientScopeSnapshot, customerScope, notifyScopeChanges, expandChange, loadOwner, scopeImpact, scopesFor, selfManaged, templateChanges, templates, writeScope } from './entrustment.js'
 
 // Entrustment per item, customer item lists, templates and plate transfers (docs/tasks/scope-items-design.md,
 // docs/tasks/entrustment-brief.md §6). Admin only.
@@ -39,6 +39,10 @@ export async function entrustmentRoutes(req, res, url, user, h) {
     if (change.firmId) db.prepare('UPDATE companies SET accounting_firm_id=?, updated_at=? WHERE id=? AND tenant_id=?').run(change.firmId, new Date().toISOString(), change.ownerId, tenant)
   }
 
+  // 委託變更通知客戶：寫入前後各取一次客戶看到的委託內容，提交後比較
+  const snapshots = customerIds => new Map([...new Set(customerIds)].map(id => [id, clientScopeSnapshot(tenant, id)]))
+  const notifyAll = before => { for (const [customerId, snapshot] of before) notifyScopeChanges(tenant, customerId, snapshot) }
+
   if (path === '/api/service-scopes' && method === 'GET') {
     const result = scopesFor(tenant, url.searchParams.get('ownerType'), url.searchParams.get('ownerId'))
     return (result ? json(res, 200, result) : fail(res, 404, '對象不存在')), true
@@ -46,8 +50,10 @@ export async function entrustmentRoutes(req, res, url, user, h) {
   if (path === '/api/service-scopes' && method === 'PUT') {
     const resolved = resolve(await parseBody(req))
     if (resolved.error) return fail(res, resolved.status, resolved.error), true
+    const before = snapshots(resolved.changes.map(change => change.customerId))
     db.exec('BEGIN IMMEDIATE')
     try { resolved.changes.forEach(write); db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
+    notifyAll(before)
     return json(res, 200, scopesFor(tenant, resolved.changes[0].ownerType, resolved.changes[0].ownerId)), true
   }
   if (path === '/api/service-scopes/batch' && method === 'PUT') {
@@ -65,8 +71,10 @@ export async function entrustmentRoutes(req, res, url, user, h) {
     }
     const impact = scopeImpact(tenant, checked)
     if (body.dryRun) return json(res, 200, { updated: 0, impact }), true
+    const before = snapshots(checked.map(change => change.customerId))
     db.exec('BEGIN IMMEDIATE')
     try { checked.forEach(write); db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
+    notifyAll(before)
     return json(res, 200, { updated: checked.length, impact }), true
   }
   if (customerScopeMatch && customerScopeMatch[2] === 'scope' && method === 'GET') {
@@ -83,9 +91,11 @@ export async function entrustmentRoutes(req, res, url, user, h) {
       const preview = changeItems(tenant, customer, { add, remove }, user.id, false)
       return (preview.error ? fail(res, 400, preview.error) : json(res, 200, { ...preview, applied: false })), true
     }
+    const before = snapshots([customer.id])
     db.exec('BEGIN IMMEDIATE')
     let result
     try { result = changeItems(tenant, customer, { add, remove }, user.id, true); if (result.error) db.exec('ROLLBACK'); else db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
+    if (!result.error) notifyAll(before)
     return (result.error ? fail(res, 400, result.error) : json(res, 200, { ...result, applied: true })), true
   }
   if (templateMatch && method === 'POST') {
@@ -95,8 +105,10 @@ export async function entrustmentRoutes(req, res, url, user, h) {
     const preview = templateChanges(tenant, templateMatch[1], body.template)
     if (!preview) return fail(res, 404, '客戶不存在'), true
     if (body.dryRun !== false) return json(res, 200, { ...preview, applied: false }), true
+    const before = snapshots([templateMatch[1]])
     db.exec('BEGIN IMMEDIATE')
     try { applyTemplate(tenant, templateMatch[1], preview, user.id); db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
+    notifyAll(before)
     return json(res, 200, { ...preview, applied: true }), true
   }
   if (transferMatch && method === 'GET' && path.endsWith('/transfers')) {

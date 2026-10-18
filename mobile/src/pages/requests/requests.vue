@@ -2,14 +2,15 @@
   <view class="page request-page">
     <text class="intro">{{ introText }}</text>
     <view v-if="lockedPlate" class="card locked"><text class="side-label">為這個牌照辦理</text><view class="plates"><PlateChip :plate="lockedPlate.mainland_plate" region="內地" /><PlateChip v-if="lockedPlate.local_plate" :plate="lockedPlate.local_plate" :region="lockedPlate.route==='粵澳'?'澳門':'香港'" /></view></view>
-    <view v-if="!lockedPlate && entrust !== 'long'" class="segmented route-switch"><text v-for="r in routes" :key="r" class="seg" :class="{on:route===r}" @click="route=r">{{ r }}服務</text></view>
+    <view v-if="!lockedPlate && !fixedService" class="segmented route-switch"><text v-for="r in routes" :key="r" class="seg" :class="{on:route===r}" @click="route=r">{{ r }}服務</text></view>
     <view class="card form-card">
-      <template v-if="entrust === 'long'"><text class="form-title">長期委託</text><text class="subtle">由我們負責你指定的事項，按年收固定代辦費；範圍和價錢由我們和你一起定。</text></template>
+      <template v-if="entrust === 'scope'"><text class="form-title">申請調整委託</text><text class="subtle">{{ entrustItem || '全部委託內容' }}</text></template>
+      <template v-else-if="entrust === 'long'"><text class="form-title">長期委託</text><text class="subtle">由我們負責你指定的事項，按年收固定代辦費；範圍和價錢由我們和你一起定。</text></template>
       <template v-else><text class="form-title">要辦甚麼？</text><text class="subtle">不確定就選「其他代辦要求」，寫下情況即可。</text></template>
-      <view v-if="entrust !== 'long'" class="chips"><text v-for="s in shownServices" :key="s.code" class="chip" :class="{active:serviceCode===s.code}" @click="pickService(s.code)">{{ s.name }}</text></view>
-      <text v-if="selfManaged && serviceCode && entrust !== 'long'" class="price-hint">{{ priceText }}</text>
-      <template v-if="needsPlate && !lockedPlate && entrust !== 'long'"><text class="field-label">哪個牌照？</text><picker :range="plateNames" @change="plateIndex=Number($event.detail.value)"><view class="field picker" :class="{placeholder:!plateIndex}"><text>{{ plateNames[plateIndex] }}</text><text class="chev">›</text></view></picker></template>
-      <text class="field-label">補充說明（可不填）</text><textarea class="field description" v-model="description" :placeholder="entrust === 'long' ? '想交給我們的事項，例如全部牌照續期、公司年報' : '例如新車資料、希望完成的日期'" />
+      <view v-if="!fixedService" class="chips"><text v-for="s in shownServices" :key="s.code" class="chip" :class="{active:serviceCode===s.code}" @click="pickService(s.code)">{{ s.name }}</text></view>
+      <text v-if="selfManaged && serviceCode && !fixedService" class="price-hint">{{ priceText }}</text>
+      <template v-if="needsPlate && !lockedPlate && !fixedService"><text class="field-label">哪個牌照？</text><picker :range="plateNames" @change="plateIndex=Number($event.detail.value)"><view class="field picker" :class="{placeholder:!plateIndex}"><text>{{ plateNames[plateIndex] }}</text><text class="chev">›</text></view></picker></template>
+      <text class="field-label">補充說明（可不填）</text><textarea class="field description" v-model="description" :placeholder="entrust === 'scope' ? '想加入或取消哪些事項，例如香港商業登記證改由你們辦' : entrust === 'long' ? '想交給我們的事項，例如全部牌照續期、公司年報' : '例如新車資料、希望完成的日期'" />
       <button class="primary submit" :loading="submitting" :disabled="submitting" @click="submit">提交</button>
     </view>
     <view class="section-head"><text class="section-title">我的辦理記錄</text><text class="subtle num">{{ requests.length }} 項</text></view>
@@ -48,15 +49,16 @@ async function submit(){
 }
 // Opened from a plate's quick actions: the plate and service arrive pre-selected.
 let wanted={service:'',plate:''}
-// 自管客戶的委託入口（docs/requirements.md 5.6.2）：item＝按次委託某個到期項目；long＝長期委託洽談
+// 自管客戶的委託入口（docs/requirements.md 5.6.2）：item＝按次委託某個到期項目；long＝長期委託洽談；scope＝托管客戶申請調整委託（委託內容頁）
 const selfManaged=isSelfManaged(),entrust=ref(''),entrustItem=ref(''),price=ref(null)
-const introText=computed(()=>entrust.value==='item'?`交給我們辦「${entrustItem.value}」。提交後我們會聯絡你，確認實價和要準備的資料。`:entrust.value==='long'?'提交後我們會聯絡你，了解要交給我們的事項，再按合約報價。':selfManaged?'選擇要交給我們辦的事，提交後我們會聯絡你報價，並列出需要準備的資料。':'選擇要辦的事，提交後你的顧問會聯絡你，並列出需要準備的資料。')
+const fixedService=computed(()=>['long','scope'].includes(entrust.value))
+const introText=computed(()=>entrust.value==='scope'?'告訴顧問想加入或取消哪些事項，顧問確認後會更新你的委託內容。':entrust.value==='item'?`交給我們辦「${entrustItem.value}」。提交後我們會聯絡你，確認實價和要準備的資料。`:entrust.value==='long'?'提交後我們會聯絡你，了解要交給我們的事項，再按合約報價。':selfManaged?'選擇要交給我們辦的事，提交後我們會聯絡你報價，並列出需要準備的資料。':'選擇要辦的事，提交後你的顧問會聯絡你，並列出需要準備的資料。')
 const priceText=computed(()=>price.value?.from?`參考價：由 ${money(price.value.from.currency,price.value.from.amount)} 起，實價由我們確認`:'價錢由我們報價，你同意後才開始辦')
 watch(()=>[serviceCode.value,route.value],async([code,r])=>{price.value=null;if(!selfManaged||!code)return;try{price.value=await api('/my/entrust-price?service='+encodeURIComponent(code)+'&route='+encodeURIComponent(r))}catch{}})
 const lockedPlate=computed(()=>plates.value.find(p=>p.id===wanted.plate)||null)
 const shownServices=computed(()=>lockedPlate.value?available.value.filter(s=>s.code!=='new_application'):available.value)
-function pickService(code){serviceCode.value=code;title.value=entrust.value==='item'?'委託辦理：'+entrustItem.value:selectedService.value?.name||''}
-onLoad(options=>{wanted={service:decodeURIComponent(options.service||''),plate:decodeURIComponent(options.plate||'')};entrust.value=['item','long'].includes(options.entrust)?options.entrust:'';entrustItem.value=decodeURIComponent(options.item||'');if(entrust.value==='long')wanted.service='other'})
+function pickService(code){serviceCode.value=code;title.value=entrust.value==='scope'?'申請調整委託'+(entrustItem.value?'：'+entrustItem.value:''):entrust.value==='item'?'委託辦理：'+entrustItem.value:selectedService.value?.name||''}
+onLoad(options=>{wanted={service:decodeURIComponent(options.service||''),plate:decodeURIComponent(options.plate||'')};entrust.value=['item','long','scope'].includes(options.entrust)?options.entrust:'';entrustItem.value=decodeURIComponent(options.item||'');if(['long','scope'].includes(entrust.value))wanted.service='other'})
 // The route watcher resets the selections, so wait for it before applying the plate.
 async function applyWanted(){const plate=lockedPlate.value;if(plate){route.value=plate.route;await nextTick();const index=plateOptions.value.findIndex(p=>p.id===plate.id);plateIndex.value=index+1;const vIndex=vehicleOptions.value.findIndex(v=>v.id===plate.vehicle_id);vehicleIndex.value=vIndex+1}if(entrust.value==='long'&&plates.value[0]){route.value=plates.value[0].route;await nextTick()}if(wanted.service&&available.value.some(s=>s.code===wanted.service))pickService(wanted.service);if(entrust.value==='long')title.value='長期委託洽談'}
 // 列表回傳內部狀態，換成客戶看得懂的說法（與辦理進度頁一致）

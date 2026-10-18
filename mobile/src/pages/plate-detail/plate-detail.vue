@@ -28,6 +28,7 @@
       <!-- 其他資料：平時收起，標題列顯示摘要 -->
       <text v-if="summary.id" class="section-title other-title">其他資料</text>
       <view v-if="summary.id">
+      <view v-if="!cardSelfManaged" class="list-card row fold-head" @click="openScope(p.id)"><text class="fold-title">委託內容</text><text class="fold-sum grow">哪些事由我們負責</text><text class="chev">›</text></view>
       <view :id="'fold-deadlines'" class="list-card row fold-head" @click="toggle('deadlines')"><text class="fold-title">到期項目</text><text class="fold-sum grow">{{ deadlineSummary }}</text><text class="chev">{{ open.deadlines ? '⌃' : '›' }}</text></view>
       <view v-if="open.deadlines" class="fold-body">
         <view class="card list">
@@ -169,6 +170,7 @@ import { ref,computed,nextTick } from 'vue'
 import { onLoad,onShow } from '@dcloudio/uni-app'
 import { useChoice,useConfirm } from '../../lib/choice'
 import { canEntrust,startEntrust,isSelfManaged,unsetWord,noDatesWord } from '../../lib/api'
+function openScope(id){uni.navigateTo({url:'/pages/scope/scope?id='+id})}
 // 自管客戶自己建檔，沒有顧問核對批文卡：不顯示「待核對」，只顯示有效期
 const cardSelfManaged=isSelfManaged()
 import { api,getUser,startRequest,requestTone,clientStage,detailText,selfHandled,money,cardPhoto,viewCardOriginal,forgetCardOriginal,viewVehicleDocument,daysLeft } from '../../lib/api'

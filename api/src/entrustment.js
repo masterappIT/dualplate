@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { db } from './db.js'
 import { businessToday, itemGroups, defaultGroup, ruleMatches, clientOnlyItems } from './rules.js'
-import { plateFacts } from './plate-facts.js'
+import { plateFacts, vehicleFacts } from './plate-facts.js'
+import { notify } from './client-portal.js'
 
 // What a client entrusts to us (docs/tasks/scope-items-design.md). Three layers: the tenant's item catalogue (every rule
 // plus two built-in items), each customer's own item list, and who handles each listed item per company or plate.
@@ -259,4 +260,64 @@ export function scopeImpact(tenantId, checked) {
   }
   const requests = [...new Set(plateIds.values())].flatMap(customerId => openRequests(customerId, [...plateIds].filter(([, owner]) => owner === customerId).map(([id]) => id)))
   return { toClient, fromClient, openRequests: requests.map(row => ({ id: row.id, title: row.title })) }
+}
+
+// 客戶端「委託內容」（docs/tasks/client-scope-view-design.md）：只列客戶自己有批文卡的牌照和未註銷的公司；外包對客戶一律是
+// 「我們負責」，不透露外包單位。車輛事項按牌照綁定的車判斷是否適用（後台矩陣交給員工判斷，這裏不能讓客戶看到粵港車的澳門檢驗）；
+// 未綁車的按路線推斷車輛來源。不顯示起始日：預設沿用範本的事項沒有可靠日期（管理者 2026-10-18 同意先不顯示）。
+export function clientScope(tenantId, customerId) {
+  const scope = customerScope(tenantId, customerId)
+  if (!scope) return null
+  const items = new Map(catalogue(tenantId).map(item => [item.code, item]))
+  const plates = new Map(db.prepare("SELECT * FROM plate_assets WHERE customer_id=? AND card_number IS NOT NULL AND TRIM(card_number)<>''").all(customerId).map(row => [row.id, row]))
+  const carOf = plate => {
+    const vehicle = plate.vehicle_id ? db.prepare('SELECT * FROM vehicles WHERE id=?').get(plate.vehicle_id) : null
+    const facts = vehicle ? vehicleFacts(vehicle) : { route: plate.route }
+    return { ...facts, origin: facts.origin || (plate.route === '粵澳' ? '澳門' : '香港') }
+  }
+  const sections = scope.sections.map(section => ({
+    category: section.category, label: section.label,
+    owners: section.owners.filter(owner => owner.type === 'plate' ? plates.has(owner.id) : owner.status !== '已註銷').map(owner => {
+      const plate = plates.get(owner.id), car = plate && carOf(plate)
+      const listed = Object.entries(owner.cells).filter(([code]) => !car || items.get(code)?.scope !== 'vehicle' || ruleMatches(items.get(code), car))
+        .map(([code, cell]) => ({ code, name: items.get(code)?.name || code, handledBy: cell.handler === 'client' ? 'you' : 'us' }))
+      return { type: owner.type, id: owner.id, label: owner.label, nameEn: owner.nameEn || '', stopped: Boolean(plate?.stopped_on), us: listed.filter(item => item.handledBy === 'us'), you: listed.filter(item => item.handledBy === 'you') }
+    })
+  })).filter(section => section.owners.length)
+  return { serviceMode: scope.customer.serviceMode, sections }
+}
+
+// 委託變更通知客戶（設計稿第四節）：員工改動前後各取一次客戶看到的委託內容，逐項比較後通知。矩陣、整批、事項清單、套用範本都經這裏，
+// 外包和我們做之間互換客戶看不出分別，不通知。自管客戶（看不到委託內容）和本公司自有指標不通知。
+export const clientScopeSnapshot = (tenantId, customerId) => {
+  const customer = customerOf(tenantId, customerId)
+  if (!customer || customer.is_self || selfManaged(customer)) return null
+  const view = clientScope(tenantId, customerId), snapshot = new Map()
+  for (const owner of view.sections.flatMap(section => section.owners)) for (const item of [...owner.us, ...owner.you]) snapshot.set(`${owner.id}:${item.code}`, { owner, item })
+  return snapshot
+}
+export function notifyScopeChanges(tenantId, customerId, before) {
+  if (!before) return 0
+  const after = clientScopeSnapshot(tenantId, customerId)
+  if (!after) return 0
+  const today = businessToday().toISOString().slice(0, 10), byOwner = new Map()
+  const add = (owner, line, toYou) => { const entry = byOwner.get(owner.id) || { owner, lines: [], toYou: false }; entry.lines.push(line); entry.toYou ||= toYou; byOwner.set(owner.id, entry) }
+  for (const [key, { owner, item }] of after) {
+    const old = before.get(key)?.item
+    if (!old) add(owner, item.handledBy === 'us' ? `${item.name}加入委託，由我們負責` : `${item.name}加入提醒，由你自行辦理`, item.handledBy === 'you')
+    else if (old.handledBy !== item.handledBy) add(owner, item.handledBy === 'us' ? `${item.name}改為由我們負責` : `${item.name}改為由你自行辦理`, item.handledBy === 'you')
+  }
+  for (const [key, { owner, item }] of before) if (!after.has(key)) add(owner, `${item.name}不再列入委託內容，我們不再跟進或提醒`, false)
+  const entries = [...byOwner.values()]
+  const remind = entries.some(entry => entry.toYou) ? '自行辦理的事項到期前我們會提醒你。' : ''
+  // 一次改動涉及多個牌照或公司（例如套用範本）時合成一則，免得連發
+  if (entries.length > 3) {
+    notify({ tenantId, customerId, kind: 'scope_changed', title: '你的委託內容有更新', body: `由 ${today} 起，${entries.length} 個牌照或公司的委託內容有改動，請打開查看。${remind}如有疑問請聯絡你的顧問。`, link: '/pages/scope/scope' })
+    return 1
+  }
+  for (const { owner, lines, toYou } of entries) {
+    const title = lines.length === 1 ? lines[0].replace(/，我們不再跟進或提醒$/, '') : `「${owner.label}」的委託內容有 ${lines.length} 項更新`
+    notify({ tenantId, customerId, kind: 'scope_changed', title, body: `${owner.label}：由 ${today} 起，${lines.join('；')}。${toYou ? '到期前我們會提醒你。' : ''}如有疑問請聯絡你的顧問。`, link: `/pages/scope/scope?id=${owner.id}` })
+  }
+  return entries.length
 }

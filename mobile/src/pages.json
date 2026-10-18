@@ -114,6 +114,12 @@
       "style": {
         "navigationBarTitleText": "我的資料"
       }
+    },
+    {
+      "path": "pages/scope/scope",
+      "style": {
+        "navigationBarTitleText": "委託內容"
+      }
     }
   ],
   "tabBar": {
