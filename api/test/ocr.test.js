@@ -17,26 +17,26 @@ const fixtures = join(here, 'fixtures', 'cards')
 const expectedPath = join(fixtures, 'expected.json')
 
 const frontData = {
-  cardNumber: '1030381',
-  company: '曲坤有限公司',
-  contractor: '深圳市曲坤软件技术服务有限公司',
+  cardNumber: '1088123',
+  company: '大明有限公司',
+  contractor: '深圳市大明软件技术服务有限公司',
   crossing: '深圳湾',
-  serial: '00121698'
+  serial: '00654321'
 }
 const backData = {
-  mainlandPlate: '粵Z76L2港',
+  mainlandPlate: '粵Z98B7港',
   localPlate: 'HK1234',
-  driver1: '王振华',
-  driver2: '何思时',
-  driver3: '钟家德',
-  currentApproval: '2025第0630016号',
-  previousApproval: '2024第0447302号',
+  driver1: '张伟明',
+  driver2: '刘子豪',
+  driver3: '黄志强',
+  currentApproval: '2025第0633333号',
+  previousApproval: '2024第0444444号',
   color: '黑色',
   seats: '5座',
   purpose: '延期',
   validFrom: '2025-11-27',
   validTo: '2027-01-01',
-  notes: '主司机:王振华(7378),副司机:何思时(4146),副司机:钟家德(6927)。'
+  notes: '主司机:张伟明(1234),副司机:刘子豪(5678),副司机:黄志强(9012)。'
 }
 
 function svgText(x, y, value, size = 25, weight = 600) {
@@ -125,24 +125,24 @@ function sampleCases(expected) {
 
 test('OCR validators normalize and reject invalid values for every card field', () => {
   const cases = {
-    cardNumber: ['1030381', '12345'],
-    company: ['曲坤有限公司(QUKUN CO., LIMITED)', '2宣昌达 En'],
-    contractor: ['深圳市曲坤软件技术服务有限公司', 'TI大桥'],
+    cardNumber: ['1088123', '12345'],
+    company: ['大明有限公司(DAMING CO., LIMITED)', '2样木 En'],
+    contractor: ['深圳市大明软件技术服务有限公司', 'TI大桥'],
     crossing: ['深圳灣', '不存在口岸'],
-    serial: ['00121698', '12345'],
-    mainlandPlate: ['粤Z76L2港', '锣77RA!D港'],
+    serial: ['00654321', '12345'],
+    mainlandPlate: ['粤Z98B7港', '锣77RA!D港'],
     localPlate: ['HK1234', 'H K 123456789'],
     driver1: ['王振華', '委交村'],
     driver2: ['李小明', '站人攻'],
-    driver3: ['鐘家德', '王振華五六'],
-    currentApproval: ['2025第0630016號', '2025第1234号'],
-    previousApproval: ['2024第0447302号', '2024-0447302'],
+    driver3: ['黃志強', '王振華五六'],
+    currentApproval: ['2025第0633333號', '2025第1234号'],
+    previousApproval: ['2024第0444444号', '2024-0444444'],
     color: ['黑色', '人'],
     seats: ['5座', '座'],
     purpose: ['延期', '区期'],
     validFrom: ['2025/11/27', '2025-02-30'],
     validTo: ['2027.01.01', '2027-13-01'],
-    notes: ['主司机:王振华(7378),副司机:何思时(4146)', 'Eee']
+    notes: ['主司机:张伟明(1234),副司机:刘子豪(5678)', 'Eee']
   }
   for (const field of cardFields) {
     const [valid, invalid] = cases[field]

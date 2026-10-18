@@ -29,7 +29,7 @@ before(async () => {
   }
   state.server = (await import('../src/server.js')).server
   state.images = {
-    cn: await documentImage(['中华人民共和国机动车行驶证', '号牌号码 粤Z76L2港    车辆类型 小型普通客车', '所有人 曲坤有限公司', '品牌型号 丰田牌GTH6490', '车辆识别代号 JTMHV05J804012345', '注册日期 2019-05-10    发证日期 2023-06-01']),
+    cn: await documentImage(['中华人民共和国机动车行驶证', '号牌号码 粤Z98B7港    车辆类型 小型普通客车', '所有人 大明有限公司', '品牌型号 丰田牌GTH6490', '车辆识别代号 JTMHV05J804012345', '注册日期 2019-05-10    发证日期 2023-06-01']),
     hk: await documentImage(['車輛牌照 VEHICLE LICENCE', '登記號碼 Registration Mark AB1234', '底盤號碼 Chassis No. JTMHV05J804012345', '有效期至 Expiry Date 15/03/2027']),
     mo: await documentImage(['車輛登記 REGISTO DE VEICULO', '車牌號碼 Matricula MX-12-34', '牌子 Marca TOYOTA', '型號 Modelo ALPHARD', '車架號碼 Quadro JTMHV05J804012345', '製造年份 Ano de fabrico 2020'])
   }
@@ -64,9 +64,9 @@ const lines = list => list.map(text => ({ text, confidence: 92 }))
 
 // ── 欄位驗證與正規化 ──
 test('內地車牌：OCR 的「粤」改為「粵」，格式不符留空', () => {
-  assert.equal(parseMainlandPlate('粤Z76L2港'), '粵Z76L2港')
+  assert.equal(parseMainlandPlate('粤Z98B7港'), '粵Z98B7港')
   assert.equal(parseMainlandPlate('锣77RA!D港'), null)
-  assert.equal(parseMainlandPlate('粵Z76L2'), null)
+  assert.equal(parseMainlandPlate('粵Z98B7'), null)
 })
 test('香港車牌只接受標準登記號碼', () => {
   assert.equal(parseHongKongPlate('AB 1234'), 'AB1234')
@@ -97,8 +97,8 @@ test('製造年份只收合理年份', () => {
 
 // ── 按標籤讀欄位 ──
 test('內地行駛證：同一行兩個日期分別歸入註冊日期與發證日期', () => {
-  const { fields, fieldStatus } = extractVehicleFields('cn_licence', lines(['号牌号码 粤Z76L2港  车辆类型 小型普通客车', '品牌型号 丰田牌GTH6490', '车辆识别代号 JTMHV05J804012345', '注册日期 2019-05-10 发证日期 2023-06-01']))
-  assert.deepEqual(fields, { plate: '粵Z76L2港', vehicleType: '小型普通客车', brandModel: '丰田牌GTH6490', vin: 'JTMHV05J804012345', registeredOn: '2019-05-10', issuedOn: '2023-06-01' })
+  const { fields, fieldStatus } = extractVehicleFields('cn_licence', lines(['号牌号码 粤Z98B7港  车辆类型 小型普通客车', '品牌型号 丰田牌GTH6490', '车辆识别代号 JTMHV05J804012345', '注册日期 2019-05-10 发证日期 2023-06-01']))
+  assert.deepEqual(fields, { plate: '粵Z98B7港', vehicleType: '小型普通客车', brandModel: '丰田牌GTH6490', vin: 'JTMHV05J804012345', registeredOn: '2019-05-10', issuedOn: '2023-06-01' })
   assert.equal(fieldStatus.vin.status, 'ok'); assert.equal(fieldStatus.vehicleType.status, 'uncertain')
 })
 test('香港車輛牌照：英文副標不會被當成車牌，有效期取到期日', () => {
@@ -167,7 +167,7 @@ test('辨識結果是 null、非陣列或空行時不出錯', () => {
 const bytesOf = image => Buffer.from(image.split(',')[1], 'base64')
 test('合成內地行駛證：讀出車牌、車架號碼、註冊日期', { timeout: 120000 }, async () => {
   const { fields } = await recognizeVehicleDocument(bytesOf(state.images.cn), 'cn_licence')
-  assert.equal(fields.plate, '粵Z76L2港'); assert.equal(fields.vin, 'JTMHV05J804012345'); assert.equal(fields.registeredOn, '2019-05-10')
+  assert.equal(fields.plate, '粵Z98B7港'); assert.equal(fields.vin, 'JTMHV05J804012345'); assert.equal(fields.registeredOn, '2019-05-10')
 })
 test('合成香港車輛牌照：讀出車牌、車架號碼、有效期', { timeout: 120000 }, async () => {
   const { fields } = await recognizeVehicleDocument(bytesOf(state.images.hk), 'hk_licence')
@@ -265,7 +265,7 @@ test('寫法不同但相同的車架號碼不算不一致', async () => {
 })
 test('內地行駛證車牌與牌照的內地車牌不一致時提示', async () => {
   const { vehicleId } = makeVehicle({ mainlandPlate: '粵Z11111港' })
-  state.db.prepare("INSERT INTO vehicle_documents(vehicle_id,kind,mime,data,fields_json,uploaded_at) VALUES (?,?,?,?,?,?)").run(vehicleId, 'cn_licence', 'image/png', Buffer.from('x'), JSON.stringify({ fieldStatus: { plate: { value: '粵Z76L2港', status: 'ok' } } }), new Date().toISOString())
+  state.db.prepare("INSERT INTO vehicle_documents(vehicle_id,kind,mime,data,fields_json,uploaded_at) VALUES (?,?,?,?,?,?)").run(vehicleId, 'cn_licence', 'image/png', Buffer.from('x'), JSON.stringify({ fieldStatus: { plate: { value: '粵Z98B7港', status: 'ok' } } }), new Date().toISOString())
   assert.deepEqual((await request(`/vehicles/${vehicleId}/documents`)).body.checks.map(item => item.code), ['mainland_plate_mismatch'])
 })
 test('香港證件車牌與車輛車牌不一致時提示', async () => {

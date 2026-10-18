@@ -6,7 +6,7 @@ const kind = (value: string) => {
   if (/^[京津滬渝冀豫雲遼黑湘皖魯新蘇浙贛鄂桂甘晉蒙陝吉閩貴粵青藏川寧瓊]/u.test(value)) return 'mainland'
   // 澳門車牌固定「M＋字母＋兩組兩位數字」；粵澳路線的非內地車牌也是澳門牌
   if (/^M[A-Z]?[-\s]?\d{2}[-\s]?\d{2}$/i.test(value) || (props.route === '粵澳' && value)) return 'macau'
-  // 香港車牌含自訂車牌（如 ALEX11、ME1KA、0NL1NG）：最多 8 個英文字母、數字或空格
+  // 香港車牌含自訂車牌（如 LUCKY8、ME1KA、0NL1NG）：最多 8 個英文字母、數字或空格
   if (/^[A-Z0-9][A-Z0-9 ]{0,7}$/i.test(value)) return 'hongkong'
   return 'unknown'
 }

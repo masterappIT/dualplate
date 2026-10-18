@@ -20,7 +20,7 @@ const synthetic = {
   front1: { cardNumber: '1088123', company: '示范有限公司', contractor: '深圳市示范贸易有限公司', crossing: '深圳湾', serial: '00123456' },
   front2: { cardNumber: '1077456', company: '样本运输有限公司', contractor: '广州样本商贸有限公司', crossing: '大桥', serial: '00654321' },
   back1: { mainlandPlate: '粵Z12A3港', localPlate: 'AB1234', driver1: '陈大文', driver2: '李小明', currentApproval: '2025第0611111号', previousApproval: '2024第0422222号', color: '黑', seats: '7座', purpose: '延期', validFrom: '2025-11-01', validTo: '2027-01-01', notes: '主司机:陈大文(1234),副司机:李小明(5678)。' },
-  back2: { mainlandPlate: '粵Z98B7港', localPlate: 'CD5678', driver1: '王振华', driver2: '何思时', driver3: '钟家德', currentApproval: '2025第0633333号', previousApproval: '2024第0444444号', color: '白', seats: '5座', purpose: '延期', validFrom: '2025-12-01', validTo: '2027-01-01', notes: '主司机:王振华(7378),副司机:何思时(4146),副司机:钟家德(6927)。' }
+  back2: { mainlandPlate: '粵Z98B7港', localPlate: 'CD5678', driver1: '张伟明', driver2: '刘子豪', driver3: '黄志强', currentApproval: '2025第0633333号', previousApproval: '2024第0444444号', color: '白', seats: '5座', purpose: '延期', validFrom: '2025-12-01', validTo: '2027-01-01', notes: '主司机:张伟明(1234),副司机:刘子豪(5678),副司机:黄志强(9012)。' }
 }
 // 真實樣本按 expected.json 的檔名排序取前兩張正面、前兩張背面（檔名含客戶卡號，不寫進測試）
 const realJson = real ? JSON.parse(readFileSync(join(fixtures, 'expected.json'), 'utf8')) : {}

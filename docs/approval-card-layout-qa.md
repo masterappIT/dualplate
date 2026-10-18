@@ -1,8 +1,8 @@
 # 批文卡文字排版校準
 
-- Source visual truth: `/Users/vincentw/Desktop/兩地牌維護/曲坤批文卡2026-2027.pdf`，正反面掃描，卡面比例 1013 × 643。
+- Source visual truth: `客戶提供的批文卡掃描 PDF（不入庫）`，正反面掃描，卡面比例 1013 × 643。
 - Implementation: 用戶端 `http://localhost:5173/#/pages/vehicles/vehicles` 與後台 `http://localhost:5174/` 的批文卡預覽。
-- State: 範例卡 1030381；手機卡 CSS 尺寸約 376.5 × 239 px，後台卡約 519.2 × 329.5 px，按比例換算為 1013 × 643。
+- State: 範例卡 1088123；手機卡 CSS 尺寸約 376.5 × 239 px，後台卡約 519.2 × 329.5 px，按比例換算為 1013 × 643。
 - Full-view comparison: 正面標題、五列內容，以及背面左右兩欄與底部三列已在瀏覽器檢視；掃描件的文字錯位不作為目標。
 - Focused comparison: 正面「內承單位」標籤與值共用基線，值起點 x≈205/1013；背面左欄值起點 x≈212/1013，右欄 x≈686/1013；駕駛人姓名起點 x≈253/1013。
 - Typography: 標籤與值分層，正面主標題在兩端完整顯示；兩端檢查無欄位截字。

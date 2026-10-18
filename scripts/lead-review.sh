@@ -35,7 +35,7 @@ echo "測試 $bt → $at；斷言 $ba → $aa"
 echo "== 現有測試被刪改的行"
 git diff -U0 -- api/test | grep -E '^-[^-]' | grep -vE '^-\s*$' | head -40
 echo "== 可疑硬寫（人名、特定車牌、只為測試的分支）"
-git diff -U0 -- api/src admin/src | grep -E '^\+' | grep -nE "NODE_ENV *=+ *['\"]test|process\.env\.(TEST|CI)|鐘家德|李先生|曲坤|宜昌|粵Z[0-9A-Z]{4}" | head -20
+git diff -U0 -- api/src admin/src | grep -E '^\+' | grep -nE "NODE_ENV *=+ *['\"]test|process\.env\.(TEST|CI)|黃志強|李先生|大明有限|样本|粵Z[0-9A-Z]{4}" | head -20
 echo "== 樣式規則與模板引用"
 (cd admin && npm run -s check) || fail=1
 echo "== API 測試"

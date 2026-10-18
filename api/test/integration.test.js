@@ -10,7 +10,7 @@ import { randomUUID, scryptSync } from 'node:crypto'
 import { defaultRules } from '../src/rules.js'
 
 const hash = password => { const salt = randomUUID(); return `${salt}:${scryptSync(password, salt, 64).toString('hex')}` }
-const lookupResponse = { data: [{ Brn:'68249242', Chinese_Company_Name:'曲坤有限公司', English_Company_Name:'Kukwan Limited', Address_of_Registered_Office:'香港測試地址', Company_Type:'私人股份有限公司', Date_of_Incorporation:'26-09-2017', 'Re-domiciliation_Date':'' }] }
+const lookupResponse = { data: [{ Brn:'87654321', Chinese_Company_Name:'大明有限公司', English_Company_Name:'Daming Limited', Address_of_Registered_Office:'香港測試地址', Company_Type:'私人股份有限公司', Date_of_Incorporation:'26-09-2017', 'Re-domiciliation_Date':'' }] }
 const nativeFetch = globalThis.fetch
 globalThis.fetch = async (input, init) => String(input).startsWith('http://mock-company-lookup.invalid/') ? new Response(JSON.stringify(lookupResponse), { status: 200, headers: { 'content-type': 'application/json' } }) : nativeFetch(input, init)
 const invoke = (server, path, method = 'GET', body, token = '') => {
@@ -148,12 +148,12 @@ describe('第一階段 API 整合測試', { concurrency:false }, () => {
   })
 
   test('香港公司註冊處查詢只回傳結果，確認後才寫入', async () => {
-    const created = await state.request('/companies','POST',{customerId:state.customerA,jurisdiction:'香港',name:'待查香港公司',nameEn:'PENDING LOOKUP HK LIMITED',registrationNo:'68249242'},state.adminA); assert.equal(created.status,201)
+    const created = await state.request('/companies','POST',{customerId:state.customerA,jurisdiction:'香港',name:'待查香港公司',nameEn:'PENDING LOOKUP HK LIMITED',registrationNo:'87654321'},state.adminA); assert.equal(created.status,201)
     const lookup = await state.request(`/companies/${created.body.id}/hk-lookup`,'POST',{},state.adminA)
-    assert.equal(lookup.status,200); assert.equal(lookup.body.name,'曲坤有限公司'); assert.equal(lookup.body.incorporatedOn,'2017-09-26')
+    assert.equal(lookup.status,200); assert.equal(lookup.body.name,'大明有限公司'); assert.equal(lookup.body.incorporatedOn,'2017-09-26')
     assert.equal((await state.request('/companies','GET',undefined,state.adminA)).body.find(item => item.id === created.body.id).name,'待查香港公司')
     const saved = await state.request(`/companies/${created.body.id}`,'PATCH',{name:lookup.body.name,incorporatedOn:lookup.body.incorporatedOn},state.adminA)
-    assert.equal(saved.status,200); assert.equal(saved.body.name,'曲坤有限公司'); assert.equal(saved.body.incorporated_on,'2017-09-26')
+    assert.equal(saved.status,200); assert.equal(saved.body.name,'大明有限公司'); assert.equal(saved.body.incorporated_on,'2017-09-26')
   })
 
   test('批文規則參數遷移只執行一次', () => {
