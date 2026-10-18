@@ -56,7 +56,8 @@ test('未發佈時強制模式不擋客戶', async () => {
   assert.equal((await setMode('prompt')).status, 200)
 })
 test('未登入看條款：未發佈回 404', async () => { assert.equal((await request('/public/terms', 'GET', undefined, '')).status, 404) })
-test('初稿還有待填寫的地方不能發佈', async () => { const r = await publish(draft.terms, draft.privacy); assert.equal(r.status, 400); assert.match(r.body.error, /請填寫/) })
+// 預設條文已沒有【請填寫…】（管理者 2026-10-18 決定聯絡方式暫不寫），所以自行加一處，檢查發佈仍會擋下
+test('條文還有待填寫的地方不能發佈', async () => { const r = await publish(draft.terms + '\n【請填寫：聯絡電話及電郵】', draft.privacy); assert.equal(r.status, 400); assert.match(r.body.error, /請填寫/) })
 test('條款留空不能發佈', async () => { assert.equal((await publish('  ', ready(draft.privacy))).status, 400) })
 test('條款不是文字不能發佈', async () => { assert.equal((await publish(['甲'], ready(draft.privacy))).status, 400) })
 test('發佈拒絕 null 內容', async () => { assert.equal((await request('/terms/publish', 'POST', null)).status, 400) })
