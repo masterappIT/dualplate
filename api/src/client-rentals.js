@@ -200,7 +200,7 @@ export async function clientRentalRoutes(req, res, url, user, { json, fail, pars
   if (!['PUT', 'POST'].includes(method) || (action === 'agreement') !== (method === 'PUT')) return fail(res, 405, '不支援此操作'), true
   if (!openStatuses.includes(contract.status)) return fail(res, 409, '這次出租已結束或已取消'), true
   if (action === 'cancel') {
-    if (!['草擬', '待換車'].includes(contract.status)) return fail(res, 409, '出租已開始，提早結束請聯絡你的顧問'), true
+    if (!['草擬', '待換車'].includes(contract.status)) return fail(res, 409, `出租已開始，提早結束${selfManaged(customer) ? '請在「我的 › 聯絡我們」發訊息給我們' : '請聯絡你的顧問'}`), true
     db.prepare("UPDATE rental_contracts SET status='已終止', terminated_reason='客戶取消', staff_seen_at=NULL, updated_at=? WHERE id=?").run(now(), contract.id)
     db.prepare('UPDATE rental_links SET revoked_at=? WHERE contract_id=? AND revoked_at IS NULL').run(now(), contract.id)
     return json(res, 200, detailView(customer, contractFor(customer.tenant_id, contract.id))), true

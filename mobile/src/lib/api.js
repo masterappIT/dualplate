@@ -66,6 +66,10 @@ export const levelTone = { overdue: 'red', due: 'amber', upcoming: '', ok: '' }
 export function daysText(item) { return item.daysLeft == null ? '' : item.daysLeft < 0 ? `逾期 ${-item.daysLeft} 天` : item.daysLeft === 0 ? '今天到期' : `還有 ${item.daysLeft} 天` }
 // 客戶自己辦、我們只提醒的事項，全站同一個說法
 export const selfHandled = '自行辦理'
+// 自管客戶看到的句子（docs/tasks/self-managed-wording-2026-10-18.md，管理者 2026-10-19）：托管客戶的句子一字不改，自管客戶另給一句
+export const forMode = (custody, self) => isSelfManaged() ? self : custody
+// 到期項目旁的「自行辦理」：自管客戶全部都是自己辦，不標（減少雜訊）
+export const showSelfTag = item => item.handledBy === 'you' && !isSelfManaged()
 // 辦理狀態：全站同一套顏色（進行中藍、要你做的橙、結束灰）
 export const requestTone = status => ({ 需要你提供資料: 'amber', 辦理中: 'blue', 已收到: 'blue', 已完成: 'gray', 已取消: 'gray' }[status] || 'blue')
 // 工單步驟名是寫給員工看的（「客戶提供……」），客戶端改成對客戶說話

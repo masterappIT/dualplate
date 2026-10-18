@@ -15,7 +15,7 @@
       </view>
       <view v-if="!visible.length" class="empty">沒有符合條件的牌照</view>
     </view>
-    <view v-if="loaded && !plates.length" class="card empty-library"><text class="list-title">還沒有牌照記錄</text><text class="list-sub">拍下批文卡正反面交給我們，我們會替你建立檔案。</text></view>
+    <view v-if="loaded && !plates.length" class="card empty-library"><text class="list-title">還沒有牌照記錄</text><text class="list-sub">{{ forMode('拍下批文卡正反面交給我們，我們會替你建立檔案。','按上面的「新增牌照」拍下批文卡，就能建立牌照。') }}</text></view>
     <view class="card-deck" :style="deckStyle" v-if="mode==='cards' && plates.length">
       <view v-for="(p,index) in plates" :key="p.id" class="deck-card" :style="deckCardStyle(index)">
         <ApprovalCard :data="details[p.id]?.cardData || {}" :flip-on-tap="false" :tap-label="'單獨查看此批文卡'" @card-tap="selectPlate(p)"/>
@@ -39,7 +39,7 @@
 <script setup>
 import { computed,ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { api,getUser,daysText,unsetWord,noDatesWord,isSelfManaged } from '../../lib/api'
+import { api,getUser,daysText,unsetWord,noDatesWord,isSelfManaged,forMode } from '../../lib/api'
 import ApprovalCard from '../../components/ApprovalCard.vue'
 const plates=ref([]),summaries=ref([]),details=ref({}),loaded=ref(false),selectedPlateId=ref(''),flipped=ref(false),mode=ref(uni.getStorageSync('plateView')||'cards'),keyword=ref(''),filter=ref('')
 const healthLabel={ok:'正常',due:'快到期',overdue:'已逾期',pending:noDatesWord()},healthTone={ok:'',due:'amber',overdue:'red',pending:'gray'},noteTone={overdue:'note-red',due:'note-amber',upcoming:'note-green',ok:'note-gray'}

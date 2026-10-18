@@ -15,7 +15,7 @@
       <button v-if="advisor.wechat" class="btn-sm act" @click="copyText(advisor.wechat, '微信號已複製')">複製微信號</button>
     </view>
   </view>
-  <view v-else-if="placeholder" class="card advisor empty-advisor"><text class="caption">你的顧問</text><text class="meta">顧問資料整理中，稍後會在這裡顯示聯絡方式。</text></view>
+  <view v-else-if="placeholder" class="card advisor empty-advisor"><text class="caption">你的顧問</text><text class="meta">顧問資料整理中，稍後會在這裏顯示聯絡方式。</text></view>
 </template>
 <script setup>
 import { callAdvisor, copyText } from '../lib/api'

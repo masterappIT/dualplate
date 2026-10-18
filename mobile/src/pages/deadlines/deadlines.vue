@@ -3,7 +3,7 @@
     <text class="intro">{{ selfManaged ? '未來半年要辦的事，都由你自己辦；想交給我們，按「委託我們辦」。' : '未來半年要辦的事。標了「自行辦理」的由你自己辦，其他由我們在到期前安排。' }}</text>
     <view class="chips"><text v-for="f in filters" :key="f.id" class="chip" :class="{active:filter===f.id}" @click="filter=f.id">{{ f.name }}</text></view>
     <view v-for="(item,index) in visible" :key="index" class="list-card row" @click="open(item)">
-      <view class="grow"><text class="list-title">{{ item.name }}</text><text v-if="item.handledBy==='you'" class="who">{{ selfHandled }}</text><text class="list-sub">{{ item.ownerLabel }}{{ item.detail ? ' · '+detailText(item.detail) : '' }}</text><text v-if="canEntrust(item)" class="link entrust" @click.stop="startEntrust(item)">委託我們辦 ›</text></view>
+      <view class="grow"><text class="list-title">{{ item.name }}</text><text v-if="showSelfTag(item)" class="who">{{ selfHandled }}</text><text class="list-sub">{{ item.ownerLabel }}{{ item.detail ? ' · '+detailText(item.detail) : '' }}</text><text v-if="canEntrust(item)" class="link entrust" @click.stop="startEntrust(item)">委託我們辦 ›</text></view>
       <DueDate :date="item.dueOn" :days="item.daysLeft" :level="item.level" />
     </view>
     <view v-if="loaded && !visible.length" class="card empty">沒有需要留意的到期項目</view>
@@ -12,7 +12,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { api, getUser, openPlate, detailText, selfHandled, isSelfManaged, canEntrust, startEntrust } from '../../lib/api'
+import { api, getUser, openPlate, detailText, selfHandled, isSelfManaged, canEntrust, startEntrust, showSelfTag } from '../../lib/api'
 const selfManaged=isSelfManaged()
 const items=ref([]),filter=ref(''),loaded=ref(false)
 const filters=[{id:'',name:'全部'},{id:'plate',name:'牌照'},{id:'vehicle',name:'車輛'},{id:'company',name:'公司'}]

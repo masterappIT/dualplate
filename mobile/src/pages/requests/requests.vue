@@ -16,7 +16,7 @@
       <button class="primary submit" :loading="submitting" :disabled="submitting" @click="submit">提交</button>
     </view>
     <view class="section-head"><text class="section-title">我的辦理記錄</text><text class="subtle num">{{ requests.length }} 項</text></view>
-    <view v-if="!requests.length" class="card empty">還沒有辦理記錄，提交後可在這裡看進度。</view>
+    <view v-if="!requests.length" class="card empty">還沒有辦理記錄，提交後可在這裏看進度。</view>
     <view v-else class="card list"><view v-for="item in requests" :key="item.id" class="line" @click="open(item.id)"><view class="row"><text class="line-title grow">{{ item.title }}</text><text class="pill" :class="requestTone(customerStatus(item.status))">{{ customerStatus(item.status) }}</text></view><view class="req-meta"><PlateChip v-if="plateOf(item)" :plate="plateOf(item)" region="內地" size="sm" /><text class="line-sub">{{ clientStage(item.stage) }}</text></view></view></view>
   </view>
 </template>

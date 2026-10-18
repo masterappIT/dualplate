@@ -1,6 +1,6 @@
 <template>
   <view class="page billing">
-    <text class="intro">年費、代辦費、政府規費和代墊款項。不同幣種分開計算。</text>
+    <text class="intro">{{ forMode('年費、代辦費、政府規費和代墊款項。','代辦費、政府規費和代墊款項。') }}不同幣種分開計算。</text>
     <view class="card deep guilloche due-card">
       <text class="kicker">尚未付款</text>
       <view v-if="totals.length" class="due-rows"><text v-for="t in totals" :key="t.currency" class="due-amount num">{{ money(t.currency, t.value) }}</text></view>
@@ -10,7 +10,7 @@
       <view class="section-head"><text class="section-title">請你確認的分期款項</text></view>
       <view v-for="item in toConfirm" :key="item.id" class="list-card warn-card">
         <view class="row"><text class="list-title grow">{{ item.description }}</text><text class="num amount">{{ money(item.currency, item.amount) }}</text></view>
-        <text class="list-sub">到期 <text class="num">{{ friendlyDate(item.dueOn) }}</text>。確認金額無誤後，顧問會按此收款。</text>
+        <text class="list-sub">到期 <text class="num">{{ friendlyDate(item.dueOn) }}</text>。確認金額無誤後，{{ forMode('顧問','我們') }}會按此收款。</text>
         <button class="btn-sm confirm" :disabled="busy === item.id" @click="confirm(item)">{{ busy === item.id ? '確認中' : '確認金額' }}</button>
       </view>
     </view>
@@ -23,13 +23,13 @@
       </view>
     </view>
     <view v-if="loaded && !shown.length" class="card empty">{{ filter === 'open' ? '沒有其他未付款項' : '還沒有帳單記錄' }}</view>
-    <text class="subtle tip">付款方式與收據請向你的顧問查詢。</text>
+    <text class="subtle tip">{{ forMode('付款方式與收據請向你的顧問查詢。','付款方式與收據請在「我的 › 聯絡我們」查詢。') }}</text>
   </view>
 </template>
 <script setup>
 import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { api, getUser, friendlyDate, money } from '../../lib/api'
+import { api, getUser, friendlyDate, money, forMode } from '../../lib/api'
 const items = ref([]), outstanding = ref({}), loaded = ref(false), busy = ref(''), filter = ref('open')
 const filters = [{ key: 'open', label: '未付' }, { key: 'all', label: '全部' }]
 const totals = computed(() => Object.entries(outstanding.value).map(([currency, value]) => ({ currency, value })))

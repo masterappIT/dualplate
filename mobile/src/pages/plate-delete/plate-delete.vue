@@ -1,6 +1,6 @@
 <template>
   <view class="page plate-delete">
-    <!-- 自管客戶刪除建錯的牌照（docs/tasks/self-managed-fixes-plan.md 第 13 步）：沿用「注銷帳號」頁的結構；即時刪除，不能復原 -->
+    <!-- 自管客戶刪除建錯的牌照（docs/tasks/self-managed-fixes-plan.md 第 13 步）：沿用「註銷帳號」頁的結構；即時刪除，不能復原 -->
     <text class="intro">批文卡輸入有錯、建錯了牌照，可以在這裏刪除。刪除後不能復原。</text>
     <view v-if="loadError" class="card"><text class="error">{{ loadError }}</text></view>
     <template v-else-if="info">

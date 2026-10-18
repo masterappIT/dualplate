@@ -1,6 +1,6 @@
 <template>
   <view class="page profile">
-    <text class="subtle intro">{{ selfManaged ? '你的登入帳號和委託人資料，修改後立即生效。' : '你的登入帳號和委託人資料。委託人資料修改後立即生效，顧問會再核對。' }}</text>
+    <text class="subtle intro">{{ selfManaged ? '你的登入帳號和帳單名義，修改後立即生效。' : '你的登入帳號和委託人資料。委託人資料修改後立即生效，顧問會再核對。' }}</text>
 
     <!-- 登入帳號：這個登入的人 -->
     <text class="section-title">登入帳號</text>
@@ -32,16 +32,17 @@
     </view>
 
     <!-- 委託人：合約和帳單上的名義（個人或公司），改動由管理者核對。選公司不加公司資料欄位（管理者 2026-10-18） -->
-    <view class="section-head"><text class="section-title">委託人（合約及帳單上的名義）</text><text v-if="customerPending" class="pill amber">已修改，待核對</text></view>
+    <view class="section-head"><!-- 自管客戶沒有合約，只有按次委託才有帳單（管理者 2026-10-19）：寫「帳單名義」 -->
+    <text class="section-title">{{ selfManaged ? '帳單名義' : '委託人（合約及帳單上的名義）' }}</text><text v-if="customerPending" class="pill amber">已修改，待核對</text></view>
     <view class="card">
       <text class="field-label first">類型</text>
       <view class="segmented kind"><text class="seg" :class="{ on: customerDraft.kind==='個人' }" @click="customerDraft.kind='個人'">個人</text><text class="seg" :class="{ on: customerDraft.kind==='公司' }" @click="customerDraft.kind='公司'">公司</text></view>
-      <text class="subtle field-hint">以個人還是公司名義委託我們</text>
+      <text class="subtle field-hint">{{ selfManaged ? '以個人還是公司名義收帳單' : '以個人還是公司名義委託我們' }}</text>
       <text class="field-label">{{ customerDraft.kind === '公司' ? '公司名稱' : '姓名' }}</text>
       <input class="field" v-model="customerDraft.name" :placeholder="customerDraft.kind === '公司' ? '例如 李氏貿易（香港）有限公司' : '例如 李大文'" />
       <text class="field-label">聯絡電話</text>
       <input class="field num" v-model="customerDraft.phone" placeholder="例如 +852 9123 4567" />
-      <button class="btn-sm solid save" :disabled="savingCustomer || !customerChanged" @click="saveCustomer">{{ savingCustomer ? '正在儲存…' : '儲存委託人資料' }}</button>
+      <button class="btn-sm solid save" :disabled="savingCustomer || !customerChanged" @click="saveCustomer">{{ savingCustomer ? '正在儲存…' : selfManaged ? '儲存帳單名義' : '儲存委託人資料' }}</button>
       <text v-if="!selfManaged" class="line-sub note">委託人名稱會用在合約和帳單，修改後由顧問核對。</text>
     </view>
 
@@ -58,11 +59,11 @@
       <view class="card"><text class="line-sub">讓助手或同事用自己的帳號一起管理。之後推出，屬收費功能。</text></view>
     </view>
 
-    <!-- 注銷帳號：只限自管客戶；托管客戶要經顧問終止合約 -->
-    <text class="section-title">注銷帳號</text>
+    <!-- 註銷帳號：只限自管客戶；托管客戶要經顧問終止合約 -->
+    <text class="section-title">註銷帳號</text>
     <view class="card">
-      <text class="line-sub">{{ selfManaged ? '不再使用的話，可以注銷帳號。帳號和全部資料會即時刪除，不能復原。' : '托管客戶要終止服務和注銷帳號，請聯絡你的顧問。' }}</text>
-      <button v-if="selfManaged" class="btn-line close-btn" @click="goClose">注銷帳號</button>
+      <text class="line-sub">{{ selfManaged ? '不再使用的話，可以註銷帳號。帳號和全部資料會即時刪除，不能復原。' : '托管客戶要終止服務和註銷帳號，請聯絡你的顧問。' }}</text>
+      <button v-if="selfManaged" class="btn-line close-btn" @click="goClose">註銷帳號</button>
     </view>
   </view>
 </template>

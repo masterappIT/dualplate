@@ -353,7 +353,7 @@ export async function selfHandledClientRoutes(req, res, url, user, { json, fail,
   const handledOn = body.handledOn === undefined ? todayHk() : body.handledOn
   if (!validDate(handledOn)) return fail(res, 400, '辦好日期無效'), true
   if (handledOn > todayHk()) return fail(res, 400, '辦好日期不可在今天之後'), true
-  if (plate.stopped_on && body.kind !== 'stop_renewal') return fail(res, 409, '這個牌照已標記為不再續期；如要恢復，請聯絡你的顧問'), true
+  if (plate.stopped_on && body.kind !== 'stop_renewal') return fail(res, 409, `這個牌照已標記為不再續期；如要恢復，${selfManagedCustomer(plate.customer_id) ? '請在「我的 › 聯絡我們」發訊息給我們' : '請聯絡你的顧問'}`), true
   if (one("SELECT id FROM self_handled WHERE plate_asset_id=? AND kind=? AND status='待核對'", plate.id, body.kind)) return fail(res, 409, `已提交「${kinds[body.kind]}」，顧問核對中；如需修改請聯絡你的顧問`), true
   const photos = checkPhotos(body.photos)
   if (photos.error) return fail(res, photos.status, photos.error), true

@@ -1,7 +1,7 @@
 <template>
   <view class="page close-account">
-    <!-- 自管客戶注銷帳號（docs/requirements.md 5.6.2）：不設冷靜期，輸入密碼確認後即時刪除，不能復原 -->
-    <text class="intro">注銷後會即時刪除你的帳號和全部資料，不能復原。</text>
+    <!-- 自管客戶註銷帳號（docs/requirements.md 5.6.2）：不設冷靜期，輸入密碼確認後即時刪除，不能復原 -->
+    <text class="intro">註銷後會即時刪除你的帳號和全部資料，不能復原。</text>
     <view v-if="loadError" class="card"><text class="error">{{ loadError }}</text></view>
     <template v-else-if="info">
       <text class="section-title">會刪除的資料</text>
@@ -23,7 +23,7 @@
         </view>
       </template>
       <template v-else>
-        <text class="section-title">注銷原因（選填）</text>
+        <text class="section-title">註銷原因（選填）</text>
         <view class="card">
           <wd-radio-group v-model="reason" shape="dot">
             <wd-radio v-for="item in info.reasons" :key="item" :value="item">{{ item }}</wd-radio>
@@ -35,7 +35,7 @@
           <text class="field-label first">登入密碼</text>
           <input class="field" v-model="password" password placeholder="輸入你的登入密碼" />
           <text v-if="error" class="error">{{ error }}</text>
-          <button class="primary danger submit" :disabled="busy" @click="submit">{{ busy ? '正在注銷…' : '注銷帳號' }}</button>
+          <button class="primary danger submit" :disabled="busy" @click="submit">{{ busy ? '正在註銷…' : '註銷帳號' }}</button>
         </view>
       </template>
     </template>
@@ -59,13 +59,13 @@ function goMessages() { uni.navigateTo({ url: '/pages/messages/messages' }) }
 async function submit() {
   error.value = ''
   if (!password.value) return (error.value = '請輸入登入密碼')
-  if (await confirmBox.ask({ title: '確定注銷帳號？', msg: '你的帳號和全部資料會即時刪除，不能復原。', ok: '注銷', cancel: '取消', danger: true }) !== 'confirm') return
+  if (await confirmBox.ask({ title: '確定註銷帳號？', msg: '你的帳號和全部資料會即時刪除，不能復原。', ok: '註銷', cancel: '取消', danger: true }) !== 'confirm') return
   busy.value = true
   try {
     await api('/my/account/close', 'POST', { password: password.value, ...(reason.value ? { reason: reason.value } : {}), ...(reason.value === '其他' && reasonText.value.trim() ? { reasonText: reasonText.value.trim() } : {}) })
     clearSession()
     uni.reLaunch({ url: '/pages/login/login' })
-    setTimeout(() => uni.showToast({ title: '帳號已注銷，多謝你曾使用', icon: 'none' }), 400)
+    setTimeout(() => uni.showToast({ title: '帳號已註銷，多謝你曾使用', icon: 'none' }), 400)
   } catch (e) {
     error.value = e.message
     if (e.status === 409) load()

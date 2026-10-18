@@ -1,6 +1,6 @@
 <template>
   <view class="page notices">
-    <view class="row head"><text class="subtle grow">到期提醒、辦理進度和文件核對結果都會在這裡。</text><text v-if="unread" class="link" @click="readAll">全部已讀</text></view>
+    <view class="row head"><text class="subtle grow">到期提醒、辦理進度和文件核對結果都會在這裏。</text><text v-if="unread" class="link" @click="readAll">全部已讀</text></view>
     <view v-for="g in groups" :key="g.label">
       <text class="day">{{ g.label }}</text>
       <view class="card list">

@@ -94,7 +94,7 @@
     {
       "path": "pages/close-account/close-account",
       "style": {
-        "navigationBarTitleText": "注銷帳號"
+        "navigationBarTitleText": "註銷帳號"
       }
     },
     {

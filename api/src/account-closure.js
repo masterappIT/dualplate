@@ -28,9 +28,9 @@ function counts(customerId) {
 function check(user) {
   const customer = db.prepare('SELECT * FROM customers WHERE id=? AND tenant_id=?').get(user.customer_id, user.tenant_id)
   if (!customer || customer.closed_on) return { status: 404, error: '帳戶不存在' }
-  if (customer.is_self || customer.service_mode !== '自管') return { status: 403, error: '托管客戶不能自行注銷，請聯絡你的顧問終止合約' }
+  if (customer.is_self || customer.service_mode !== '自管') return { status: 403, error: '托管客戶不能自行註銷，請聯絡你的顧問終止合約' }
   const open = openRequests(customer.id)
-  if (open.length) return { status: 409, error: `你有 ${open.length} 件委託仍在辦理，請先聯絡我們完成或取消，才可以注銷`, openRequests: open.map(row => ({ id: row.id, title: row.title, status: row.status })) }
+  if (open.length) return { status: 409, error: `你有 ${open.length} 件委託仍在辦理，請先完成或取消才可以註銷；還未開始辦理的，可按進去自行取消`, openRequests: open.map(row => ({ id: row.id, title: row.title, status: row.status })) }
   return { customer }
 }
 
@@ -115,7 +115,7 @@ function purgeNotices() {
 function readClose(body) {
   if (!isObject(body) || Object.keys(body).some(key => !['password', 'reason', 'reasonText'].includes(key))) return { error: '內容無效' }
   if (typeof body.password !== 'string' || !body.password) return { error: '請輸入密碼' }
-  if (body.reason !== undefined && body.reason !== null && !closeReasons.includes(body.reason)) return { error: '注銷原因無效' }
+  if (body.reason !== undefined && body.reason !== null && !closeReasons.includes(body.reason)) return { error: '註銷原因無效' }
   if (body.reasonText !== undefined && body.reasonText !== null && typeof body.reasonText !== 'string') return { error: '內容無效' }
   const reasonText = (body.reasonText || '').trim()
   if (reasonText && body.reason !== '其他') return { error: '只有選「其他」才可填寫原因' }

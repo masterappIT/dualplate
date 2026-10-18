@@ -38,7 +38,7 @@
       <view class="card">
         <text v-if="r.agreement.confirmed" class="pill confirmed">{{ r.agreement.confirmedBy }} 已於 {{ when(r.agreement.confirmedAt) }} 確認</text>
         <text v-else-if="r.agreement.version" class="pill amber confirmed">等承租人確認</text>
-        <text v-if="r.handling !== 'self'" class="line-sub">這次出租已交給我們代理，協議由顧問處理。</text>
+        <text v-if="r.handling !== 'self'" class="line-sub">這次出租已交給我們代理，協議由{{ forMode('顧問', '我們') }}處理。</text>
         <template v-else>
           <text class="subtle">已按你填的資料寫好，可以按實際情況修改。{{ r.agreement.version ? '發出後再改，要重新發出，承租人要重新確認。' : '' }}</text>
           <textarea v-model="draft" class="field agreement" :maxlength="20000" :disabled="!r.canSend" auto-height />
@@ -92,7 +92,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
-import { api, getUser, money, copyText, openLink, pickPhotos, pickPdf, readBase64, privateImage } from '../../lib/api'
+import { api, getUser, money, copyText, openLink, pickPhotos, pickPdf, readBase64, privateImage, forMode } from '../../lib/api'
 import { useConfirm } from '../../lib/choice'
 import SignaturePad from '../../components/SignaturePad.vue'
 const confirmBox = useConfirm()
@@ -114,7 +114,7 @@ const next = computed(() => {
   if (x.status === '已終止') return { title: x.statusWord === '已取消' ? '這次出租已取消' : '這次出租已終止', sub: '如要重新出租，可在牌照頁新增。' }
   if (x.status === '已結束') return { title: '這次出租已結束', sub: '' }
   if (x.status === '生效') return { title: '出租中', sub: `由 ${x.startsOn} 起計租金。` }
-  if (x.handling !== 'self' && !x.agreement.version) return { title: '已交給我們代理', sub: '顧問會聯絡你和承租人處理協議和手續。' }
+  if (x.handling !== 'self' && !x.agreement.version) return { title: '已交給我們代理', sub: forMode('顧問會聯絡你和承租人處理協議和手續。', '我們會聯絡你和承租人處理協議和手續。') }
   if (x.statusWord === '未發出協議') return { title: '把協議發給承租人', sub: '看過協議後按「發給承租人」，把連結傳給承租人確認。' }
   if (x.statusWord === '待承租人確認') return { title: '等承租人確認協議', sub: '承租人打開連結後按「我同意這份協議」。連結不見了可以重新發送。' }
   if (mine.length) return { title: `請辦理${mine.join('、')}`, sub: '辦好後按「已辦好？更新」，在「有變動？」填上新資料。辦妥後就開始出租。' }
@@ -163,7 +163,7 @@ async function viewSigned() {
   try { const src = await privateImage('/my/rentals/' + rentalId + '/signed'); if (src.startsWith('data:application/pdf')) openLink(src); else uni.previewImage({ urls: [src] }) } catch (e) { uni.showToast({ title: e.message, icon: 'none' }) }
 }
 async function cancel() {
-  if (await confirmBox.ask({ title: '取消這次出租？', msg: '已發出的連結會作廢；已開的換車、換司機工單，顧問會聯絡你。', ok: '取消出租', cancel: '不取消', danger: true }) !== 'confirm') return
+  if (await confirmBox.ask({ title: '取消這次出租？', msg: forMode('已發出的連結會作廢；已開的換車、換司機工單，顧問會聯絡你。', '已發出的連結會作廢；已開的換車、換司機工單，我們會聯絡你。'), ok: '取消出租', cancel: '不取消', danger: true }) !== 'confirm') return
   busy.value = true
   try { r.value = await api('/my/rentals/' + rentalId + '/cancel', 'POST', {}); link.value = null } catch (e) { uni.showToast({ title: e.message, icon: 'none' }) } finally { busy.value = false }
 }
