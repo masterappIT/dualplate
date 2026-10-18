@@ -29,7 +29,7 @@ import { vehicleDocumentRoutes } from './vehicle-documents.js'
 import { publicTermsRoutes, termsGate, termsRoutes } from './terms.js'
 import { plateCompanyRoutes, linkPlateCompanies } from './plate-companies.js'
 import { seedDemo } from './demo-seed.js'
-import { serviceModeRoutes, modes, startSelfManaged } from './service-mode.js'
+import { serviceModeRoutes, modes, startSelfManaged, loginLimit } from './service-mode.js'
 import { seal } from './password-vault.js'
 import { supportRoutes } from './support.js'
 import { signupPublicRoutes, signupRoutes, applicationLogin } from './signup.js'
@@ -610,16 +610,20 @@ export const server = http.createServer(async (req, res) => {
       if (user.role !== 'admin') return fail(res, 403, '無權限')
       const body = await parseBody(req)
       if (!required(body, ['customerId', 'name', 'password']) || !(required(body, ['email']) || required(body, ['phone']))) return fail(res, 400, '請填寫姓名、密碼，以及電郵或手機號碼')
-      const phone = body.phone ? loginPhone(body.phone) : null
-      if (body.phone && !phone) return fail(res, 400, PHONE_RULE)
+      if ([body.email, body.phone].some(value => value != null && typeof value !== 'string')) return fail(res, 400, '內容無效')
+      const email = body.email?.trim().toLowerCase() || ''
+      if (email && (email.length > 160 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.endsWith('@phone.invalid'))) return fail(res, 400, '電郵格式無效')
+      const phone = body.phone?.trim() ? loginPhone(body.phone) : null
+      if (body.phone?.trim() && !phone) return fail(res, 400, PHONE_RULE)
       if (phone && one('SELECT id FROM users WHERE phone=?', phone)) return fail(res, 409, '這個手機號碼已被使用')
-      if (body.email && one('SELECT id FROM users WHERE email=?', clean(body.email, 160).toLowerCase())) return fail(res, 409, '這個電郵已被使用')
+      if (email && one('SELECT id FROM users WHERE email=?', email)) return fail(res, 409, '這個電郵已被使用')
       if (!canAccessCustomer(user, body.customerId)) return fail(res, 404, '客戶不存在')
       if (one('SELECT is_self FROM customers WHERE id=?', body.customerId)?.is_self) return fail(res, 409, '本公司（自有）不開通客戶端登入')
       if (one('SELECT closed_on FROM customers WHERE id=?', body.customerId)?.closed_on) return fail(res, 409, '這位客戶已自行注銷，不能再開通登入')
-      { const problem = passwordProblem(body.password, { email: body.email, phone: body.phone }); if (problem) return fail(res, 400, problem) }
+      { const customer = one('SELECT * FROM customers WHERE id=?', body.customerId); if (one("SELECT COUNT(*) count FROM users WHERE customer_id=? AND role='customer'", customer.id).count >= loginLimit(customer)) return fail(res, 409, '自管客戶目前只可開一個登入，多人登入稍後推出（收費功能）') }
+      { const problem = passwordProblem(body.password, { email, phone: body.phone }); if (problem) return fail(res, 400, problem) }
       const userId = id()
-      db.prepare('INSERT INTO users(id,role,name,email,password_hash,password_enc,customer_id,tenant_id,phone) VALUES (?,?,?,?,?,?,?,?,?)').run(userId, 'customer', clean(body.name, 100), body.email ? clean(body.email, 160).toLowerCase() : `${phone}@phone.invalid`, hashPassword(body.password), seal(body.password), body.customerId, user.tenant_id, phone)
+      db.prepare('INSERT INTO users(id,role,name,email,password_hash,password_enc,customer_id,tenant_id,phone) VALUES (?,?,?,?,?,?,?,?,?)').run(userId, 'customer', clean(body.name, 100), email || `${phone}@phone.invalid`, hashPassword(body.password), seal(body.password), body.customerId, user.tenant_id, phone)
       return json(res, 201, { id: userId })
     }
     if (path === '/api/vehicles' && req.method === 'GET') {

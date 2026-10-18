@@ -17,6 +17,12 @@ const validDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.te
 const daysBetween = (from, to) => Math.round((Date.parse(to + 'T00:00:00Z') - Date.parse(from + 'T00:00:00Z')) / 86400000)
 const modeOf = customer => customer.service_mode || '托管'
 
+// 自管客戶暫時只可開一個登入（停用的也算）；多人登入日後作為收費功能推出（docs/requirements.md 5.6.2 第 6 點，管理者 2026-10-18），
+// 屆時從這條規則放開。托管客戶不限，全部登入權限相同
+export const SELF_MANAGED_LOGIN_LIMIT = 1
+export const loginLimit = customer => modeOf(customer) === '自管' ? SELF_MANAGED_LOGIN_LIMIT : Infinity
+const loginCount = customerId => db.prepare("SELECT COUNT(*) count FROM users WHERE customer_id=? AND role='customer'").get(customerId).count
+
 // 對不上的情況：托管卻沒有我們負責的事項；自管卻仍有我們負責的逐項設定或生效中的年費；合約快到期或已過期仍標托管
 function warnings(tenantId, customer) {
   const list = [], mode = modeOf(customer)
@@ -34,6 +40,7 @@ function warnings(tenantId, customer) {
     const leftover = db.prepare(`SELECT COUNT(*) count FROM service_scopes WHERE tenant_id=? AND ended_on IS NULL AND handler<>'client' AND ((owner_type='plate' AND owner_id IN (SELECT id FROM plate_assets WHERE customer_id=?)) OR (owner_type='company' AND owner_id IN (SELECT id FROM companies WHERE customer_id=?)))`).get(tenantId, customer.id, customer.id).count
     if (leftover) list.push({ kind: 'leftover_scope', text: `標為自管，代理範圍仍有 ${leftover} 項設為我們負責或外包；自管期間一律由客戶自理` })
     if (db.prepare('SELECT 1 FROM customer_billing WHERE customer_id=? AND active=1').get(customer.id)) list.push({ kind: 'billing_active', text: '標為自管，但年費設定仍然生效；自管期間不會產生年費' })
+    { const logins = loginCount(customer.id); if (logins > SELF_MANAGED_LOGIN_LIMIT) list.push({ kind: 'extra_logins', text: `標為自管，但有 ${logins} 個登入；自管客戶目前只可有 ${SELF_MANAGED_LOGIN_LIMIT} 個，現有的照常可用，不能再新增` }) }
   }
   return list
 }

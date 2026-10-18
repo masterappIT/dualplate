@@ -52,6 +52,12 @@
       <text class="subtle note">要新增或停用登入，請聯絡你的顧問。</text>
     </view>
 
+    <!-- 多人登入：自管客戶暫時只有一個登入，之後作為收費功能推出；現在只告知，沒有操作 -->
+    <view v-if="selfManaged">
+      <text class="section-title">多人登入</text>
+      <view class="card"><text class="line-sub">讓助手或同事用自己的帳號一起管理。之後推出，屬收費功能。</text></view>
+    </view>
+
     <!-- 注銷帳號：只限自管客戶；托管客戶要經顧問終止合約 -->
     <text class="section-title">注銷帳號</text>
     <view class="card">
