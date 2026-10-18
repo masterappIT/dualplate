@@ -116,6 +116,18 @@
       }
     },
     {
+      "path": "pages/rental-new/rental-new",
+      "style": {
+        "navigationBarTitleText": "新增出租"
+      }
+    },
+    {
+      "path": "pages/rental/rental",
+      "style": {
+        "navigationBarTitleText": "出租"
+      }
+    },
+    {
       "path": "pages/scope/scope",
       "style": {
         "navigationBarTitleText": "委託內容"

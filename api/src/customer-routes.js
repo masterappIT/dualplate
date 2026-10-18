@@ -83,7 +83,9 @@ export async function customerRoutes(req, res, url, user, h) {
     const health = next && ['overdue', 'due'].includes(next.level) ? next.level : known.length ? 'ok' : 'pending'
     const members = plate.group_id ? groupCompanies(plate.group_id) : { offshore: [], mainland: [] }
     const card = (() => { try { return JSON.parse(plate.card_data || '{}') } catch { return {} } })()
-    const rental = one("SELECT renter_name,renter_vehicle_plate,starts_on,ends_on FROM plate_rentals WHERE plate_asset_id=? AND status='出租中' ORDER BY created_at DESC LIMIT 1", plate.id)
+    // 出租中：先讀現行的出租合約；沒有才看舊的 plate_rentals（已遷移、不再寫入）
+    const rental = one("SELECT renter_name,renter_vehicle_plate,starts_on,ends_on FROM rental_contracts WHERE plate_asset_id=? AND status='生效' ORDER BY starts_on DESC LIMIT 1", plate.id)
+      || one("SELECT renter_name,renter_vehicle_plate,starts_on,ends_on FROM plate_rentals WHERE plate_asset_id=? AND status='出租中' ORDER BY created_at DESC LIMIT 1", plate.id)
     const warnings = members.mainland.filter(item => ['已註銷', '註銷中'].includes(item.status)).map(item => item.status === '已註銷' ? '內承單位已註銷' : '內承單位註銷中')
     return {
       id: plate.id, route: plate.route, mainlandPlate: plate.mainland_plate || '', localPlate: plate.local_plate || '', cardNumber: plate.card_number,

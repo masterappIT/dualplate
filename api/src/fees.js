@@ -136,8 +136,8 @@ export async function feeRoutes(req, res, url, user, { json, fail, parseBody }) 
     if (path === '/api/my/fees') {
       if (method !== 'GET') return fail(res, 405, '不支援此操作'), true
       const items = db.prepare('SELECT * FROM fee_items WHERE customer_id=? AND tenant_id=? AND voided=0 ORDER BY COALESCE(due_on, incurred_on) DESC').all(user.customer_id, tenant).map(feeView)
-      // 客戶端不寫「租金」：代收使用費的管理費稱「代收服務費」
-      const words = item => item.kind === 'rent_commission' ? { ...item, kindLabel: '代收服務費', description: item.description.replace('租金管理費', '代收使用費服務費') } : item
+      // 代收租金的管理費對客戶稱「代收服務費」（用語：管理者 2026-10-18 起客戶端寫「租金」）
+      const words = item => item.kind === 'rent_commission' ? { ...item, kindLabel: '代收服務費', description: item.description.replace('租金管理費', '代收租金服務費') } : item
       return json(res, 200, { outstanding: sumBy(items.map(item => ({ currency: item.currency, value: item.outstanding }))), items: items.map(words).map(({ id: feeId, kind, kindLabel, description, currency, amount, paid, outstanding, dueOn, status, overdue, installmentPlanId, customerConfirmedAt }) => ({ id: feeId, kind, kindLabel, description, currency, amount, paid, outstanding, dueOn, status, overdue, needsConfirm: Boolean(installmentPlanId) && !customerConfirmedAt })) }), true
     }
     if (method !== 'POST') return fail(res, 405, '不支援此操作'), true

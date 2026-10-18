@@ -11,6 +11,7 @@
   <AccountClosures />
   <SupportInbox />
   <SelfHandledChanges />
+  <ClientRentals />
   <CustomerChanges />
   <section ref="queuePanel" class="panel">
     <div class="panel-head"><div><h2>工作隊列</h2><p>日期可直接錄入；批文卡有效期請回到批文卡修改。</p></div></div>
@@ -58,6 +59,7 @@ import Tag from '../components/ui/Tag.vue'
 import FilterBar from '../components/business/FilterBar.vue'
 import CustomerChanges from '../components/business/CustomerChanges.vue'
 import SelfHandledChanges from '../components/business/SelfHandledChanges.vue'
+import ClientRentals from '../components/business/ClientRentals.vue'
 import ContractEndings from '../components/business/ContractEndings.vue'
 import SupportInbox from '../components/business/SupportInbox.vue'
 import SignupApplications from '../components/business/SignupApplications.vue'

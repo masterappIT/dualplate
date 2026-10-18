@@ -2,6 +2,7 @@ import http from 'node:http'
 import { randomBytes, createHash } from 'node:crypto'
 import { db, id, now, hashPassword, verifyPassword } from './db.js'
 import { services, sources, inspectionGuidance, planFor } from './catalog.js'
+import { pushActivity, addTasks } from './request-tasks.js'
 import { cardData, cleanCard, recognizeCard } from './card.js'
 import { phase1Routes } from './phase1-routes.js'
 import { customerRoutes, requestStatus } from './customer-routes.js'
@@ -21,6 +22,7 @@ import { pricingRoutes } from './pricing.js'
 import { bookkeepingRoutes } from './bookkeeping.js'
 import { reportRoutes } from './reports.js'
 import { renterPublicRoutes, renterAdminRoutes } from './renter-portal.js'
+import { clientRentalRoutes } from './client-rentals.js'
 import { clientEditRoutes, changeReviewRoutes, logCreated, logCompanyCreated, logCardChanges, logPlateChanges } from './client-edits.js'
 import { selfHandledClientRoutes, selfHandledReviewRoutes } from './self-handled.js'
 import { vehicleDocumentRoutes } from './vehicle-documents.js'
@@ -109,16 +111,6 @@ function plateSummary(item, tenantId) {
   const healthStatus = levels.includes('overdue') ? 'overdue' : levels.includes('due') ? 'due' : levels.includes('missing') || !levels.length ? 'missing' : 'ok'
   return { ...item, card_data: cardData(item.card_data), holder_company: holder?.name || null, holder_company_en: holder?.jurisdiction === '香港' ? holder.name_en || '' : null, mainland_company: groupCompanies.find(company => company.jurisdiction === '內地')?.name || null, permit_expires_on: permit, health_status: healthStatus }
 }
-function pushActivity(requestId, actorId, kind, detail) { db.prepare('INSERT INTO activities VALUES (?,?,?,?,?,?)').run(id(), requestId, actorId, kind, detail, now()) }
-function addTasks(requestId, service, route) {
-  const plan = planFor(service, route)
-  for (const stage of plan.stages) {
-    const jurisdiction = /廣東|內地/.test(stage) ? '內地' : /香港/.test(stage) ? '香港' : /澳門/.test(stage) ? '澳門' : '通用'
-    const sourceId = /香港/.test(stage) ? plan.sourceIds.find(x => x.startsWith('HK-')) : /澳門/.test(stage) ? plan.sourceIds.find(x => x.startsWith('MO-')) : /廣東|內地/.test(stage) ? plan.sourceIds.find(x => x.startsWith('GD-')) : null
-    db.prepare('INSERT INTO tasks(id,request_id,title,jurisdiction,status,source_id,due_on,notes,sort) VALUES (?,?,?,?,?,?,?,?,?)').run(id(), requestId, stage, jurisdiction, '待辦', sourceId || null, null, null, db.prepare('SELECT COUNT(*) count FROM tasks WHERE request_id=?').get(requestId).count)
-  }
-}
-
 export const server = http.createServer(async (req, res) => {
   const origin = req.headers.origin
   if (origin && allowedOrigins.has(origin)) res.setHeader('access-control-allow-origin', origin)
@@ -180,6 +172,8 @@ export const server = http.createServer(async (req, res) => {
     if (await auditRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (path === '/api/me' && req.method === 'GET') return json(res, 200, { id: user.id, name: user.name, email: user.email, role: user.role, customerId: user.customer_id })
     if (path === '/api/catalog' && req.method === 'GET') return json(res, 200, { services, sources, routePlans: Object.fromEntries(services.map(s => [s.code, Object.fromEntries(s.routes.map(route => [route, planFor(s, route)]))])) })
+    // 客戶自行新增出租：要在 /api/my/ 的只讀客戶路由之前
+    if (await clientRentalRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await phase1Routes(req, res, url, user, { json, fail, parseBody, canAccessCustomer, vehicleFor, plateFor, query, one, clean })) return
     if (await entrustmentRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await serviceModeRoutes(req, res, url, user, { json, fail, parseBody })) return

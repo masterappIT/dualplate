@@ -1,7 +1,7 @@
 <template>
   <view class="page reports">
     <view v-if="!current">
-      <text class="intro">每月一份：辦好的事、快到期的事、使用費、收費和報帳，由顧問核對後發出。</text>
+      <text class="intro">每月一份：辦好的事、快到期的事、租金、收費和報帳，由顧問核對後發出。</text>
       <view v-for="r in list" :key="r.id" class="list-card row" @click="open(r)">
         <view class="grow"><text class="list-title">{{ monthTitle(r.period) }}</text><text class="list-sub">{{ r.version > 1 ? '更正版 · ' : '' }}發出 {{ friendlyDate(r.confirmedAt) }}</text></view>
         <view class="net"><text v-for="n in netRows(r.net)" :key="n.currency" class="net-line num" :class="n.value < 0 ? 'note-amber' : 'note-green'">{{ n.value < 0 ? '你應付' : '應付給你' }} {{ money(n.currency, Math.abs(n.value)) }}</text></view>
@@ -19,8 +19,8 @@
       <view class="card list"><view v-for="(c, i) in current.report.completed" :key="i" class="line"><view class="grow"><text class="line-title">{{ c.service }}</text><text class="line-sub">{{ c.plate || c.title }}</text></view><text class="line-sub num">{{ c.completedOn }}</text></view><text v-if="!current.report.completed.length" class="subtle">本月沒有辦好的事</text></view>
       <text class="section-title">已逾期及 60 天內到期 · {{ current.report.upcoming.length }}</text>
       <view class="card list"><view v-for="(u, i) in current.report.upcoming" :key="i" class="line"><view class="grow"><text class="line-title">{{ u.name }}</text><text v-if="u.handledBy === 'you'" class="who">{{ selfHandled }}</text><text class="line-sub">{{ u.owner }}</text></view><DueDate :date="u.dueOn" :days="u.daysLeft" :level="u.level" /></view><text v-if="!current.report.upcoming.length" class="subtle">沒有已逾期或 60 天內到期的事項</text></view>
-      <view v-if="current.report.usage.items.length"><text class="section-title">車輛使用與使用費</text>
-        <view class="card list"><view v-for="(u, i) in current.report.usage.items" :key="i" class="line"><view class="grow"><text class="line-title">{{ u.plate }}</text><text class="line-sub">使用人 {{ u.user }} · {{ u.collectedByUs ? '由我們代收' : '直接付給你' }}</text></view><view class="right"><text class="num line-title">{{ money(u.currency, u.amount) }}</text><text class="line-sub">{{ u.status === '已收' ? '已收到' : u.status === '部分收' ? '部分收到' : '未收到' }}</text></view></view></view>
+      <view v-if="current.report.usage.items.length"><text class="section-title">出租與租金</text>
+        <view class="card list"><view v-for="(u, i) in current.report.usage.items" :key="i" class="line"><view class="grow"><text class="line-title">{{ u.plate }}</text><text class="line-sub">承租人 {{ u.user }} · {{ u.collectedByUs ? '由我們代收' : '直接付給你' }}</text></view><view class="right"><text class="num line-title">{{ money(u.currency, u.amount) }}</text><text class="line-sub">{{ u.status === '已收' ? '已收到' : u.status === '部分收' ? '部分收到' : '未收到' }}</text></view></view></view>
       </view>
       <view v-if="current.report.charges.items.length"><text class="section-title">本月收費</text>
         <view class="card list"><view v-for="(c, i) in current.report.charges.items" :key="i" class="line"><view class="grow"><text class="line-title">{{ c.description }}</text><text class="line-sub">{{ c.kindLabel }}</text></view><view class="right"><text class="num line-title">{{ money(c.currency, c.amount) }}</text><text class="line-sub">{{ c.status === '已收' ? '已付款' : c.status === '部分收' ? '部分付款' : '待付款' }}</text></view></view></view>
@@ -28,7 +28,7 @@
       <view v-if="current.report.filings.length"><text class="section-title">內地公司報帳</text>
         <view class="card list"><view v-for="(f, i) in current.report.filings" :key="i" class="line"><view class="grow"><text class="line-title">{{ f.company }}</text><text class="line-sub">{{ f.zeroFiling ? '零申報' : f.taxAmount ? '稅額 ' + money('RMB', f.taxAmount) : '截止 ' + f.dueOn }}</text></view><text class="pill" :class="['已完成','已申報'].includes(f.status) ? '' : 'blue'">{{ ['已完成','已申報'].includes(f.status) ? '已申報' : '辦理中' }}</text></view></view>
       </view>
-      <view class="card settle"><text class="section-title settle-title">結算說明</text><text class="subtle">應付給你 ＝ 本月代收的使用費 − 代收服務費 − 未付的收費。不同幣種分開計算，不換算。如有疑問請聯絡你的顧問。</text></view>
+      <view class="card settle"><text class="section-title settle-title">結算說明</text><text class="subtle">應付給你 ＝ 本月代收的租金 − 代收服務費 − 未付的收費。不同幣種分開計算，不換算。如有疑問請聯絡你的顧問。</text></view>
     </view>
   </view>
 </template>

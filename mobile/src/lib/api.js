@@ -200,7 +200,7 @@ export function pickPdf() {
     // #endif
   })
 }
-function readBase64(path) {
+export function readBase64(path) {
   // #ifdef H5
   return fetch(path).then(r => r.arrayBuffer()).then(buffer => uni.arrayBufferToBase64(buffer))
   // #endif

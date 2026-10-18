@@ -38,7 +38,7 @@ const isSelf = computed(() => Boolean(customers.value.find(item => item.id === c
 const companies = computed(() => companyRecords.value.filter(item => item.customer_id === chosenPlate.value?.customer_id && ['香港', '澳門'].includes(item.jurisdiction)))
 const columns = [{ key: 'plateLabel', title: '牌照', minWidth: 175 }, { key: 'renter', title: '承租方', minWidth: 140 }, { key: 'rentAmount', title: '每期租金', minWidth: 150, align: 'right' }, { key: 'collectionMode', title: '收款方式', minWidth: 100 }, { key: 'currentInvoice', title: '本期狀態', minWidth: 110 }, { key: 'action', title: '操作', className: 'col-actions', minWidth: 90 }]
 const invoiceColumns = [{ key: 'period', title: '期數', minWidth: 110 }, { key: 'dueOn', title: '應收日', minWidth: 130 }, { key: 'amount', title: '應收金額', minWidth: 150, align: 'right' }, { key: 'receivedAmount', title: '已收金額', minWidth: 150, align: 'right' }, { key: 'status', title: '狀態', minWidth: 85 }, { key: 'action', title: '操作', className: 'col-actions', minWidth: 170 }]
-function tone(value) { return ({ 逾期: 'danger', '部分收': 'warning', 待收: 'warning', 已收: 'ok', 生效: 'ok', 草擬: 'info' })[value] || 'neutral' }
+function tone(value) { return ({ 逾期: 'danger', '部分收': 'warning', 待收: 'warning', 已收: 'ok', 生效: 'ok', 草擬: 'info', 待換車: 'warning' })[value] || 'neutral' }
 async function load() {
   loading.value = true; listError.value = ''
   try { contracts.value = await api('/rental-contracts'); await selectFromQuery() }
@@ -140,11 +140,11 @@ onMounted(load)
   <template v-else>
   <section class="panel">
     <div class="panel-head"><div><h2>合約列表</h2><p>按客戶及狀態查看；金額按原幣顯示。</p></div></div>
-    <div class="rental-filters"><Field label="客戶"><Select v-model="customerId" :options="[{ value: '', label: '全部客戶' }, ...customers.map(item => ({ value: item.id, label: item.name }))]" /></Field><Field label="合約狀態"><Select v-model="status" :options="['全部狀態', '草擬', '生效', '已結束', '已終止'].map(item => ({ value: item === '全部狀態' ? '' : item, label: item }))" /></Field></div>
+    <div class="rental-filters"><Field label="客戶"><Select v-model="customerId" :options="[{ value: '', label: '全部客戶' }, ...customers.map(item => ({ value: item.id, label: item.name }))]" /></Field><Field label="合約狀態"><Select v-model="status" :options="['全部狀態', '草擬', '待換車', '生效', '已結束', '已終止'].map(item => ({ value: item === '全部狀態' ? '' : item, label: item }))" /></Field></div>
     <p v-if="loading">合約載入中…</p><p v-else-if="listError" role="alert">合約載入失敗：{{ listError }} <button class="text-button" @click="load">重試</button></p>
     <template v-else><DataTable v-if="filtered.length" :columns="columns" :data="filtered" :min-width="850">
       <template #cell-plateLabel="{ row }"><span v-for="plate in row.plateLabel.split(' · ')" :key="plate"><PlateChip :plate="plate" /> </span><small>{{ row.customerName }}</small></template>
-      <template #cell-renter="{ row }">{{ row.renter.name }}<small v-if="row.renter.vehiclePlate">使用車牌：<PlateChip :plate="row.renter.vehiclePlate" /></small></template>
+      <template #cell-renter="{ row }">{{ row.renter.name }}<small v-if="row.source === 'client'">客戶新增{{ row.handling === 'agent' ? '，交給我們代理' : '，客戶自行負責' }}</small><small v-if="row.renter.vehiclePlate">使用車牌：<PlateChip :plate="row.renter.vehiclePlate" /></small></template>
       <template #cell-rentAmount="{ row }">{{ rentMoney(row.rentAmount, row.currency) }}<small>{{ { monthly: '月繳', quarterly: '季繳', yearly: '年繳' }[row.cycle] }}</small></template>
       <template #cell-currentInvoice="{ row }"><Tag :tone="tone(row.currentInvoice?.status || row.status)">{{ row.currentInvoice?.status || row.status }}</Tag></template>
       <template #cell-action="{ row }"><button class="text-button" @click="openContract(row.id)">查看合約 →</button></template>

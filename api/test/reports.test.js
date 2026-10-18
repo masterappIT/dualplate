@@ -112,10 +112,11 @@ test('別的租戶看不到報告', async () => {
   assert.equal((await request(`/reports/${state.draft}`, 'GET', undefined, 'foreign-admin')).status, 404)
   assert.ok((await request('/reports', 'GET', undefined, 'foreign-admin')).body.every(item => item.customerId === state.foreign))
 })
-test('報告內容不出現「租金」字眼', async () => {
+// 用語（管理者 2026-10-18 推翻 V1）：報告寫「租金」，不再用「使用費」
+test('報告內容用「租金」，不出現「使用費」', async () => {
   const [latest] = (await request('/my/reports', 'GET', undefined, 'client')).body
   const text = JSON.stringify((await request(`/my/reports/${latest.id}`, 'GET', undefined, 'client')).body)
-  assert.ok(text.includes('代收服務費')); assert.ok(!text.includes('租金'))
+  assert.ok(text.includes('代收服務費')); assert.ok(!text.includes('使用費'))
 })
 test('沒有任何內容的客戶不產生空白月報', async () => {
   const empty = randomUUID()

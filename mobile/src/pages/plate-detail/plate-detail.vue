@@ -116,16 +116,19 @@
                 <view class="editor-actions"><button class="btn-sm" @click="editingDriverId=''">取消</button><button class="btn-sm solid" :disabled="savingDriver" @click="saveDriver">{{ savingDriver ? '正在儲存…' : '儲存司機資料' }}</button></view>
               </view></view><text class="line-sub driver-note">司機證件到期會列在到期項目。要更換司機，按上方「有變動？」。</text></view></view>
       </view>
-      <view :id="'fold-usage'" class="list-card row fold-head" @click="toggle('usage')"><text class="fold-title">使用安排</text><text class="fold-sum grow">{{ usageSummary }}</text><text class="chev">{{ open.usage ? '⌃' : '›' }}</text></view>
+      <view :id="'fold-usage'" class="list-card row fold-head" @click="toggle('usage')"><text class="fold-title">出租</text><text class="fold-sum grow">{{ usageSummary }}</text><text class="chev">{{ open.usage ? '⌃' : '›' }}</text></view>
       <view v-if="open.usage" class="fold-body">
-        <view v-if="!arrangements.length" class="card"><text class="line-sub">{{ usageSummary }}。使用安排由顧問記錄。</text></view>
-        <view v-if="arrangements.length"><view v-for="a in arrangements" :key="a.id" class="card"><view class="row"><view class="grow"><text class="line-title">{{ a.user.name }}</text><text class="line-sub">{{ a.user.vehiclePlate ? '使用車輛 ' + a.user.vehiclePlate + ' · ' : '' }}{{ a.startsOn }} 起{{ a.endsOn ? ' 至 ' + a.endsOn : '' }}</text></view><text class="pill" :class="a.status==='生效'?'':'gray'">{{ a.status==='生效' ? '使用中' : a.status }}</text></view><text class="line-sub">使用費 {{ money(a.currency, a.amount) }} / {{ cycleLabel[a.cycle] }} · {{ a.collectionMode==='代收' ? '由我們代收' : '直接付給你' }}</text><view class="ticket-rule" /><view v-for="i in a.invoices" :key="i.id" class="fee-row"><text class="num">{{ i.period }}</text><text class="pill" :class="feeTone[i.status]">{{ feeLabel(a, i) }}</text></view><text v-if="!a.invoices.length" class="line-sub">暫時沒有使用費記錄</text></view></view>
+        <view v-if="!arrangements.length" class="card"><text class="line-sub">{{ usageSummary }}。{{ rentalOptions?.allowed ? '可以把這個牌照出租給別人使用：填好承租人和租金，我們會產生出租協議給你發出。' : rentalOptions ? '' : '出租由顧問記錄。' }}</text></view>
+        <!-- 出租（管理者 2026-10-18 起客戶端寫「出租、租金、承租人」）：客戶自己新增的可按進去處理協議和手續 -->
+        <view v-if="arrangements.length"><view v-for="a in arrangements" :key="a.id" class="card" @click="openRental(a)"><view class="row"><view class="grow"><text class="line-title">{{ a.user.name }}</text><text class="line-sub">{{ a.user.vehiclePlate ? '使用車輛 ' + a.user.vehiclePlate + ' · ' : '' }}{{ a.startsOn }} 起{{ a.endsOn ? ' 至 ' + a.endsOn : '' }}</text></view><text class="pill" :class="rentalTone(a)">{{ a.statusWord }}</text><text v-if="a.source==='client'" class="chev">›</text></view><text class="line-sub">租金 {{ money(a.currency, a.amount) }} / {{ cycleLabel[a.cycle] }} · {{ a.collectionMode==='代收' ? '由我們代收' : '直接付給你' }}</text><template v-if="a.status==='生效'||a.invoices.length"><view class="ticket-rule" /><view v-for="i in a.invoices" :key="i.id" class="fee-row"><text class="num">{{ i.period }}</text><text class="pill" :class="feeTone[i.status]">{{ feeLabel(a, i) }}</text></view><text v-if="!a.invoices.length" class="line-sub">暫時沒有租金記錄</text></template></view></view>
+        <button v-if="rentalOptions?.allowed" class="btn-line rent-button" @click="newRental">新增出租</button>
+        <text v-else-if="rentalOptions?.reason && !arrangements.some(a=>['草擬','待換車','生效'].includes(a.status))" class="line-sub rent-note">{{ rentalOptions.reason }}</text>
       </view>
       <view :id="'fold-holder'" class="list-card row fold-head" @click="toggle('holder')"><text class="fold-title">持牌公司</text><text class="fold-sum grow">{{ summary.holder || '待補充' }}</text><text class="chev">{{ open.holder ? '⌃' : '›' }}</text></view>
       <view v-if="open.holder" class="fold-body">
         <view class="card kv">
-          <text class="k">用途</text><text class="v">{{ summary.rental ? '使用安排：'+summary.rental.renter : summary.usageStatus==='自用' ? '自用' : summary.installationStatus==='未上牌' ? '空置（未上牌）' : unsetWord() }}</text>
-          <template v-if="summary.rental"><text class="k">使用期</text><text class="v num">{{ (summary.rental.startsOn||'—')+' 至 '+(summary.rental.endsOn||'未定') }}</text></template>
+          <text class="k">用途</text><text class="v">{{ summary.rental ? '出租：'+summary.rental.renter : summary.usageStatus==='自用' ? '自用' : summary.installationStatus==='未上牌' ? '空置（未上牌）' : unsetWord() }}</text>
+          <template v-if="summary.rental"><text class="k">租期</text><text class="v num">{{ (summary.rental.startsOn||'—')+' 至 '+(summary.rental.endsOn||'未定') }}</text></template>
           <text v-if="summary.indicatorCategory" class="k">指標類別</text><text v-if="summary.indicatorCategory" class="v">{{ summary.indicatorCategory }}</text>
           <text v-if="summary.port" class="k">口岸</text><text v-if="summary.port" class="v">{{ summary.port }}</text>
           <text class="k">持牌公司</text><text class="v">{{ summary.holder || '待補充' }}</text>
@@ -191,12 +194,16 @@ const todayIso=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMo
 // 客戶按「今天已過關」或選其他日期；成功後蓋章並重新整理到期項目
 async function toggleReminder(on){if(crossingBusy.value)return;crossingBusy.value=true;try{await api('/my/plates/'+plateId+'/crossing-reminder','PUT',{enabled:!!on});summary.value=await api('/my/plates/'+plateId);uni.showToast({title:on?'已開啟 90 天過關提醒':'已關閉提醒',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{crossingBusy.value=false}}
 async function markCrossed(date){if(crossingBusy.value||!date)return;crossingBusy.value=true;try{const result=await api('/my/plates/'+plateId+'/crossings','POST',{crossedOn:date});justCrossed.value=false;setTimeout(()=>{justCrossed.value=true},10);uni.showToast({title:'已記錄，下次請在 '+result.nextDueOn+' 前過關',icon:'none',duration:2600});summary.value=await api('/my/plates/'+plateId)}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{crossingBusy.value=false}}
-const summary=ref({}),showEdit=ref(false),fieldStatus=ref({}),arrangements=ref([])
-// 客戶端不寫「出租」：牌照用途顯示為使用安排
+const summary=ref({}),showEdit=ref(false),fieldStatus=ref({}),arrangements=ref([]),rentalOptions=ref(null)
+// 客戶端寫「出租」（管理者 2026-10-18，推翻 V1「使用安排」）
 function cardSummary(p){const status=p.card_status||'待核對',expires=p.card_expires_on?'有效期至 '+p.card_expires_on:'';if(cardSelfManaged&&status==='待核對')return expires||'已建檔';return status+(expires?' · '+expires:'')}
-const usageWord=status=>!status||status==='待核對'?unsetWord():status==='出租中'?'使用安排中':status
+const usageWord=status=>!status||status==='待核對'?unsetWord():status==='出租中'?'出租中':status
 const cycleLabel={monthly:'每月',quarterly:'每季',yearly:'每年'},feeTone={已收:'gray',逾期:'red',部分收:'amber',待收:''}
 // 代收的寫「已收到」；直付的由客戶自己收款，寫「已確認收到」
+// 出租：生效＝出租中（綠），處理中（橙），結束或取消（灰）
+const rentalTone=a=>a.status==='生效'?'':['草擬','待換車'].includes(a.status)?'amber':'gray'
+function openRental(a){if(a.source==='client')uni.navigateTo({url:'/pages/rental/rental?id='+a.id})}
+function newRental(){uni.navigateTo({url:'/pages/rental-new/rental-new?plate='+plateId})}
 function feeLabel(a,i){return i.status==='已收'?(a.collectionMode==='代收'?'我們已收到':'已確認收到'):i.status==='逾期'?'未收到（已過期）':i.status==='部分收'?'部分收到':'未到期'}
 function openRequest(id){uni.navigateTo({url:'/pages/request-detail/request-detail?id='+id})}
 const editingCardId=ref(''),cardDraft=ref({}),creating=ref(false),plateForm=ref({}),savingFile=ref(false)
@@ -259,9 +266,9 @@ const deadlineSummary=computed(()=>{const list=deadlineList.value;if(!list.lengt
 const crossingSummary=computed(()=>{const c=summary.value.crossing;return !c?.enabled?'未開啟':c.lastCrossedOn?'上次 '+c.lastCrossedOn:'未記錄過關日期'})
 const vehicleSummary=computed(()=>{const v=boundVehicles.value[0];if(!v)return '尚未登記車輛';const list=docs.value[v.id]?.documents||[];return v.plate+(list.length?' · 證件 '+list.filter(d=>d.uploaded).length+'/'+list.length+' 已上傳':'')})
 const driverSummary=computed(()=>{const list=summary.value.drivers||[];if(!list.length)return '未登記';const main=list.find(d=>d.role==='主')||list[0];return main.name+'（'+(main.role==='主'?'主':'副')+'）'+(list.length>1?' 等 '+list.length+' 人':'')})
-// 有使用安排時，摘要加最近一期使用費的收款狀態
-const paidWord=a=>{const list=a?.invoices||[];if(list.some(i=>i.status==='逾期'))return '有逾期未收';const last=[...list].sort((x,y)=>String(y.period).localeCompare(String(x.period)))[0];return !last?'未有使用費記錄':last.status==='已收'?'已收':last.status==='部分收'?'部分收到':'未到期'}
-const usageSummary=computed(()=>{const s=summary.value,active=arrangements.value.find(a=>a.status==='生效')||arrangements.value[0];if(active)return active.user.name+' · '+paidWord(active);return s.rental?'使用安排：'+s.rental.renter:s.usageStatus==='自用'?'自用':s.installationStatus==='未上牌'?'空置（未上牌）':unsetWord()})
+// 有出租時，摘要加狀態或最近一期租金的收款狀態
+const paidWord=a=>{const list=a?.invoices||[];if(list.some(i=>i.status==='逾期'))return '有逾期未收';const last=[...list].sort((x,y)=>String(y.period).localeCompare(String(x.period)))[0];return !last?'未有租金記錄':last.status==='已收'?'已收':last.status==='部分收'?'部分收到':'未到期'}
+const usageSummary=computed(()=>{const s=summary.value,active=arrangements.value.find(a=>a.status==='生效')||arrangements.value[0];if(active)return active.user.name+' · '+(active.status==='生效'?paidWord(active):active.statusWord);return s.rental?'出租：'+s.rental.renter:s.usageStatus==='自用'?'自用':s.installationStatus==='未上牌'?'空置（未上牌）':unsetWord()})
 const plateSummary=computed(()=>{const p=plates.value[0];return p?(p.installation_status==='待核對'?unsetWord():p.installation_status)+' · '+boundVehicle(p):''})
 // 下一件要做的事：先逾期、再快到期（你自理的事項、90 天過關），然後是車輛登記和必要證件
 const nextBusy=ref(false)
@@ -300,7 +307,7 @@ function mainlandParts(value){const clean=String(value||'').toUpperCase().replac
 function formatHongKong(value){const clean=String(value||'').toUpperCase().replace(/\s+/g,'');return clean.replace(/^([A-Z]{1,2})([0-9]{1,4})$/,'$1 $2')}
 function formatMacau(value){const clean=String(value||'').toUpperCase().replace(/[\s-]/g,'');return clean.replace(/^([A-Z]{2})([0-9]{2})([0-9]{2})$/,'$1-$2-$3')}
 function openSource(sourceId){const source=sources.value.find(s=>s.id===sourceId);if(source)uni.setClipboardData({data:source.url,success:()=>uni.showToast({title:'官方連結已複製',icon:'none'})})}
-async function load(){if(!getUser())return uni.navigateTo({url:'/pages/login/login'});if(creating.value||!plateId)return;try{const [p,v,catalog,mine]=await Promise.all([api('/plate-assets/'+plateId),api('/vehicles'),api('/catalog'),api('/my/plates/'+plateId)]);summary.value=mine;loadPending();loadSelf();api('/my/drivers').then(list=>{drivers.value=list}).catch(()=>{drivers.value=[]});api('/my/rentals').then(list=>{arrangements.value=list.filter(item=>item.plateId===plateId)}).catch(()=>{arrangements.value=[]});plates.value=[p];plateDetail.value={...plateDetail.value,[p.id]:p};vehicles.value=v;sources.value=catalog.sources;fillPlateForm(p);detail.value=Object.fromEntries(await Promise.all(v.map(async item=>[item.id,await api('/vehicles/'+item.id)])));loadDocs(v.filter(item=>item.id===p.vehicle_id))}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
+async function load(){if(!getUser())return uni.navigateTo({url:'/pages/login/login'});if(creating.value||!plateId)return;try{const [p,v,catalog,mine]=await Promise.all([api('/plate-assets/'+plateId),api('/vehicles'),api('/catalog'),api('/my/plates/'+plateId)]);summary.value=mine;loadPending();loadSelf();api('/my/drivers').then(list=>{drivers.value=list}).catch(()=>{drivers.value=[]});api('/my/rentals').then(list=>{arrangements.value=list.filter(item=>item.plateId===plateId)}).catch(()=>{arrangements.value=[]});if(!cardSelfManaged)api('/my/plates/'+plateId+'/rental-options').then(r=>{rentalOptions.value=r}).catch(()=>{rentalOptions.value=null});plates.value=[p];plateDetail.value={...plateDetail.value,[p.id]:p};vehicles.value=v;sources.value=catalog.sources;fillPlateForm(p);detail.value=Object.fromEntries(await Promise.all(v.map(async item=>[item.id,await api('/vehicles/'+item.id)])));loadDocs(v.filter(item=>item.id===p.vehicle_id))}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
 onLoad(options=>{plateId=options.id||'';creating.value=options.new==='1';if(!creating.value)load()})
 onShow(load)
 import DueDate from '../../components/DueDate.vue'
@@ -338,6 +345,7 @@ import StampMark from '../../components/StampMark.vue'
 .edit-file{padding-top:4px}.picker{display:flex;align-items:center;justify-content:space-between}.notes{height:96px}.save-file{margin-top:16px}
 .edit-file>.line-sub{margin-top:12px}
 .fee-row{display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:var(--fs-body);color:var(--ink-2)}
+.rent-button{width:100%;margin-bottom:12px}.rent-note{display:block;margin-bottom:12px}
 .guidance{margin-top:16px;padding:12px;border-radius:var(--r-card);background:var(--paper)}
 .guidance-title{margin:0 0 4px;color:var(--ink-3);font-size:var(--fs-meta)}
 .guidance-line{display:flex;align-items:flex-start;gap:12px;padding:4px 0;font-size:var(--fs-body);line-height:1.5;color:var(--ink-2)}

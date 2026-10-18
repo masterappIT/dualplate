@@ -32,7 +32,7 @@ export function computeReport(tenantId, customerId, period) {
   const upcoming = computeDeadlines({ rules, owners: owners.filter(owner => owner.customerId === customerId), tracked, completions, scopes: scopeMap(tenantId), windowDays: 60 })
     .filter(item => item.dueOn && item.dueOn <= limit && item.level !== 'ok').sort((a, b) => a.dueOn.localeCompare(b.dueOn))
     .map(item => ({ name: item.name, owner: item.ownerLabel, dueOn: item.dueOn, daysLeft: item.daysLeft, level: item.level, handledBy: item.handler === 'client' ? 'you' : 'us' }))
-  // 3. 車輛使用與使用費
+  // 3. 出租與租金
   const invoices = db.prepare("SELECT i.*, c.currency, c.collection_mode, c.renter_name, p.mainland_plate FROM rent_invoices i JOIN rental_contracts c ON c.id=i.contract_id JOIN plate_assets p ON p.id=c.plate_asset_id WHERE p.customer_id=? AND i.voided=0").all(customerId)
   const monthInvoices = invoices.filter(row => row.period === period)
   const usage = { items: monthInvoices.map(row => ({ plate: row.mainland_plate || '車牌待補', user: row.renter_name, currency: row.currency, amount: row.amount, received: row.received_amount || 0, status: invoiceStatus(row), collectedByUs: row.collection_mode === '代收' })),
@@ -41,9 +41,9 @@ export function computeReport(tenantId, customerId, period) {
   const fees = db.prepare('SELECT * FROM fee_items WHERE customer_id=? AND voided=0').all(customerId)
   const paid = feeId => db.prepare('SELECT COALESCE(SUM(amount),0) total FROM fee_payments WHERE fee_item_id=?').get(feeId).total
   const monthFees = fees.filter(row => inMonth(row.incurred_on, period))
-  const charges = { items: monthFees.map(row => ({ kind: row.kind, kindLabel: row.kind === 'rent_commission' ? '代收服務費' : feeKinds[row.kind], description: row.description.replace('租金管理費', '代收使用費服務費'), currency: row.currency, amount: row.amount, status: feeStatus(row, paid(row.id)) })),
+  const charges = { items: monthFees.map(row => ({ kind: row.kind, kindLabel: row.kind === 'rent_commission' ? '代收服務費' : feeKinds[row.kind], description: row.description.replace('租金管理費', '代收租金服務費'), currency: row.currency, amount: row.amount, status: feeStatus(row, paid(row.id)) })),
     byKind: Object.fromEntries(Object.keys(feeKinds).map(kind => [kind, totals(monthFees.filter(row => row.kind === kind).map(row => ({ currency: row.currency, value: row.amount })))]).filter(([, value]) => Object.keys(value).length)) }
-  // 5. 淨額：本月代收使用費 − 本月代收服務費 − 截至月底未付的其他收費（含代墊）。正數＝我們應付客戶，負數＝客戶應付。
+  // 5. 淨額：本月代收租金 − 本月代收服務費 − 截至月底未付的其他收費（含代墊）。正數＝我們應付客戶，負數＝客戶應付。
   const collected = invoices.filter(row => row.collection_mode === '代收' && row.received_by === '代辦公司' && inMonth(row.received_on, period)).map(row => ({ currency: row.currency, value: row.received_amount }))
   const commission = monthFees.filter(row => row.kind === 'rent_commission').map(row => ({ currency: row.currency, value: row.amount }))
   const unpaid = fees.filter(row => row.kind !== 'rent_commission' && (row.incurred_on || '').slice(0, 7) <= period).map(row => ({ currency: row.currency, value: Math.max(0, row.amount - paid(row.id)) }))
@@ -61,7 +61,7 @@ function ensureReports(tenantId) {
   for (const customer of db.prepare("SELECT id FROM customers WHERE tenant_id=? AND COALESCE(is_self,0)=0 AND service_mode<>'自管'").all(tenantId)) {
     if (db.prepare('SELECT 1 FROM monthly_reports WHERE customer_id=? AND period=?').get(customer.id, period)) continue
     const report = computeReport(tenantId, customer.id, period)
-    // 這個月沒有任何工作、使用費、收費、報帳和結算時不產生空白報告（例如月中才成為客戶）
+    // 這個月沒有任何工作、租金、收費、報帳和結算時不產生空白報告（例如月中才成為客戶）
     if (!report.completed.length && !report.usage.items.length && !report.charges.items.length && !report.filings.length && !Object.values(report.net.net).some(Boolean)) continue
     db.prepare("INSERT OR IGNORE INTO monthly_reports(id,tenant_id,customer_id,period,version,status,snapshot_json,created_at,updated_at) VALUES (?,?,?,?,1,'草稿',?,?,?)").run(id(), tenantId, customer.id, period, JSON.stringify(report), now(), now())
   }

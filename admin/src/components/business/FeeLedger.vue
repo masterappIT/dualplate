@@ -16,7 +16,7 @@ import { floatBarEnter, floatBarLeave } from '../../composables/motion'
 const props = defineProps({ customerId: { type: String, default: '' } })
 const { customers, showSuccess } = useAdminStore()
 const kinds = { annual: '年費', service: '代辦費', gov_fee: '政府規費', advance: '代墊', rent_commission: '租金管理費' }
-// 手動新增不可選租金管理費（由系統在代收使用費入帳時自動產生）
+// 手動新增不可選租金管理費（由系統在代收租金入帳時自動產生）
 const manualKinds = Object.fromEntries(Object.entries(kinds).filter(([kind]) => kind !== 'rent_commission'))
 const currencies = ['HKD', 'RMB', 'MOP']
 const filters = ref({ customerId: '', kind: '', status: '', overdue: false })

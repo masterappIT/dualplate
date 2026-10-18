@@ -65,9 +65,9 @@ function print() { window.print() }
         <div class="report-label">本月結算</div>
         <div v-for="n in entries(report.net.net)" :key="n.currency" class="report-net-line" :class="n.value < 0 ? 'is-due' : 'is-pay'"><span>{{ n.value < 0 ? '客戶應付' : '應付客戶' }}</span><strong class="num">{{ money(n.value, n.currency) }}</strong></div>
         <p v-if="!entries(report.net.net).length" class="report-muted">本月沒有需要結算的款項</p>
-        <p class="report-muted">應付客戶 ＝ 本月代收的使用費 − 代收服務費 − 未付的收費（含代墊）。不同幣種分開計算，不換算。</p>
+        <p class="report-muted">應付客戶 ＝ 本月代收的租金 − 代收服務費 − 未付的收費（含代墊）。不同幣種分開計算，不換算。</p>
         <div class="report-breakdown">
-          <div><span>代收使用費</span><b v-for="n in entries(report.net.collected)" :key="n.currency" class="num">{{ money(n.value, n.currency) }}</b><b v-if="!entries(report.net.collected).length">—</b></div>
+          <div><span>代收租金</span><b v-for="n in entries(report.net.collected)" :key="n.currency" class="num">{{ money(n.value, n.currency) }}</b><b v-if="!entries(report.net.collected).length">—</b></div>
           <div><span>代收服務費</span><b v-for="n in entries(report.net.commission)" :key="n.currency" class="num">{{ money(n.value, n.currency) }}</b><b v-if="!entries(report.net.commission).length">—</b></div>
           <div><span>未付收費</span><b v-for="n in entries(report.net.unpaid)" :key="n.currency" class="num">{{ money(n.value, n.currency) }}</b><b v-if="!entries(report.net.unpaid).length">—</b></div>
         </div>
@@ -79,9 +79,9 @@ function print() { window.print() }
       <section class="report-section"><h2>二、已逾期及 60 天內到期 <small>{{ report.upcoming.length }} 項</small></h2>
         <table v-if="report.upcoming.length" class="report-table"><thead><tr><th>事項</th><th>對象</th><th>辦理</th><th>到期</th></tr></thead><tbody><tr v-for="(item, index) in report.upcoming" :key="index"><td>{{ item.name }}</td><td>{{ item.owner }}</td><td><Tag :tone="item.handledBy === 'you' ? 'neutral' : 'ok'">{{ item.handledBy === 'you' ? '自行辦理' : '我們辦理' }}</Tag></td><td><DueDate :date="item.dueOn" /></td></tr></tbody></table>
         <p v-else class="report-muted">沒有已逾期或 60 天內到期的事項。</p></section>
-      <section class="report-section"><h2>三、車輛使用與使用費</h2>
-        <table v-if="report.usage.items.length" class="report-table"><thead><tr><th>牌照</th><th>使用人</th><th>收款</th><th class="n">金額</th><th>狀態</th></tr></thead><tbody><tr v-for="(item, index) in report.usage.items" :key="index"><td>{{ item.plate }}</td><td>{{ item.user }}</td><td>{{ item.collectedByUs ? '我們代收' : '直接付給客戶' }}</td><td class="n num">{{ money(item.amount, item.currency) }}</td><td><Tag :tone="item.status === '已收' ? 'ok' : item.status === '逾期' ? 'danger' : 'warning'">{{ statusWord(item.status) }}</Tag></td></tr></tbody></table>
-        <p v-else class="report-muted">本月沒有車輛使用安排。</p></section>
+      <section class="report-section"><h2>三、出租與租金</h2>
+        <table v-if="report.usage.items.length" class="report-table"><thead><tr><th>牌照</th><th>承租人</th><th>收款</th><th class="n">金額</th><th>狀態</th></tr></thead><tbody><tr v-for="(item, index) in report.usage.items" :key="index"><td>{{ item.plate }}</td><td>{{ item.user }}</td><td>{{ item.collectedByUs ? '我們代收' : '直接付給客戶' }}</td><td class="n num">{{ money(item.amount, item.currency) }}</td><td><Tag :tone="item.status === '已收' ? 'ok' : item.status === '逾期' ? 'danger' : 'warning'">{{ statusWord(item.status) }}</Tag></td></tr></tbody></table>
+        <p v-else class="report-muted">本月沒有出租。</p></section>
       <section class="report-section"><h2>四、本月收費</h2>
         <table v-if="report.charges.items.length" class="report-table"><thead><tr><th>類別</th><th>說明</th><th class="n">金額</th><th>狀態</th></tr></thead><tbody><tr v-for="(item, index) in report.charges.items" :key="index"><td>{{ item.kindLabel }}</td><td>{{ item.description }}</td><td class="n num">{{ money(item.amount, item.currency) }}</td><td><Tag :tone="item.status === '已收' ? 'ok' : 'warning'">{{ feeWord(item.status) }}</Tag></td></tr></tbody></table>
         <p v-else class="report-muted">本月沒有新的收費。</p></section>

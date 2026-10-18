@@ -42,7 +42,7 @@ async function settle(row) {
   settleBusy.value = row.customerId + row.currency
   try { await api('/rent-settlements', 'POST', { customerId: row.customerId, period: period.value, currency: row.currency, settledOn: today }); justSettled.value = row.customerId + row.currency; emit('saved', `${row.customerName} ${period.value} 已標記結算`); await loadSettlement() } catch (cause) { emit('error', cause) } finally { settleBusy.value = '' }
 }
-const settleColumns = [{ key: 'customerName', title: '客戶', minWidth: 160 }, { key: 'collected', title: '代收使用費' }, { key: 'fees', title: '代收服務費' }, { key: 'net', title: '應付客戶' }, { key: 'action', title: '', minWidth: 160 }]
+const settleColumns = [{ key: 'customerName', title: '客戶', minWidth: 160 }, { key: 'collected', title: '代收租金' }, { key: 'fees', title: '代收服務費' }, { key: 'net', title: '應付客戶' }, { key: 'action', title: '', minWidth: 160 }]
 
 // ── 合約範本 ──
 const template = ref({ body: '', placeholders: [], isDefault: true }), templateSaving = ref(false)
@@ -64,23 +64,23 @@ watch(period, loadSettlement)
       <template #empty><EmptyState title="沒有承租方上傳的憑證" desc="在合約詳情產生「承租方連結」轉發給承租方，對方上傳後會出現在這裡。" /></template>
     </DataTable>
     <FormDialog :open="Boolean(rejecting)" title="要求承租方重交" :sub="rejecting ? `${rejecting.renterName} · ${rejecting.period}` : ''" :saving="saving" submit-text="送出要求" layout="stack" @close="rejecting = null" @submit="reject">
-      <Field label="原因（承租方會在頁面看到）" required><TextInput v-model="reason" multiline placeholder="例如：金額與本期使用費不符" /></Field>
+      <Field label="原因（承租方會在頁面看到）" required><TextInput v-model="reason" multiline placeholder="例如：金額與本期租金不符" /></Field>
     </FormDialog>
   </section>
 
   <section v-else-if="tab === 'settlement'" class="panel table-panel">
-    <div class="panel-head filing-head"><div><h2>代收結算</h2><p>按客戶彙總當月代收的使用費，扣除代收服務費，得出應付客戶金額。不同幣種分開計算。轉帳給客戶後按「標記已結算」。</p></div><div class="period-pick"><Select v-model="period" :options="periods.map(value => ({ label: `${value.slice(0, 4)} 年 ${Number(value.slice(5))} 月`, value }))" aria-label="結算月份" /></div></div>
+    <div class="panel-head filing-head"><div><h2>代收結算</h2><p>按客戶彙總當月代收的租金，扣除代收服務費，得出應付客戶金額。不同幣種分開計算。轉帳給客戶後按「標記已結算」。</p></div><div class="period-pick"><Select v-model="period" :options="periods.map(value => ({ label: `${value.slice(0, 4)} 年 ${Number(value.slice(5))} 月`, value }))" aria-label="結算月份" /></div></div>
     <DataTable :columns="settleColumns" :data="settlement.rows" :loading="loading" :min-width="720">
       <template #cell-collected="{ row }"><span class="num">{{ money(row.collected, row.currency) }}</span></template>
       <template #cell-fees="{ row }"><span class="num">{{ money(row.fees, row.currency) }}</span></template>
       <template #cell-net="{ row }"><strong class="num">{{ money(row.net, row.currency) }}</strong></template>
       <template #cell-action="{ row }"><div class="row-actions"><StampMark v-if="row.settled" text="已結算" :play="justSettled === row.customerId + row.currency" /><span v-if="row.settled" class="cell-sub">{{ row.settledOn }}</span><Button v-else size="sm" :loading="settleBusy === row.customerId + row.currency" @click="settle(row)">標記已結算</Button></div></template>
-      <template #empty><EmptyState title="這個月沒有代收的使用費" desc="只有收款方式為「代收」、由我們收到的使用費會在這裡結算。" /></template>
+      <template #empty><EmptyState title="這個月沒有代收的租金" desc="只有收款方式為「代收」、由我們收到的租金會在這裡結算。" /></template>
     </DataTable>
   </section>
 
   <section v-else-if="tab === 'template'" class="panel">
-    <div class="panel-head"><div><h2>合約範本</h2><p>承租方頁面顯示的安排內容。對外請寫「車輛使用安排」「使用費」，不要寫「出租」「租金」。點下方欄位名稱可插入佔位符。</p></div><Tag :tone="template.isDefault ? 'neutral' : 'ok'">{{ template.isDefault ? '使用預設範本' : '已自訂' }}</Tag></div>
+    <div class="panel-head"><div><h2>合約範本</h2><p>員工發出的合約在承租人頁面顯示的出租確認書，不寫牌主名稱。客戶自行新增的出租另用出租協議，由客戶逐份修改。點下方欄位名稱可插入佔位符。</p></div><Tag :tone="template.isDefault ? 'neutral' : 'ok'">{{ template.isDefault ? '使用預設範本' : '已自訂' }}</Tag></div>
     <div class="template-tokens"><button v-for="name in template.placeholders" :key="name" type="button" class="template-token" @click="insert(name)">{{ name }}</button></div>
     <TextInput v-model="template.body" multiline :rows="14" />
     <div class="drawer-actions"><Button variant="primary" :loading="templateSaving" @click="saveTemplate">儲存範本</Button></div>

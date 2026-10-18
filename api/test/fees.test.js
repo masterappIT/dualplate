@@ -216,4 +216,5 @@ test('客戶帳單只看到自己的、不含作廢，並按幣種列出未收',
   assert.equal((await request('/my/fees', 'GET', undefined, 'other-client')).body.items.filter(item => item.kind !== 'annual').length, 0)
   assert.equal((await request('/my/fees')).status, 403)
 })
-test('客戶帳單不出現「租金」字眼', async () => assert.ok(!JSON.stringify((await request('/my/fees', 'GET', undefined, 'client')).body).includes('租金')))
+// 用語（管理者 2026-10-18 推翻 V1）：客戶端寫「租金」，不再用「使用費」；管理費對客戶仍稱「代收服務費」
+test('客戶帳單用「租金」，不出現「使用費」', async () => assert.ok(!JSON.stringify((await request('/my/fees', 'GET', undefined, 'client')).body).includes('使用費')))

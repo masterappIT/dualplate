@@ -21,7 +21,7 @@ import { api, getUser } from '../../lib/api'
 const items = ref([]), unread = ref(0), loaded = ref(false)
 // 按日子分組：今天、昨天、其後按日期
 const groups = computed(() => { const out = []; for (const item of items.value) { const label = when(item.createdAt); const last = out[out.length - 1]; if (last && last.label === label) last.items.push(item); else out.push({ label, items: [item] }) } return out })
-const kindLabel = { deadline: '到期提醒', request: '辦理進度', attachment: '文件核對', change_accepted: '資料核對', change_reverted: '資料核對', self_handled_accepted: '自行辦理', self_handled_returned: '自行辦理', support_reply: '客服訊息', scope_changed: '委託內容' }
+const kindLabel = { deadline: '到期提醒', request: '辦理進度', attachment: '文件核對', change_accepted: '資料核對', change_reverted: '資料核對', self_handled_accepted: '自行辦理', self_handled_returned: '自行辦理', support_reply: '客服訊息', scope_changed: '委託內容', rental: '出租' }
 async function load() {
   if (!getUser()) return uni.navigateTo({ url: '/pages/login/login' })
   try { const result = await api('/my/notifications'); items.value = result.items; unread.value = result.unread } catch (e) { uni.showToast({ title: e.message, icon: 'none' }) } finally { loaded.value = true }

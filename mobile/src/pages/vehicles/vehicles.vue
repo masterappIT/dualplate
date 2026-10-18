@@ -44,9 +44,9 @@ import ApprovalCard from '../../components/ApprovalCard.vue'
 const plates=ref([]),summaries=ref([]),details=ref({}),loaded=ref(false),selectedPlateId=ref(''),flipped=ref(false),mode=ref(uni.getStorageSync('plateView')||'cards'),keyword=ref(''),filter=ref('')
 const healthLabel={ok:'正常',due:'快到期',overdue:'已逾期',pending:noDatesWord()},healthTone={ok:'',due:'amber',overdue:'red',pending:'gray'},noteTone={overdue:'note-red',due:'note-amber',upcoming:'note-green',ok:'note-gray'}
 const idle=p=>p.installationStatus==='未上牌'||p.usageStatus==='暫停使用'
-const usageText=p=>p.rental?`使用安排：${p.rental.renter}`:idle(p)?'空置':p.usageStatus==='自用'?'自用':isSelfManaged()?'未填用途':'使用狀況確認中'
+const usageText=p=>p.rental?`出租：${p.rental.renter}`:idle(p)?'空置':p.usageStatus==='自用'?'自用':isSelfManaged()?'未填用途':'使用狀況確認中'
 const tests={attention:p=>['due','overdue'].includes(p.health),rented:p=>!!p.rental,self:p=>p.usageStatus==='自用'&&!p.rental,idle}
-const filters=computed(()=>[{id:'',name:'全部',count:summaries.value.length},{id:'attention',name:'需注意'},{id:'rented',name:'使用安排中'},{id:'self',name:'自用'},{id:'idle',name:'空置'}].map(f=>f.id?{...f,count:summaries.value.filter(tests[f.id]).length}:f))
+const filters=computed(()=>[{id:'',name:'全部',count:summaries.value.length},{id:'attention',name:'需注意'},{id:'rented',name:'出租中'},{id:'self',name:'自用'},{id:'idle',name:'空置'}].map(f=>f.id?{...f,count:summaries.value.filter(tests[f.id]).length}:f))
 // 數目為零的篩選不顯示（「全部」除外）
 const shownFilters=computed(()=>filters.value.filter(f=>!f.id||f.count||filter.value===f.id))
 const visible=computed(()=>{const word=keyword.value.trim().toLowerCase();return summaries.value.filter(p=>(!filter.value||tests[filter.value](p))&&(!word||[p.mainlandPlate,p.localPlate,p.holder,p.contractor,p.cardNumber].join(' ').toLowerCase().includes(word)))})

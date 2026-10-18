@@ -67,12 +67,13 @@ test('末 4 碼錯誤 5 次後連結暫時鎖定', async () => {
   assert.equal((await api(`/rental-contracts/${state.contract}/link`)).body.locked, true)
   state.db.prepare('UPDATE rental_links SET locked_until=NULL, failures=0').run()
 })
-test('核對成功後看到安排內容與各期使用費，不出現「租金」「出租」', async () => {
+// 用語（管理者 2026-10-18 決定推翻 V1「使用安排」）：承租人頁寫「出租、租金」；員工發出的確認書仍不寫牌主名稱
+test('核對成功後看到出租確認書與各期租金，不顯示牌主名稱', async () => {
   state.key = await enter(state.token)
   assert.ok(state.key)
   const page = await raw(`/r/${state.token}?k=${state.key}`)
-  assert.match(page.text, /承租人乙/); assert.match(page.text, /HKD 6,000\.00/); assert.match(page.text, /車輛使用安排確認書/)
-  assert.ok(!/租金|出租/.test(page.text)); assert.ok(!page.text.includes('牌主甲'))
+  assert.match(page.text, /承租人乙/); assert.match(page.text, /HKD 6,000\.00/); assert.match(page.text, /出租確認書/)
+  assert.match(page.text, /各期租金/); assert.ok(!/使用安排|使用費/.test(page.text)); assert.ok(!page.text.includes('牌主甲'))
 })
 test('沒有有效的瀏覽憑證不能看內容', async () => assert.match((await raw(`/r/${state.token}?k=${'0'.repeat(48)}`)).text, /電話最後 4 位/))
 test('承租方上傳轉帳憑證，同一期不能重複上傳', async () => {
@@ -124,8 +125,8 @@ test('過期或格式錯誤的連結無效', async () => {
   assert.equal((await raw('/r/not-a-token')).status, 404)
   assert.equal((await api(`/rental-contracts/${state.contract}/link`, 'POST', { expiresInDays: 0 })).status, 400)
 })
-test('合約範本可修改，佔位符會填入；不可寫「出租」「租金」', async () => {
-  assert.equal((await api('/rental-template', 'PUT', { body: '出租協議 {{使用人}}' })).status, 400)
+test('合約範本可修改，佔位符會填入；可以寫「出租」「租金」', async () => {
+  assert.equal((await api('/rental-template', 'PUT', { body: '出租：{{承租人}} 使用 {{牌照}}，每期 {{租金}}' })).status, 200)
   assert.equal((await api('/rental-template', 'PUT', { body: '' })).status, 400)
   assert.equal((await api('/rental-template', 'PUT', { body: '使用安排：{{使用人}} 使用 {{牌照}}，每期 {{使用費}}' })).status, 200)
   const fresh = tokenOf((await api(`/rental-contracts/${state.contract}/link`, 'POST', {})).body.url)
