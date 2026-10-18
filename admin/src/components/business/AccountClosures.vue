@@ -1,7 +1,8 @@
 <script setup>
 // 今日工作的「帳戶已注銷」（docs/requirements.md 5.6.2，2026-10-18）：自管客戶自行注銷帳號後通知管理者，附注銷原因。
 // 資料已即時刪除，這裏只留注銷時的名稱和原因；按「知道了」收起，30 天後刪除。沒有時不顯示。
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
+import { useLiveRefresh } from '../../composables/live-refresh'
 import DataTable from '../ui/DataTable.vue'
 import Tag from '../ui/Tag.vue'
 import Button from '../ui/Button.vue'
@@ -13,8 +14,9 @@ const isAdmin = user()?.role === 'admin'
 const rows = ref([]), loadError = ref(''), busy = ref('')
 const columns = [{ key: 'customerName', title: '客戶', minWidth: 140 }, { key: 'reason', title: '注銷原因', minWidth: 200 }, { key: 'records', title: '保留記錄', minWidth: 140 }, { key: 'closedAt', title: '注銷時間', minWidth: 110 }, { key: 'action', title: '操作', className: 'col-actions', minWidth: 90 }]
 const time = value => value ? new Date(value).toLocaleString('zh-HK', { timeZone: 'Asia/Hong_Kong', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : ''
-async function load() { if (!isAdmin) return; try { rows.value = await api('/account-closures'); loadError.value = '' } catch (error) { loadError.value = error.message } }
-onMounted(load)
+async function fetchRows() { if (!isAdmin) return; try { rows.value = await api('/account-closures'); loadError.value = '' } catch (error) { loadError.value = error.message } }
+// 打開時讀取，之後每分鐘、切回分頁時、按「重新整理」時自動更新；讀完通知導航的待處理數目
+const { reload: load } = useLiveRefresh(fetchRows)
 async function acknowledge(row) {
   busy.value = row.id
   try { await api(`/account-closures/${row.id}/acknowledge`, 'POST'); await load() } catch (error) { showError(error); await load() } finally { busy.value = '' }

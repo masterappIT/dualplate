@@ -4,7 +4,8 @@
 // 整件「核對無誤」，錯的那一欄可單獨「改回」（改回會通知客戶）。有改日期（影響到期提醒）的件排在最前。
 // 同一牌照已有客戶自辦待核對時，批文卡修改已包在那一件（今日工作「客戶自行辦理待核對」），這裏不重複列。
 // 改前的值永久保留：「最近已處理」列出 7 天內核對或改回的記錄。員工只可查看。
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
+import { useLiveRefresh } from '../../composables/live-refresh'
 import DataTable from '../ui/DataTable.vue'
 import Button from '../ui/Button.vue'
 import Tag from '../ui/Tag.vue'
@@ -27,7 +28,7 @@ const columns = [{ key: 'customer', title: '客戶', minWidth: 110 }, { key: 'en
 const time = value => value ? new Date(value).toLocaleString('zh-HK', { timeZone: 'Asia/Hong_Kong', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : ''
 const WEEK = 7 * 86400000
 
-async function load() {
+async function fetchRows() {
   try {
     const [pending, accepted, reverted] = await Promise.all([api('/customer-changes'), api('/customer-changes?status=已核對'), api('/customer-changes?status=已改回')])
     rows.value = pending.filter(row => !row.inSelfHandled)
@@ -35,7 +36,8 @@ async function load() {
     loadError.value = ''
   } catch (error) { loadError.value = error.message } finally { loaded.value = true }
 }
-onMounted(load)
+// 打開時讀取，之後每分鐘、切回分頁時、按「重新整理」時自動更新；讀完通知導航的待處理數目
+const { reload: load } = useLiveRefresh(fetchRows)
 
 // 同一客戶、同一對象的修改合成一件；日期類排在件內最前
 function groupRows(list) {

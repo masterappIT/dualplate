@@ -1,6 +1,7 @@
 <script setup>
 // 今日工作的「托管合約到期」（docs/requirements.md 5.6.2）：合約 30 天內結束或已結束、仍標為托管的客戶。只給管理者，沒有時不顯示。
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
+import { useLiveRefresh } from '../../composables/live-refresh'
 import DataTable from '../ui/DataTable.vue'
 import DueDate from '../ui/DueDate.vue'
 import Button from '../ui/Button.vue'
@@ -11,8 +12,9 @@ const { customers, openCustomer } = useAdminStore()
 const isAdmin = user()?.role === 'admin'
 const rows = ref([]), loadError = ref('')
 const columns = [{ key: 'name', title: '客戶', minWidth: 140 }, { key: 'endsOn', title: '合約結束日', minWidth: 160 }, { key: 'action', title: '操作', className: 'col-actions', minWidth: 120 }]
-async function load() { if (!isAdmin) return; try { rows.value = await api('/service-mode/contract-endings'); loadError.value = '' } catch (error) { loadError.value = error.message } }
-onMounted(load)
+async function fetchRows() { if (!isAdmin) return; try { rows.value = await api('/service-mode/contract-endings'); loadError.value = '' } catch (error) { loadError.value = error.message } }
+// 打開時讀取，之後每分鐘、切回分頁時、按「重新整理」時自動更新；讀完通知導航的待處理數目
+const { reload: load } = useLiveRefresh(fetchRows)
 function open(row) { const customer = customers.value.find(item => item.id === row.customerId); if (customer) openCustomer(customer) }
 </script>
 

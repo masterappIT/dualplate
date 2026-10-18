@@ -1,7 +1,8 @@
 <script setup>
 // 今日工作的「註冊申請」（docs/requirements.md 5.6.2，2026-10-18）：客戶在客戶端自行申請使用，只給管理者審批。
 // 號碼未經短信驗證，批准前必須先聯絡申請人確認號碼屬於本人；批准即開自管客戶和登入帳戶。沒有待審批的申請時不顯示。
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { useLiveRefresh } from '../../composables/live-refresh'
 import DataTable from '../ui/DataTable.vue'
 import Tag from '../ui/Tag.vue'
 import Button from '../ui/Button.vue'
@@ -25,8 +26,9 @@ const phoneText = value => String(value || '').replace(/^\+(852|853)(\d{4})(\d{4
 const whatsapp = value => `https://wa.me/${String(value || '').replace(/\D/g, '')}`
 const details = computed(() => current.value ? [{ label: '稱呼', value: current.value.name }, { label: '手機號碼', value: phoneText(current.value.phone) }, { label: '申請時間', value: time(current.value.createdAt) }] : [])
 
-async function load() { if (!isAdmin) return; try { rows.value = await api('/signup-applications'); loadError.value = '' } catch (error) { loadError.value = error.message } }
-onMounted(load)
+async function fetchRows() { if (!isAdmin) return; try { rows.value = await api('/signup-applications'); loadError.value = '' } catch (error) { loadError.value = error.message } }
+// 打開時讀取，之後每分鐘、切回分頁時、按「重新整理」時自動更新；讀完通知導航的待處理數目
+const { reload: load } = useLiveRefresh(fetchRows)
 watch(confirmed, value => { if (value) formError.value = '' })
 function open(kind, row) { current.value = row; dialog.value = kind; confirmed.value = false; note.value = ''; formError.value = '' }
 async function submit() {

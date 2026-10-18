@@ -1,5 +1,5 @@
 <template>
-  <PageHeader title="今日工作" desc="按優先順序處理到期項目、業務與待客戶提供資料。"><Button variant="primary" @click="view = 'new-request'">＋ 開工單</Button></PageHeader>
+  <PageHeader title="今日工作" desc="按優先順序處理到期項目、業務與待客戶提供資料。每分鐘自動更新。"><Button :loading="reloading" @click="reloadAll">重新整理</Button><Button variant="primary" @click="view = 'new-request'">＋ 開工單</Button></PageHeader>
   <div class="metrics">
     <StatCard label="已逾期" tone="danger" :value="todayCounts.overdue" hint="立即跟進" :active="todayTab === 'due' && todayStatus === 'overdue'" @click="choose('due', 'overdue')" />
     <StatCard label="7 天內要辦" tone="warning" :value="todayCounts.due" hint="到期項目" :active="todayTab === 'due' && todayStatus === 'due'" @click="choose('due', 'due')" />
@@ -68,6 +68,10 @@ import { useAdminStore } from '../store'
 import { api, rentMoney } from '../api'
 import { offerFee, offerFees } from '../composables/fee-suggestion'
 import { floatBarEnter, floatBarLeave } from '../composables/motion'
+import { refreshToday } from '../composables/live-refresh'
+// 「重新整理」：到期項目、工作隊列和今日工作各區塊（註冊申請、客戶訊息等）、導航數目一起重新讀取
+const reloading = ref(false)
+async function reloadAll() { if (reloading.value) return; reloading.value = true; refreshToday(); try { await useAdminStore().refresh() } finally { reloading.value = false } }
 const { view, customers, customerTab, openCustomer, todayTab, todayCustomerId, todayOwnership, todayCounts, todayDeadlines, overviewData, saveTrackedItem, createRequestFromDeadline, openPlateById, openRequest, showSuccess, showError } = useAdminStore()
 const router = useRouter()
 const moneyByCurrency = amounts => Object.entries(amounts || {}).filter(([, amount]) => amount).map(([currency, amount]) => rentMoney(amount, currency)).join(' · ') || '—'

@@ -1,7 +1,8 @@
 <script setup>
 // 今日工作的「客戶訊息」（docs/requirements.md 5.6.2，2026-10-18）：自管客戶在 app 內發的文字訊息，員工和管理者共用一個收件匣。
 // 按一行打開對話抽屜，看來往記錄並回覆；回覆會通知客戶。沒有任何對話時不顯示。
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
+import { useLiveRefresh } from '../../composables/live-refresh'
 import DataTable from '../ui/DataTable.vue'
 import Tag from '../ui/Tag.vue'
 import Button from '../ui/Button.vue'
@@ -16,8 +17,9 @@ const rows = ref([]), loadError = ref(''), threadLoading = ref(false), open = re
 const unread = computed(() => rows.value.reduce((total, row) => total + row.unread, 0))
 const columns = [{ key: 'customer', title: '客戶', minWidth: 140 }, { key: 'last', title: '最新訊息', minWidth: 260 }, { key: 'lastAt', title: '時間', minWidth: 110, align: 'right' }, { key: 'action', title: '操作', className: 'col-actions', minWidth: 90 }]
 const time = value => value ? new Date(value).toLocaleString('zh-HK', { timeZone: 'Asia/Hong_Kong', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : ''
-async function load() { try { rows.value = await api('/support/inbox'); loadError.value = '' } catch (error) { loadError.value = error.message } }
-onMounted(load)
+async function fetchRows() { try { rows.value = await api('/support/inbox'); loadError.value = '' } catch (error) { loadError.value = error.message } }
+// 打開時讀取，之後每分鐘、切回分頁時、按「重新整理」時自動更新；讀完通知導航的待處理數目
+const { reload: load } = useLiveRefresh(fetchRows)
 async function openThread(row) {
   open.value = row; messages.value = []; draft.value = ''; threadError.value = ''; threadLoading.value = true
   try { messages.value = (await api(`/support/conversations/${row.customerId}`)).messages; await load() } catch (error) { threadError.value = error.message } finally { threadLoading.value = false }

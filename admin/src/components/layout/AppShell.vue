@@ -11,9 +11,12 @@ import RecordModal from '../RecordModal.vue'
 import ConfirmHost from '../ui/ConfirmHost.vue'
 import ToastHost from '../ui/ToastHost.vue'
 import WelcomeGuide from './WelcomeGuide.vue'
+import { useTodayPending } from '../../composables/live-refresh'
 
 const { selected, selectedCustomer, selectedVehicle, selectedPlate, error, showSuccess, showError } = useAdminStore()
 const route = useRoute()
+// 今日工作待處理數目：每分鐘讀一次，導航和手機選單按鈕共用
+useTodayPending()
 const frame = ref<HTMLElement | null>(null)
 const menuOpen = ref(false)
 const commandOpen = ref(false)

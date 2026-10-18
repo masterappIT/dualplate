@@ -1,7 +1,8 @@
 <script setup>
 // 客戶自行辦理待核對（docs/tasks/self-handled-changes-design.md）：客戶自己辦了換車、續期、換司機、口岸、商號、補領、驗車、備案，或決定不再續期，
 // 在客戶端整件更新（資料已生效）；這裏按「整件」對照正本核對。管理者「核對無誤」或寫明原因「退回」（通知客戶）；員工只可查看。
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
+import { useLiveRefresh, todayChanged } from '../../composables/live-refresh'
 import DataTable from '../ui/DataTable.vue'
 import Button from '../ui/Button.vue'
 import Tag from '../ui/Tag.vue'
@@ -16,10 +17,11 @@ const rows = ref([]), loaded = ref(false), loadError = ref(''), busyId = ref('')
 const canReview = computed(() => account.value?.role === 'admin')
 const columns = [{ key: 'customer', title: '客戶', minWidth: 110 }, { key: 'plate', title: '牌照', minWidth: 130 }, { key: 'change', title: '客戶自行辦理', minWidth: 280 }, { key: 'createdAt', title: '提交時間', minWidth: 120, align: 'right' }, { key: 'action', title: '操作', className: 'col-actions', minWidth: 170 }]
 const time = value => value ? new Date(value).toLocaleString('zh-HK', { timeZone: 'Asia/Hong_Kong', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : ''
-async function load() {
+async function fetchRows() {
   try { rows.value = await api('/self-handled'); loadError.value = '' } catch (error) { loadError.value = error.message } finally { loaded.value = true }
 }
-onMounted(load)
+// 打開時讀取，之後每分鐘、切回分頁時、按「重新整理」時自動更新；讀完通知導航的待處理數目
+const { reload: load } = useLiveRefresh(fetchRows)
 
 // 每件自辦寫成幾行白話，員工一眼看到改了甚麼、還缺甚麼
 function lines(row) {
@@ -74,14 +76,14 @@ async function openPhotos(row) {
 
 async function accept(row) {
   busyId.value = row.id
-  try { await api(`/self-handled/${row.id}/accept`, 'POST', {}); rows.value = rows.value.filter(item => item.id !== row.id); showSuccess(row.cardChanges ? `已核對（連同批文卡 ${row.cardChanges} 項修改）` : '已核對'); refresh() } catch (error) { showError(error); await load() } finally { busyId.value = '' }
+  try { await api(`/self-handled/${row.id}/accept`, 'POST', {}); rows.value = rows.value.filter(item => item.id !== row.id); todayChanged(); showSuccess(row.cardChanges ? `已核對（連同批文卡 ${row.cardChanges} 項修改）` : '已核對'); refresh() } catch (error) { showError(error); await load() } finally { busyId.value = '' }
 }
 const returning = ref(null), returnNote = ref(''), returnBusy = ref(false)
 function startReturn(row) { returning.value = row; returnNote.value = '' }
 async function confirmReturn() {
   const row = returning.value
   returnBusy.value = true
-  try { await api(`/self-handled/${row.id}/return`, 'POST', { note: returnNote.value }); rows.value = rows.value.filter(item => item.id !== row.id); returning.value = null; showSuccess('已退回並通知客戶'); refresh() } catch (error) { showError(error) } finally { returnBusy.value = false }
+  try { await api(`/self-handled/${row.id}/return`, 'POST', { note: returnNote.value }); rows.value = rows.value.filter(item => item.id !== row.id); todayChanged(); returning.value = null; showSuccess('已退回並通知客戶'); refresh() } catch (error) { showError(error) } finally { returnBusy.value = false }
 }
 </script>
 

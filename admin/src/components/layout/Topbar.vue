@@ -4,6 +4,7 @@ import { computed } from 'vue'
 import { useAdminStore } from '../../store'
 import { LogOut } from '@lucide/vue'
 import Avatar from '../ui/Avatar.vue'
+import { todayPending } from '../../composables/live-refresh'
 const emit = defineEmits<{ (event: 'menu'): void; (event: 'command'): void }>()
 const { account, navigation, view, todayLabel, logout, selectedCustomer, selectedPlate, selectedVehicle, selected } = useAdminStore()
 // 詳情頁顯示所屬欄目與對象名稱，例如「客戶 / 李先生」，不再只寫「詳細資料」。
@@ -19,4 +20,4 @@ const current = computed(() => {
   return '詳細資料'
 })
 </script>
-<template><header class="topbar"><button class="mobile-menu" type="button" aria-label="打開選單" @click="emit('menu')">☰</button><div class="breadcrumbs">工作空間 <span>/</span> {{ current }}</div><div class="top-actions"><span class="today">{{ todayLabel }}</span><span class="topbar-divider" /><button type="button" class="cmd-trigger" aria-label="快速搜尋客戶與車牌" @click="emit('command')">⌘K 搜尋</button><Avatar class="topbar-avatar" :name="account?.name" :size="28" /><button class="mobile-logout" type="button" aria-label="退出管理端登入" @click="logout"><LogOut :size="17" /></button></div></header></template>
+<template><header class="topbar"><button class="mobile-menu" type="button" :aria-label="todayPending?.total ? `打開選單，今日工作有 ${todayPending.total} 項待處理` : '打開選單'" @click="emit('menu')">☰<span v-if="todayPending?.total" class="menu-count" aria-hidden="true">{{ todayPending.total }}</span></button><div class="breadcrumbs">工作空間 <span>/</span> {{ current }}</div><div class="top-actions"><span class="today">{{ todayLabel }}</span><span class="topbar-divider" /><button type="button" class="cmd-trigger" aria-label="快速搜尋客戶與車牌" @click="emit('command')">⌘K 搜尋</button><Avatar class="topbar-avatar" :name="account?.name" :size="28" /><button class="mobile-logout" type="button" aria-label="退出管理端登入" @click="logout"><LogOut :size="17" /></button></div></header></template>

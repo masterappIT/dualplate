@@ -1,7 +1,8 @@
 <script setup>
 // 今日工作的「客戶新增出租」（docs/tasks/custody-feedback-2026-10-18.md 第 5A 項）：客戶在客戶端自行新增出租，員工不用批准，
 // 只要知道；相關的換車、換司機、出租代理工單已在業務隊列。按「知道了」後不再列出；客戶取消會重新列出。沒有時不顯示。
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
+import { useLiveRefresh, todayChanged } from '../../composables/live-refresh'
 import DataTable from '../ui/DataTable.vue'
 import Button from '../ui/Button.vue'
 import Tag from '../ui/Tag.vue'
@@ -13,12 +14,13 @@ const rows = ref([]), loadError = ref(''), busyId = ref('')
 const columns = [{ key: 'customer', title: '客戶', minWidth: 110 }, { key: 'plate', title: '牌照', minWidth: 130 }, { key: 'rental', title: '出租', minWidth: 220 }, { key: 'procedures', title: '換車、換司機', minWidth: 180 }, { key: 'status', title: '狀態', minWidth: 100 }, { key: 'action', title: '操作', className: 'col-actions', minWidth: 100 }]
 const statusTone = { 出租中: 'success', 待換車: 'warning', 待承租人確認: 'warning', 未發出協議: 'neutral', 交給我們代理: 'info', 已取消: 'neutral' }
 const procedureWord = item => `${item.name}：${item.handler === 'us' ? '交給我們辦' : '客戶自行辦理'}${item.state === 'done' ? '（已辦妥）' : item.state === 'cancelled' ? '（工單已取消）' : ''}`
-async function load() { try { rows.value = await api('/client-rentals'); loadError.value = '' } catch (error) { loadError.value = error.message } }
-onMounted(load)
+async function fetchRows() { try { rows.value = await api('/client-rentals'); loadError.value = '' } catch (error) { loadError.value = error.message } }
+// 打開時讀取，之後每分鐘、切回分頁時、按「重新整理」時自動更新；讀完通知導航的待處理數目
+const { reload: load } = useLiveRefresh(fetchRows)
 function open(row) { const customer = customers.value.find(item => item.id === row.customerId); if (customer) openCustomer(customer) }
 async function seen(row) {
   busyId.value = row.id
-  try { await api(`/client-rentals/${row.id}/seen`, 'POST', {}); rows.value = rows.value.filter(item => item.id !== row.id) } catch (error) { showError(error) } finally { busyId.value = '' }
+  try { await api(`/client-rentals/${row.id}/seen`, 'POST', {}); rows.value = rows.value.filter(item => item.id !== row.id); todayChanged() } catch (error) { showError(error) } finally { busyId.value = '' }
 }
 </script>
 

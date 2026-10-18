@@ -60,6 +60,9 @@ body { background: var(--canvas); color: var(--ink); font-family: var(--font-bod
 .table-wrap { max-width: 100%; overflow-x: auto; }
 .table-wrap th, .table-wrap td { height: var(--row-h); }
 .mobile-menu { display: none; border: 0; background: none; color: var(--ink); }
+/* 今日工作待處理數目：手機選單按鈕右上角，與導航的 nav-count 同色 */
+.mobile-menu { position: relative; }
+.menu-count { position: absolute; top: -4px; right: -8px; min-width: 18px; padding: 1px 5px; border-radius: var(--r-control); background: var(--status-due); color: var(--surface); font-size: 11px; line-height: 16px; text-align: center; }
 /* 批文卡僅遷移外層容器樣式，卡片組件及預覽交互不變。 */
 .approval-admin-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr); gap: 28px; align-items: start; }
 .card-form-grid { max-height: 800px; overflow: auto; margin-bottom: 18px; }

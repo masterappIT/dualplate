@@ -35,6 +35,7 @@ import { supportRoutes } from './support.js'
 import { signupPublicRoutes, signupRoutes, applicationLogin } from './signup.js'
 import { accountClosureRoutes } from './account-closure.js'
 import { customerLifecycleRoutes, endedPathBlock, endedBodyBlock, endedLogin } from './customer-lifecycle.js'
+import { todayCountRoutes } from './today-counts.js'
 import { passwordProblem, authenticate, createSession, lockedMinutes, recordFailure, clearFailures, loginPhone, PHONE_RULE, clientIp, audit, auditRoutes, logError, health } from './security.js'
 
 const port = Number(process.env.PORT || 4100)
@@ -184,6 +185,7 @@ export const server = http.createServer(async (req, res) => {
     req.endedCheck = body => endedBodyBlock(user, req.method, path, body)
     if (await auditRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await customerLifecycleRoutes(req, res, url, user, { json, fail, parseBody })) return
+    if (await todayCountRoutes(req, res, url, user, { json, fail })) return
     if (path === '/api/me' && req.method === 'GET') return json(res, 200, { id: user.id, name: user.name, email: user.email, role: user.role, customerId: user.customer_id })
     if (path === '/api/catalog' && req.method === 'GET') return json(res, 200, { services, sources, routePlans: Object.fromEntries(services.map(s => [s.code, Object.fromEntries(s.routes.map(route => [route, planFor(s, route)]))])) })
     // 客戶自行新增出租：要在 /api/my/ 的只讀客戶路由之前
