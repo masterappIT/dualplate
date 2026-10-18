@@ -217,6 +217,8 @@ function prepareStop(ctx, body) {
     }
   }
 }
+// 剛建檔：30 分鐘內建立、還沒有任何自辦記錄
+const justCreated = plate => Date.now() - Date.parse(plate.created_at) < 30 * 60000 && !one('SELECT 1 FROM self_handled WHERE plate_asset_id=? LIMIT 1', plate.id)
 const markPhotoHint = { inspection_done: '請附上檢驗標誌或檢驗結果相片', filing_done: '請附上備案回執相片', tax_paid: '請附上行車稅繳費收據相片' }
 // 驗車、備案、澳門行車稅由客戶標記辦好：只限這個牌照（或它綁定的車）現在仍未完成的那一期，並須附相片作證明
 function prepareMarkDone(ctx, body, kind) {
@@ -233,11 +235,16 @@ function prepareMarkDone(ctx, body, kind) {
   const open = computeDeadlines({ rules: [decoded], owners: [{ ownerType, ownerId: owner.id, label: '', facts }], tracked: new Map(), completions: new Set(), windowDays: 180 })
     .find(item => item.completable && item.period === body.period)
   if (!open) return bad(400, '這一期目前不需要標記')
-  if (!ctx.photoCount) return bad(400, markPhotoHint[kind])
+  // 建檔時問一次新批文備案辦好了沒有（docs/tasks/self-managed-fixes-plan.md 第 10 步）：辦了多年的牌照多半早已備案、未必留着回執，
+  // 只在客戶剛建好這個牌照、這一期已逾期時免附相片；之後每一期照舊要附回執
+  if (body.confirmedAtCreation !== undefined && typeof body.confirmedAtCreation !== 'boolean') return bad(400, '建檔確認格式無效')
+  const atCreation = body.confirmedAtCreation === true
+  if (atCreation && !(kind === 'filing_done' && justCreated(plate) && open.daysLeft < 0)) return bad(400, '只可在建立牌照時確認已逾期的新批文備案；請附上備案回執相片')
+  if (!ctx.photoCount && !atCreation) return bad(400, markPhotoHint[kind])
   return {
     write(userId) {
       db.prepare('INSERT INTO rule_completions(tenant_id,code,owner_id,period,completed_by,completed_at) VALUES (?,?,?,?,?,?)').run(tenantId, code, owner.id, body.period, userId, now())
-      return { code, name: rule.name, period: body.period, label: open.detail, dueOn: open.dueOn, ownerType, ownerId: owner.id, ownerLabel: ownerType === 'vehicle' ? owner.plate : '' }
+      return { code, name: rule.name, period: body.period, label: open.detail, dueOn: open.dueOn, ownerType, ownerId: owner.id, ownerLabel: ownerType === 'vehicle' ? owner.plate : '', ...(atCreation ? { source: '建檔時客戶確認' } : {}) }
     }
   }
 }

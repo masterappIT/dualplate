@@ -23,18 +23,19 @@
     <text class="link request-link" @click="goRequests">還沒有批文卡、要申請新牌？前往申請辦理 ›</text>
     <CardCapture ref="capture"/>
     <wd-message-box />
+    <wd-action-sheet custom-class="choice-sheet" v-model="sheet.show" :title="sheet.title" :actions="sheet.actions" cancel-text="取消" @select="onSelect" @close="onClose" />
   </view>
 </template>
 <script setup>
 import { ref,computed,watch,onBeforeUnmount } from 'vue'
 import { onBackPress } from '@dcloudio/uni-app'
 import { api,getUser,isSelfManaged } from '../../lib/api'
-import { useConfirm } from '../../lib/choice'
+import { useChoice,useConfirm } from '../../lib/choice'
 import ApprovalCard from '../../components/ApprovalCard.vue'
 import CardCapture from '../../components/CardCapture.vue'
 // 自管客戶自己建檔，不經顧問核對
 const selfManaged=isSelfManaged()
-const capture=ref(null),confirmBox=useConfirm()
+const capture=ref(null),confirmBox=useConfirm(),{sheet,choose,onSelect,onClose}=useChoice()
 const route=ref('粵港'),draft=ref({}),images=ref({}),previews=ref({}),busy=ref(false),showFields=ref(false),fieldStatus=ref({})
 // 持牌公司：按批文卡的商號、內承單位找名下公司；找不到就只用名稱新建，之後在「我的公司」補資料
 const link=ref({groupId:null,groupName:'',companies:[],groups:[]}),groupId=ref('')
@@ -62,7 +63,10 @@ function fieldStatusText(status){return status?.status==='uncertain'?'請核對'
 function fieldStatusClass(status){return status?.status==='failed'?'failed':'uncertain'}
 // 先開對準框，只取框內卡面辨識和保存（管理者 2026-10-18）；伺服器找好卡邊後傳回卡面，建立牌照時存的就是這張
 async function pickCard(side){if(busy.value)return;const photo=await capture.value.open({side});if(!photo)return;busy.value=true;uni.showLoading({title:'正在辨識批文卡…',mask:true});try{const image=photo.data;images.value={...images.value,[side]:image};previews.value={...previews.value,[side]:photo.path};const recognized=await api('/card-recognize','POST',{side,image});if(recognized.image){images.value={...images.value,[side]:recognized.image};previews.value={...previews.value,[side]:recognized.image}}const next={...draft.value};for(const [key,value] of Object.entries(recognized.cardData||{}))if(value&&!next[key])next[key]=value;draft.value=next;fieldStatus.value={...fieldStatus.value,...(recognized.fieldStatus||{})};uni.hideLoading();uni.showToast({title:'已辨識，請確認編號',icon:'none'})}catch(e){uni.hideLoading();uni.showToast({title:e.message||'上傳失敗',icon:'none'})}finally{busy.value=false}}
-async function create(){if(busy.value)return;const cardNumber=String(draft.value.cardNumber||'').trim();if(!cardNumber)return uni.showToast({title:images.value.front||images.value.back?'未能辨識編號，請手動填寫':'請先拍下批文卡',icon:'none'});const user=getUser();if(!user?.customerId)return uni.navigateTo({url:'/pages/login/login'});busy.value=true;try{const plate=await api('/plate-assets','POST',{customerId:user.customerId,route:route.value,cardData:{...draft.value,cardNumber},cardImages:images.value,groupId:groupId.value});leaving=true;uni.redirectTo({url:'/pages/plate-detail/plate-detail?id='+encodeURIComponent(plate.id)})}catch(e){uni.showToast({title:e.message||'建檔失敗',icon:'none'})}finally{busy.value=false}}
+// 建檔時問一次新批文備案（docs/tasks/self-managed-fixes-plan.md 第 10 步）：只在這一期已逾期時問；說已辦好就記為已辦、不用附回執，
+// 托管客戶由顧問再核對；未辦或不清楚照常提醒。牌照已建好，這一步出錯也照樣打開牌照頁
+async function askFiling(plateId){try{const item=(await api('/my/plates/'+plateId)).deadlines.find(d=>d.code==='new_card_filing'&&d.level==='overdue');if(!item)return;const pick=await choose('這張批文卡的新批文備案已辦好了嗎？',[{title:'已辦好',sub:selfManaged?'這一期不再提醒':'這一期不再提醒，顧問會再核對'},{title:'未辦',sub:'照常提醒，請盡快辦理'},{title:'不清楚',sub:'照常提醒'}]);if(pick!==0)return;await api('/my/plates/'+plateId+'/self-handled','POST',{kind:'filing_done',period:item.period,confirmedAtCreation:true})}catch(e){uni.showToast({title:e.message,icon:'none'})}}
+async function create(){if(busy.value)return;const cardNumber=String(draft.value.cardNumber||'').trim();if(!cardNumber)return uni.showToast({title:images.value.front||images.value.back?'未能辨識編號，請手動填寫':'請先拍下批文卡',icon:'none'});const user=getUser();if(!user?.customerId)return uni.navigateTo({url:'/pages/login/login'});busy.value=true;try{const plate=await api('/plate-assets','POST',{customerId:user.customerId,route:route.value,cardData:{...draft.value,cardNumber},cardImages:images.value,groupId:groupId.value});await askFiling(plate.id);leaving=true;uni.redirectTo({url:'/pages/plate-detail/plate-detail?id='+encodeURIComponent(plate.id)})}catch(e){uni.showToast({title:e.message||'建檔失敗',icon:'none'})}finally{busy.value=false}}
 // 預覽剛拍的照片，方便對照辨識結果
 function viewPhotos(side){const sides=['front','back'].filter(s=>previews.value[s]);uni.previewImage({urls:sides.map(s=>previews.value[s]),current:previews.value[side]||previews.value[sides[0]]})}
 function goRequests(){uni.navigateTo({url:'/pages/requests/requests?service=new_application'})}
