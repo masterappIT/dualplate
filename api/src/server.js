@@ -4,6 +4,7 @@ import { db, id, now, hashPassword, verifyPassword } from './db.js'
 import { services, sources, inspectionGuidance, planFor } from './catalog.js'
 import { pushActivity, addTasks } from './request-tasks.js'
 import { cardData, cleanCard, recognizeCard } from './card.js'
+import { cardFace } from './card-face.js'
 import { phase1Routes } from './phase1-routes.js'
 import { customerRoutes, requestStatus } from './customer-routes.js'
 import { parseCsv, crossingPorts } from './plate-import.js'
@@ -363,8 +364,10 @@ export const server = http.createServer(async (req, res) => {
       if (!matched) return fail(res,400,'只接受 PNG、JPEG 或 WebP 圖片')
       const bytes=Buffer.from(matched[2],'base64')
       if (bytes.length>3500000) return fail(res,400,'圖片不可超過 3.5 MB')
-      const recognized = await recognizeCard(bytes, body.side)
-      return json(res, 200, { cardData: recognized.cardData, fieldStatus: recognized.fieldStatus })
+      // 對準框截圖先找卡邊（card-face.js），找好邊的卡面傳回客戶端，建立牌照時存為正本
+      const face = await cardFace(bytes)
+      const recognized = await recognizeCard(face ? face.image : bytes, body.side)
+      return json(res, 200, { cardData: recognized.cardData, fieldStatus: recognized.fieldStatus, ...(face ? { image: 'data:image/jpeg;base64,' + face.image.toString('base64') } : {}) })
     }
     if (path === '/api/customers' && req.method === 'GET') {
       return json(res, 200, ['admin', 'staff'].includes(user.role) ? query('SELECT * FROM customers WHERE tenant_id=? ORDER BY is_self DESC, name', user.tenant_id) : query('SELECT id,name,kind,phone FROM customers WHERE id=?', user.customer_id)) // 客戶只拿自己的基本資料，不含內部備註
@@ -423,7 +426,9 @@ export const server = http.createServer(async (req, res) => {
         if (!matched) return fail(res,400,'只接受 PNG、JPEG 或 WebP 圖片')
         const bytes=Buffer.from(matched[2],'base64')
         if (bytes.length>3500000) return fail(res,400,'圖片不可超過 3.5 MB')
-        cardImages.push([side,`image/${matched[1]}`,bytes])
+        // 辨識失敗時客戶端仍拿着對準框截圖：同樣先找卡邊；已找好邊的卡面（2030×1290）原樣保存
+        const face=await cardFace(bytes)
+        cardImages.push(face?[side,'image/jpeg',face.image]:[side,`image/${matched[1]}`,bytes])
       }
       const assetId = id()
       const mainlandPlate=clean(proposedCard.mainlandPlate || b.mainlandPlate,30)||null
@@ -523,17 +528,19 @@ export const server = http.createServer(async (req, res) => {
       const side=cardMatch[2]
       // 只保存正本（管理者 2026-10-18）：資料已對、只想留相片記錄時，不辨識、不改批文卡資料和狀態，也不列入客戶更新待核對
       if (b.recognize !== undefined && typeof b.recognize !== 'boolean') return fail(res, 400, '上傳方式無效')
+      // 對準框截圖先找卡邊，正本和辨識都用找好邊的卡面（只保存正本也一樣，只是不讀字）
+      const face=await cardFace(bytes), image=face?face.image:bytes, mime=face?'image/jpeg':matched[1]
       if (b.recognize === false) {
-        db.prepare('INSERT INTO approval_card_images VALUES (?,?,?,?) ON CONFLICT(plate_asset_id,side) DO UPDATE SET mime=excluded.mime,data=excluded.data').run(item.id,side,matched[1],bytes)
+        db.prepare('INSERT INTO approval_card_images VALUES (?,?,?,?) ON CONFLICT(plate_asset_id,side) DO UPDATE SET mime=excluded.mime,data=excluded.data').run(item.id,side,mime,image)
         return json(res, 200, { side, uploaded: true, savedOnly: true, recognized: cardData(null), fieldStatus: {}, cardData: cardData(item.card_data), needsReview: false })
       }
       let recognized={cardData:cardData(null),fieldStatus:{}}
-      try { recognized=await recognizeCard(bytes,side) } catch (error) { console.error('Card OCR failed:',error) }
+      try { recognized=await recognizeCard(image,side) } catch (error) { console.error('Card OCR failed:',error) }
       const existing=cardData(item.card_data)
       const proposed=cleanCard({...existing,...Object.fromEntries(Object.entries(recognized.cardData).filter(([,v])=>v))})
       db.exec('BEGIN IMMEDIATE')
       try {
-        db.prepare('INSERT INTO approval_card_images VALUES (?,?,?,?) ON CONFLICT(plate_asset_id,side) DO UPDATE SET mime=excluded.mime,data=excluded.data').run(item.id,side,matched[1],bytes)
+        db.prepare('INSERT INTO approval_card_images VALUES (?,?,?,?) ON CONFLICT(plate_asset_id,side) DO UPDATE SET mime=excluded.mime,data=excluded.data').run(item.id,side,mime,image)
         db.prepare('UPDATE plate_assets SET card_data=?,card_status=?,card_number=?,card_expires_on=?,mainland_plate=?,local_plate=?,card_updated_by=?,card_updated_at=?,updated_at=? WHERE id=?').run(JSON.stringify(proposed),'待核對',proposed.cardNumber||null,proposed.validTo||null,proposed.mainlandPlate||null,proposed.localPlate||null,user.name,now(),now(),item.id)
         if (user.role === 'customer') logCardChanges({ tenantId: user.tenant_id, user, plate: item, before: existing, after: proposed })
         db.exec('COMMIT')

@@ -1,5 +1,5 @@
-<!-- 批文卡對準框（管理者 2026-10-18）：後台選檔案後先把卡對進框，只保存框內的卡面（固定 2030×1290 JPEG），
-     不保存整張原檔，所以不用再限制原檔大小；與客戶端 CardCapture 相同的裁切方式。 -->
+<!-- 批文卡對準框（管理者 2026-10-18）：後台選檔案後先把卡對進框，只上傳框內卡面連框外一圈（每邊 6%，固定 2274×1445 JPEG），
+     不保存整張原檔，所以不用再限制原檔大小；伺服器再找出卡的真正邊界（api/src/card-face.js）。與客戶端 CardCapture 相同的裁切方式。 -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import Modal from '../ui/Modal.vue'
@@ -8,7 +8,7 @@ import Segmented from '../ui/Segmented.vue'
 const props = defineProps<{ open: boolean; side: 'front' | 'back'; mode: 'read' | 'save' }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'confirm', value: { side: 'front' | 'back'; image: string }): void }>()
 
-const OUT_W = 2030, OUT_H = 1290
+const OUT_W = 2030, OUT_H = 1290, MARGIN = 0.06, FULL_W = Math.round(OUT_W * (1 + 2 * MARGIN)), FULL_H = Math.round(OUT_H * (1 + 2 * MARGIN))
 const side = ref<'front' | 'back'>(props.side)
 const stage = ref<HTMLElement | null>(null), fileInput = ref<HTMLInputElement | null>(null)
 const loaded = ref(false), error = ref(''), zoom = ref(1)
@@ -83,10 +83,14 @@ function slide(event: Event) { const f = frame.value; zoomAt(f.left + f.width / 
 function confirm() {
   if (!source) { fileInput.value?.click(); return }
   const f = frame.value, canvas = document.createElement('canvas')
-  canvas.width = OUT_W; canvas.height = OUT_H
+  canvas.width = FULL_W; canvas.height = FULL_H
   const ctx = canvas.getContext('2d')!
-  ctx.fillStyle = 'white'; ctx.fillRect(0, 0, OUT_W, OUT_H)
-  ctx.drawImage(source, (f.left - view.x) / view.s, (f.top - view.y) / view.s, f.width / view.s, f.height / view.s, 0, 0, OUT_W, OUT_H)
+  ctx.fillStyle = 'white'; ctx.fillRect(0, 0, FULL_W, FULL_H)
+  // 框每邊外擴 6%；只畫和原圖重疊的部分，超出的地方留白
+  const sw = f.width / view.s * (1 + 2 * MARGIN), sh = f.height / view.s * (1 + 2 * MARGIN)
+  const sx = (f.left - view.x) / view.s - f.width / view.s * MARGIN, sy = (f.top - view.y) / view.s - f.height / view.s * MARGIN
+  const x0 = Math.max(0, sx), y0 = Math.max(0, sy), x1 = Math.min(source.width, sx + sw), y1 = Math.min(source.height, sy + sh), kx = FULL_W / sw, ky = FULL_H / sh
+  if (x1 > x0 && y1 > y0) ctx.drawImage(source, x0, y0, x1 - x0, y1 - y0, (x0 - sx) * kx, (y0 - sy) * ky, (x1 - x0) * kx, (y1 - y0) * ky)
   emit('confirm', { side: side.value, image: canvas.toDataURL('image/jpeg', 0.9) })
 }
 onBeforeUnmount(reset)

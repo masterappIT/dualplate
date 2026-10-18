@@ -1,6 +1,6 @@
 <template>
-  <!-- 批文卡對準框（管理者 2026-10-18）：拍照、從相冊選都先把卡對進框，只保存框內的卡面（固定 2030×1290 JPEG），
-       不保存整張原圖，所以不用再壓縮；送去辨識的也是這張卡面。
+  <!-- 批文卡對準框（管理者 2026-10-18）：拍照、從相冊選都先把卡對進框，只上傳框內卡面連框外一圈（每邊 6%，固定 2274×1445 JPEG），
+       不保存整張原圖，所以不用再壓縮。伺服器在這張圖裏找出卡的真正邊界再辨識和保存（api/src/card-face.js），卡沒有剛好填滿框也讀得到。
        網頁版用鏡頭（getUserMedia）＋原生 canvas；開不了鏡頭就改從相冊選、拖動縮放對框。其他平台暫時沿用系統選相片。 -->
   <view v-if="show" class="capture">
     <!-- #ifdef H5 -->
@@ -21,7 +21,7 @@
 <script setup>
 import { ref, computed, nextTick, onBeforeUnmount } from 'vue'
 import { cardPhoto } from '../lib/api'
-const OUT_W = 2030, OUT_H = 1290
+const OUT_W = 2030, OUT_H = 1290, MARGIN = 0.06, FULL_W = Math.round(OUT_W * (1 + 2 * MARGIN)), FULL_H = Math.round(OUT_H * (1 + 2 * MARGIN))
 const show = ref(false), mode = ref('camera'), side = ref('front'), stage = ref(null)
 const frame = ref({ left: 20, top: 300, width: 350, height: 222 })
 const sideName = computed(() => side.value === 'front' ? '正面' : '背面')
@@ -62,11 +62,16 @@ async function startCamera() {
   host().appendChild(video)
   await video.play()
 }
-// 畫面座標的框 → 原圖座標，畫到固定尺寸的卡面上（框外留白填白色）
+// 畫面座標的框（每邊外擴 6%）→ 原圖座標，畫到固定尺寸的截圖上（超出原圖的部分填白色）
 function crop(source, sx, sy, sw, sh) {
-  const canvas = Object.assign(document.createElement('canvas'), { width: OUT_W, height: OUT_H }), ctx = canvas.getContext('2d')
-  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, OUT_W, OUT_H)
-  ctx.drawImage(source, sx, sy, sw, sh, 0, 0, OUT_W, OUT_H)
+  const mx = sw * MARGIN, my = sh * MARGIN
+  sx -= mx; sy -= my; sw += mx * 2; sh += my * 2
+  const canvas = Object.assign(document.createElement('canvas'), { width: FULL_W, height: FULL_H }), ctx = canvas.getContext('2d')
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, FULL_W, FULL_H)
+  // 只畫和原圖重疊的部分（部分瀏覽器遇到超出原圖的來源範圍會整張不畫）
+  const width = source.videoWidth || source.naturalWidth, height = source.videoHeight || source.naturalHeight
+  const x0 = Math.max(0, sx), y0 = Math.max(0, sy), x1 = Math.min(width, sx + sw), y1 = Math.min(height, sy + sh), kx = FULL_W / sw, ky = FULL_H / sh
+  if (x1 > x0 && y1 > y0) ctx.drawImage(source, x0, y0, x1 - x0, y1 - y0, (x0 - sx) * kx, (y0 - sy) * ky, (x1 - x0) * kx, (y1 - y0) * ky)
   const data = canvas.toDataURL('image/jpeg', 0.9)
   return { data, path: data }
 }

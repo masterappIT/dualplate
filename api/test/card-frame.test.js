@@ -8,6 +8,7 @@ import { Readable } from 'node:stream'
 import { randomUUID } from 'node:crypto'
 import sharp from 'sharp'
 import { recognizeCard, normalizeCardField } from '../src/card.js'
+import { cardFace, MARGIN_W, MARGIN_H } from '../src/card-face.js'
 
 // 批文卡對準框（管理者 2026-10-18）：客戶端 CardCapture、後台 CardCropper 只上傳框內卡面（2030×1290 JPEG）。
 // 這裏模擬「卡放在桌上用手機拍、再按框裁出卡面」，每種拍攝情況一個測試：必須讀對卡號（背面讀對內地車牌），
@@ -161,4 +162,119 @@ test('客戶新增牌照時辨識對準框卡面：讀對卡號', async () => {
   const result = await request('/card-recognize', 'POST', { side: 'front', image: dataUrl(image) }, 'client')
   assert.equal(result.status, 200)
   assert.equal(result.body.cardData.cardNumber, expected.front2.cardNumber)
+})
+
+// ── 找卡邊（api/src/card-face.js，管理者 2026-10-18）──
+// 新版對準框上傳框內卡面連框外一圈（每邊 6%，2274×1445）。用手拿手機拍，卡很難剛好填滿框；
+// 這裏模擬卡比框小、比框大、歪了、模糊、放在白桌上，每種情況一個測試，四張樣本合計逐欄計分。
+// 2026-10-18 本機實測：只取框內時卡比框小 15% 只讀對 12/36、歪 3 度 20/36；找卡邊後 23–28/36。
+// 辨識程式對卡面差一兩個像素的位置也敏感，同一張卡的分數本身會上下差 2–3 欄，所以門檻定在 22/36（見報告）。
+const KEYS = ['front1', 'front2', 'back1', 'back2']
+async function marginShot(key, { fit = 1, tilt = 0, blur = 0, table = TABLE } = {}) {
+  const fw = 1000, fh = Math.round(fw * 645 / 1015)
+  const card = await sharp(await scanned(key)).resize(Math.round(fw * fit), Math.round(fh * fit), { fit: 'fill' }).rotate(tilt, { background: '#00000000' }).png().toBuffer()
+  const meta = await sharp(card).metadata(), width = fw * 2, height = fh * 3
+  let photo = await sharp({ create: { width, height, channels: 3, background: table } }).composite([{ input: card, left: Math.round((width - meta.width) / 2), top: Math.round((height - meta.height) / 2) }]).png().toBuffer()
+  if (blur) photo = await sharp(photo).blur(blur).png().toBuffer()
+  const cw = Math.round(fw * 1.12), ch = Math.round(fh * 1.12)
+  return sharp(photo).extract({ left: Math.round((width - cw) / 2), top: Math.round((height - ch) / 2), width: cw, height: ch }).resize(MARGIN_W, MARGIN_H, { fit: 'fill' }).jpeg({ quality: 90 }).toBuffer()
+}
+async function readShots(options) {
+  let correct = 0, total = 0, key = 0, found = 0
+  for (const name of KEYS) {
+    const side = name.startsWith('front') ? 'front' : 'back', face = await cardFace(await marginShot(name, options))
+    const meta = await sharp(face.image).metadata()
+    assert.deepEqual([meta.width, meta.height, meta.format], [OUT_W, OUT_H, 'jpeg'])
+    const result = await recognizeCard(face.image, side), values = expected[name], main = side === 'front' ? 'cardNumber' : 'mainlandPlate'
+    correct += Object.entries(values).filter(([field, value]) => same(field, result.cardData[field], value)).length
+    total += Object.keys(values).length
+    if (same(main, result.cardData[main], values[main])) key++
+    if (face.found) found++
+  }
+  console.log(`${real ? '真實' : '合成'} 找卡邊 ${JSON.stringify(options)}：逐欄 ${correct}/${total}，卡號／內地車牌 ${key}/4，找到卡邊 ${found}/4`)
+  return { correct, total, key, found }
+}
+// 真實樣本：逐欄合計至少 22/36、卡號和內地車牌至少讀對 3 張；合成卡只看卡號和內地車牌（中文名稱本來就常讀錯）
+function passes({ correct, key }) {
+  assert.ok(key >= 3, `卡號／內地車牌只讀對 ${key}/4`)
+  if (real) assert.ok(correct >= 22, `逐欄只讀對 ${correct}/36`)
+}
+test('找卡邊：卡剛好對齊框，找到卡邊並讀對', async () => {
+  const score = await readShots({}); assert.equal(score.found, 4); passes(score)
+})
+test('找卡邊：卡比框小 5%（四邊露出桌面），找到卡邊並讀對', async () => {
+  const score = await readShots({ fit: 0.95 }); assert.equal(score.found, 4); passes(score)
+})
+test('找卡邊：卡比框小 15%（手機拿遠了），找到卡邊並讀對', async () => {
+  const score = await readShots({ fit: 0.85 }); assert.equal(score.found, 4); passes(score)
+})
+test('找卡邊：卡比框大 5%（卡邊超出框線），找到卡邊並讀對', async () => {
+  const score = await readShots({ fit: 1.05 }); assert.equal(score.found, 4); passes(score)
+})
+test('找卡邊：卡歪 3 度，轉正後讀對', async () => {
+  const score = await readShots({ tilt: 3 }); assert.equal(score.found, 4); passes(score)
+})
+test('找卡邊：卡比框小 15% 又歪 3 度，轉正後讀對', async () => {
+  const score = await readShots({ fit: 0.85, tilt: 3 }); assert.equal(score.found, 4); passes(score)
+})
+test('找卡邊：相片輕微模糊，仍找到卡邊並讀對', async () => {
+  const score = await readShots({ blur: 1.5 }); assert.equal(score.found, 4); passes(score)
+})
+test('找卡邊：卡放在白色桌面分不清邊界，改用框內部分，和以前一樣讀對', async () => {
+  const score = await readShots({ table: '#f4f4f2' }); assert.equal(score.found, 0); passes(score)
+})
+test('找卡邊：找不到卡邊時，用的正是畫面上框內的部分', async () => {
+  const shot = await marginShot('front1', { table: '#f4f4f2' }), face = await cardFace(shot)
+  const frame = await sharp(shot).extract({ left: Math.round(OUT_W * 0.06), top: Math.round(OUT_H * 0.06), width: OUT_W, height: OUT_H }).jpeg({ quality: 90 }).toBuffer()
+  assert.equal(face.found, false)
+  assert.equal(Buffer.compare(face.image, frame), 0)
+})
+test('找卡邊：不是對準框尺寸的圖片（掃描檔、舊版客戶端）不處理', async () => {
+  assert.equal(await cardFace(await framed('front1')), null)
+  assert.equal(await cardFace(await sharp(await scanned('front1')).png().toBuffer()), null)
+})
+test('找卡邊：不是圖片的內容不處理，不會出錯', async () => {
+  assert.equal(await cardFace(Buffer.from('not an image')), null)
+  assert.equal(await cardFace(Buffer.alloc(0)), null)
+})
+
+// ── 經伺服器：三個入口都存找好邊的卡面 ──
+const isFace = async data => { const meta = await sharp(Buffer.from(data)).metadata(); return meta.width === OUT_W && meta.height === OUT_H && meta.format === 'jpeg' }
+test('客戶新增牌照辨識對準框截圖：讀對卡號，並傳回找好邊的卡面', async () => {
+  const shot = await marginShot('front2', { fit: 0.9 })
+  const result = await request('/card-recognize', 'POST', { side: 'front', image: dataUrl(shot) }, 'client')
+  assert.equal(result.status, 200)
+  assert.equal(result.body.cardData.cardNumber, expected.front2.cardNumber)
+  assert.ok(await isFace(Buffer.from(result.body.image.split(',')[1], 'base64')))
+})
+test('舊尺寸的卡面辨識時不傳回卡面（客戶端沿用自己的圖）', async () => {
+  const result = await request('/card-recognize', 'POST', { side: 'front', image: dataUrl(await framed('front2')) }, 'client')
+  assert.equal(result.status, 200)
+  assert.equal(result.body.image, undefined)
+})
+test('上傳並讀取內容：存為正本的是找好邊的卡面，並讀對卡號', async () => {
+  const result = await request(`/plate-assets/${state.plate}/card/front`, 'POST', { image: dataUrl(await marginShot('front1', { fit: 0.9 })), recognize: true })
+  assert.equal(result.status, 200)
+  assert.equal(result.body.cardData.cardNumber, expected.front1.cardNumber)
+  const saved = state.db.prepare("SELECT mime,data FROM approval_card_images WHERE plate_asset_id=? AND side='front'").get(state.plate)
+  assert.equal(saved.mime, 'image/jpeg')
+  assert.ok(await isFace(saved.data))
+})
+test('只保存正本：存的是找好邊的卡面，不讀字，批文卡資料和狀態不變', async () => {
+  state.db.prepare("UPDATE plate_assets SET card_status='已核對' WHERE id=?").run(state.plate)
+  const before = state.db.prepare('SELECT card_data,card_status FROM plate_assets WHERE id=?').get(state.plate)
+  const result = await request(`/plate-assets/${state.plate}/card/back`, 'POST', { image: dataUrl(await marginShot('back1', { fit: 0.9 })), recognize: false })
+  assert.equal(result.status, 200)
+  assert.equal(result.body.savedOnly, true)
+  assert.deepEqual(state.db.prepare('SELECT card_data,card_status FROM plate_assets WHERE id=?').get(state.plate), before)
+  const saved = state.db.prepare("SELECT data FROM approval_card_images WHERE plate_asset_id=? AND side='back'").get(state.plate)
+  assert.ok(await isFace(saved.data))
+})
+test('建立牌照時帶着未找邊的對準框截圖：同樣存找好邊的卡面', async () => {
+  const shot = dataUrl(await marginShot('front2', { fit: 0.9 }))
+  const result = await request('/plate-assets', 'POST', { customerId: state.customer, route: '粵港', cardData: { cardNumber: 'C-FRAME-NEW' }, cardImages: { front: shot } }, 'client')
+  assert.equal(result.status, 201)
+  const saved = state.db.prepare("SELECT i.mime,i.data FROM approval_card_images i JOIN plate_assets p ON p.id=i.plate_asset_id WHERE p.card_number='C-FRAME-NEW' AND i.side='front'").get()
+  assert.equal(saved.mime, 'image/jpeg')
+  assert.ok(await isFace(saved.data))
 })
