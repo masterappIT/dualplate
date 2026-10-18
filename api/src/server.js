@@ -24,7 +24,7 @@ import { bookkeepingRoutes } from './bookkeeping.js'
 import { reportRoutes } from './reports.js'
 import { renterPublicRoutes, renterAdminRoutes } from './renter-portal.js'
 import { clientRentalRoutes } from './client-rentals.js'
-import { clientEditRoutes, changeReviewRoutes, logCreated, logCompanyCreated, logCardChanges, logPlateChanges } from './client-edits.js'
+import { clientEditRoutes, changeReviewRoutes, logCreated, logCompanyCreated, logCardChanges, logPlateChanges, selfManagedCustomer } from './client-edits.js'
 import { selfHandledClientRoutes, selfHandledReviewRoutes } from './self-handled.js'
 import { vehicleDocumentRoutes } from './vehicle-documents.js'
 import { publicTermsRoutes, termsGate, termsRoutes } from './terms.js'
@@ -462,7 +462,12 @@ export const server = http.createServer(async (req, res) => {
     if (plateMatch && req.method === 'PATCH') {
       const old = plateFor(user, plateMatch[1]); if (!old) return fail(res, 404, '兩地牌不存在')
       const b = await parseBody(req)
-      if (user.role !== 'admin' && b.usageStatus !== undefined && b.usageStatus !== old.usage_status) return fail(res, 403, '使用狀態須由專員核對')
+      // 使用狀態（docs/tasks/self-managed-fixes-plan.md 第 11 步）：托管客戶由我們記錄、客戶只能看；自管客戶自己填自用或空置。
+      // 「出租中」照舊只由生效的出租推算（下面的規則），自管客戶在出租區新增出租
+      if (user.role !== 'admin' && b.usageStatus !== undefined && b.usageStatus !== old.usage_status) {
+        if (user.role !== 'customer' || !selfManagedCustomer(old.customer_id)) return fail(res, 403, '使用狀態須由專員核對')
+        if (!['自用', '暫停使用'].includes(b.usageStatus)) return fail(res, 400, '請選擇自用或空置；出租請在出租區新增出租')
+      }
       const installation = b.installationStatus ?? old.installation_status
       const usage = b.usageStatus ?? old.usage_status
       if (!['待核對','未上牌','已上牌'].includes(installation) || !['待核對','自用','出租中','暫停使用'].includes(usage)) return fail(res, 400, '牌照狀態無效')

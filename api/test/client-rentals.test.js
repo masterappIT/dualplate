@@ -87,9 +87,17 @@ test('托管客戶可以新增出租，列出出租人、現有車、登記司�
   assert.deepEqual(result.body.drivers.map(item => item.name), ['陳大文'])
   assert.equal(result.body.prices.vehicle, '由顧問報價')
 })
-test('自管客戶暫時不能新增出租', async () => {
-  assert.equal((await api(`/my/plates/${state.plates.self}/rental-options`, 'GET', undefined, 'self-client')).body.allowed, false)
-  assert.equal((await api(`/my/plates/${state.plates.self}/rentals`, 'POST', form({ useCurrentVehicle: false, renterVehiclePlate: 'XY1', driverIds: [], newDriverName: '新司機' }), 'self-client')).status, 409)
+// 管理者 2026-10-18 決定（docs/tasks/self-managed-fixes-plan.md 第 11 步）：自管客戶可以自己記出租，但只可自行負責、租客直接付款
+test('自管客戶不能把出租交給我們代理或代收', async () => {
+  assert.equal((await api(`/my/plates/${state.plates.self}/rentals`, 'POST', form({ useCurrentVehicle: false, renterVehiclePlate: 'XY1', driverIds: [], newDriverName: '新司機', handling: 'agent', collectionMode: '代收' }), 'self-client')).status, 400)
+  assert.equal((await api(`/my/plates/${state.plates.self}/rentals`, 'POST', form({ useCurrentVehicle: false, renterVehiclePlate: 'XY1', driverIds: [], newDriverName: '新司機', handling: 'agent', collectionMode: '直付' }), 'self-client')).status, 400)
+})
+test('自管客戶可以新增自行負責、租客直接付款的出租', async () => {
+  assert.equal((await api(`/my/plates/${state.plates.self}/rental-options`, 'GET', undefined, 'self-client')).body.allowed, true)
+  const result = await api(`/my/plates/${state.plates.self}/rentals`, 'POST', form({ useCurrentVehicle: false, renterVehiclePlate: 'XY1', driverIds: [], newDriverName: '新司機' }), 'self-client')
+  assert.equal(result.status, 201, JSON.stringify(result.body))
+  assert.equal(result.body.collectionMode, '直付')
+  assert.equal(result.body.handling, 'self')
 })
 test('已標記不再續期的牌照不能新增出租', async () => {
   assert.match((await client(`/my/plates/${state.plates.stopped}/rental-options`)).body.reason, /不再續期/)

@@ -132,11 +132,13 @@
         <view v-if="arrangements.length"><view v-for="a in arrangements" :key="a.id" class="card" @click="openRental(a)"><view class="row"><view class="grow"><text class="line-title">{{ a.user.name }}</text><text class="line-sub">{{ a.user.vehiclePlate ? '使用車輛 ' + a.user.vehiclePlate + ' · ' : '' }}{{ a.startsOn }} 起{{ a.endsOn ? ' 至 ' + a.endsOn : '' }}</text></view><text class="pill" :class="rentalTone(a)">{{ a.statusWord }}</text><text v-if="a.source==='client'" class="chev">›</text></view><text class="line-sub">租金 {{ money(a.currency, a.amount) }} / {{ cycleLabel[a.cycle] }} · {{ a.collectionMode==='代收' ? '由我們代收' : '直接付給你' }}</text><template v-if="a.status==='生效'||a.invoices.length"><view class="ticket-rule" /><view v-for="i in a.invoices" :key="i.id" class="fee-row"><text class="num">{{ i.period }}</text><text class="pill" :class="feeTone[i.status]">{{ feeLabel(a, i) }}</text></view><text v-if="!a.invoices.length" class="line-sub">暫時沒有租金記錄</text></template></view></view>
         <button v-if="rentalOptions?.allowed" class="btn-line rent-button" @click="newRental">新增出租</button>
         <text v-else-if="rentalOptions?.reason && !arrangements.some(a=>['草擬','待換車','生效'].includes(a.status))" class="line-sub rent-note">{{ rentalOptions.reason }}</text>
+        <!-- 自管客戶的出租租客直接付給他；想由我們代收，走「委託我們辦」（docs/tasks/self-managed-fixes-plan.md 第 11 步） -->
+        <text v-if="cardSelfManaged" class="link rent-note" @click="entrustCollection">想由我們代收租金？交給我們代收 ›</text>
       </view>
       <view :id="'fold-holder'" class="list-card row fold-head" @click="toggle('holder')"><text class="fold-title">持牌公司</text><text class="fold-sum grow">{{ summary.holder || '待補充' }}</text><text class="chev">{{ open.holder ? '⌃' : '›' }}</text></view>
       <view v-if="open.holder" class="fold-body">
         <view class="card kv">
-          <text class="k">用途</text><text class="v">{{ summary.rental ? '出租：'+summary.rental.renter : summary.usageStatus==='自用' ? '自用' : summary.installationStatus==='未上牌' ? '空置（未上牌）' : unsetWord() }}</text>
+          <text class="k">用途</text><text class="v">{{ summary.rental ? '出租：'+summary.rental.renter : summary.usageStatus==='自用' ? '自用' : summary.usageStatus==='暫停使用' ? '空置' : summary.installationStatus==='未上牌' ? '空置（未上牌）' : unsetWord() }}</text>
           <template v-if="summary.rental"><text class="k">租期</text><text class="v num">{{ (summary.rental.startsOn||'—')+' 至 '+(summary.rental.endsOn||'未定') }}</text></template>
           <text v-if="summary.indicatorCategory" class="k">指標類別</text><text v-if="summary.indicatorCategory" class="v">{{ summary.indicatorCategory }}</text>
           <text v-if="summary.port" class="k">口岸</text><text v-if="summary.port" class="v">{{ summary.port }}</text>
@@ -157,10 +159,12 @@
           <text class="field-label">內地車牌號</text><input class="field" v-model="plateForm.mainlandPlate" placeholder="尚未上牌可留空"/>
           <text class="field-label">香港／澳門車牌號</text><input class="field" v-model="plateForm.localPlate" placeholder="尚未上牌可留空"/>
           <text class="field-label">上牌狀態</text><picker :range="installOptions" @change="plateForm.installationStatus=installOptions[Number($event.detail.value)]"><view class="field picker"><text :class="installWord(plateForm.installationStatus)==='未填寫'?'note-gray':''">{{ installWord(plateForm.installationStatus) }}</text><text class="chev">›</text></view></picker>
+          <!-- 使用狀態（第 11 步）：自管客戶自己填自用或空置；出租中由出租區的出租記錄而來 -->
+          <template v-if="cardSelfManaged"><text class="field-label">使用狀態</text><view v-if="plateForm.usageStatus==='出租中'" class="field picker"><text>出租中（在出租區處理）</text></view><picker v-else :range="['自用','空置']" @change="plateForm.usageStatus=['自用','暫停使用'][Number($event.detail.value)]"><view class="field picker"><text :class="usageWord(plateForm.usageStatus)==='未填寫'?'note-gray':''">{{ usageWord(plateForm.usageStatus) }}</text><text class="chev">›</text></view></picker></template>
           <text class="field-label">綁定車輛</text><picker :range="vehicleOptions(p)" range-key="label" @change="plateForm.vehicleId=vehicleOptions(p)[Number($event.detail.value)]?.id||''"><view class="field picker"><text>{{ vehicleOptions(p).find(v=>v.id===plateForm.vehicleId)?.label || '未綁定' }}</text><text class="chev">›</text></view></picker>
           <text class="field-label">批文卡有效期至</text><input class="field num" v-model="plateForm.cardExpiresOn" placeholder="YYYY-MM-DD"/>
           <text class="field-label">備註</text><textarea class="field notes" v-model="plateForm.notes" placeholder="補充這個兩地牌的資料"/>
-          <text class="line-sub">使用狀態由顧問記錄；批文卡編號請在上方「修改內容」更新。修改後立即生效，顧問會再核對。</text>
+          <text class="line-sub">{{ cardSelfManaged ? '出租請在上面的出租區新增；批文卡編號請在上方「修改內容」更新。修改後立即生效。' : '使用狀態由顧問記錄；批文卡編號請在上方「修改內容」更新。修改後立即生效，顧問會再核對。' }}</text>
           <button class="primary save-file" :disabled="savingFile" @click="savePlate(p)">{{ savingFile ? '正在儲存…' : '儲存牌照資料' }}</button>
         </view>
       </view>
@@ -214,12 +218,13 @@ async function markCrossed(date){if(crossingBusy.value||!date)return;crossingBus
 const summary=ref({}),showEdit=ref(false),fieldStatus=ref({}),arrangements=ref([]),rentalOptions=ref(null)
 // 客戶端寫「出租」（管理者 2026-10-18，推翻 V1「使用安排」）
 function cardSummary(p){const status=p.card_status||'待核對',expires=p.card_expires_on?'有效期至 '+p.card_expires_on:'';if(cardSelfManaged&&status==='待核對')return expires||'已建檔';return status+(expires?' · '+expires:'')}
-const usageWord=status=>!status||status==='待核對'?unsetWord():status==='出租中'?'出租中':status
+const usageWord=status=>!status||status==='待核對'?unsetWord():status==='暫停使用'?'空置':status
 const cycleLabel={monthly:'每月',quarterly:'每季',yearly:'每年'},feeTone={已收:'gray',逾期:'red',部分收:'amber',待收:''}
 // 代收的寫「已收到」；直付的由客戶自己收款，寫「已確認收到」
 // 出租：生效＝出租中（綠），處理中（橙），結束或取消（灰）
 const rentalTone=a=>a.status==='生效'?'':['草擬','待換車'].includes(a.status)?'amber':'gray'
 function openRental(a){if(a.source==='client')uni.navigateTo({url:'/pages/rental/rental?id='+a.id})}
+function entrustCollection(){startEntrust({code:'rental_collection',name:'出租代收租金',plateId})}
 function newRental(){uni.navigateTo({url:'/pages/rental-new/rental-new?plate='+plateId})}
 function feeLabel(a,i){return i.status==='已收'?(a.collectionMode==='代收'?'我們已收到':'已確認收到'):i.status==='逾期'?'未收到（已過期）':i.status==='部分收'?'部分收到':'未到期'}
 function openRequest(id){uni.navigateTo({url:'/pages/request-detail/request-detail?id='+id})}
@@ -287,7 +292,7 @@ const vehicleSummary=computed(()=>{const v=boundVehicles.value[0];if(!v)return '
 const driverSummary=computed(()=>{const list=summary.value.drivers||[];if(!list.length)return '未登記';const main=list.find(d=>d.role==='主')||list[0];return main.name+'（'+(main.role==='主'?'主':'副')+'）'+(list.length>1?' 等 '+list.length+' 人':'')})
 // 有出租時，摘要加狀態或最近一期租金的收款狀態
 const paidWord=a=>{const list=a?.invoices||[];if(list.some(i=>i.status==='逾期'))return '有逾期未收';const last=[...list].sort((x,y)=>String(y.period).localeCompare(String(x.period)))[0];return !last?'未有租金記錄':last.status==='已收'?'已收':last.status==='部分收'?'部分收到':'未到期'}
-const usageSummary=computed(()=>{const s=summary.value,active=arrangements.value.find(a=>a.status==='生效')||arrangements.value[0];if(active)return active.user.name+' · '+(active.status==='生效'?paidWord(active):active.statusWord);return s.rental?'出租：'+s.rental.renter:s.usageStatus==='自用'?'自用':s.installationStatus==='未上牌'?'空置（未上牌）':unsetWord()})
+const usageSummary=computed(()=>{const s=summary.value,active=arrangements.value.find(a=>a.status==='生效')||arrangements.value[0];if(active)return active.user.name+' · '+(active.status==='生效'?paidWord(active):active.statusWord);return s.rental?'出租：'+s.rental.renter:s.usageStatus==='自用'?'自用':s.usageStatus==='暫停使用'?'空置':s.installationStatus==='未上牌'?'空置（未上牌）':unsetWord()})
 const plateSummary=computed(()=>{const p=plates.value[0];return p?(p.installation_status==='待核對'?unsetWord():p.installation_status)+' · '+boundVehicle(p):''})
 // 下一件要做的事：先逾期、再快到期（你自理的事項、90 天過關），然後是車輛登記和必要證件
 const nextBusy=ref(false)
@@ -326,7 +331,7 @@ function mainlandParts(value){const clean=String(value||'').toUpperCase().replac
 function formatHongKong(value){const clean=String(value||'').toUpperCase().replace(/\s+/g,'');return clean.replace(/^([A-Z]{1,2})([0-9]{1,4})$/,'$1 $2')}
 function formatMacau(value){const clean=String(value||'').toUpperCase().replace(/[\s-]/g,'');return clean.replace(/^([A-Z]{2})([0-9]{2})([0-9]{2})$/,'$1-$2-$3')}
 function openSource(sourceId){const source=sources.value.find(s=>s.id===sourceId);if(source)uni.setClipboardData({data:source.url,success:()=>uni.showToast({title:'官方連結已複製',icon:'none'})})}
-async function load(){if(!getUser())return uni.navigateTo({url:'/pages/login/login'});if(creating.value||!plateId)return;try{const [p,v,catalog,mine]=await Promise.all([api('/plate-assets/'+plateId),api('/vehicles'),api('/catalog'),api('/my/plates/'+plateId)]);summary.value=mine;loadPending();loadSelf();api('/my/drivers').then(list=>{drivers.value=list}).catch(()=>{drivers.value=[]});api('/my/rentals').then(list=>{arrangements.value=list.filter(item=>item.plateId===plateId)}).catch(()=>{arrangements.value=[]});if(!cardSelfManaged)api('/my/plates/'+plateId+'/rental-options').then(r=>{rentalOptions.value=r}).catch(()=>{rentalOptions.value=null});plates.value=[p];plateDetail.value={...plateDetail.value,[p.id]:p};vehicles.value=v;sources.value=catalog.sources;fillPlateForm(p);detail.value=Object.fromEntries(await Promise.all(v.map(async item=>[item.id,await api('/vehicles/'+item.id)])));loadDocs(v.filter(item=>item.id===p.vehicle_id))}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
+async function load(){if(!getUser())return uni.navigateTo({url:'/pages/login/login'});if(creating.value||!plateId)return;try{const [p,v,catalog,mine]=await Promise.all([api('/plate-assets/'+plateId),api('/vehicles'),api('/catalog'),api('/my/plates/'+plateId)]);summary.value=mine;loadPending();loadSelf();api('/my/drivers').then(list=>{drivers.value=list}).catch(()=>{drivers.value=[]});api('/my/rentals').then(list=>{arrangements.value=list.filter(item=>item.plateId===plateId)}).catch(()=>{arrangements.value=[]});api('/my/plates/'+plateId+'/rental-options').then(r=>{rentalOptions.value=r}).catch(()=>{rentalOptions.value=null});plates.value=[p];plateDetail.value={...plateDetail.value,[p.id]:p};vehicles.value=v;sources.value=catalog.sources;fillPlateForm(p);detail.value=Object.fromEntries(await Promise.all(v.map(async item=>[item.id,await api('/vehicles/'+item.id)])));loadDocs(v.filter(item=>item.id===p.vehicle_id))}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
 onLoad(options=>{plateId=options.id||'';creating.value=options.new==='1';if(!creating.value)load()})
 onShow(load)
 import DueDate from '../../components/DueDate.vue'

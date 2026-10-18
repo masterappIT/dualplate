@@ -53,9 +53,13 @@
       </view>
 
       <view class="card">
-        <text class="step-title">由誰負責</text>
+        <text class="step-title">{{ selfManaged ? '協議和收租' : '由誰負責' }}</text>
+        <!-- 自管客戶只可自行負責、租客直接付給你；代理和代收是托管服務（docs/tasks/self-managed-fixes-plan.md 第 11 步） -->
+        <text v-if="selfManaged" class="subtle field-hint">你自己把協議發給承租人、收租，租金由承租人直接付給你；我們只記錄。想由我們代收，可在牌照的出租區按「交給我們代收」。</text>
+        <template v-else>
         <view class="segmented"><text class="seg" :class="{ on: handling === 'self' }" @click="handling = 'self'">自行負責</text><text class="seg" :class="{ on: handling === 'agent' }" @click="handling = 'agent'">交給我們代理</text></view>
         <text class="subtle field-hint">{{ handling === 'self' ? '你自己把協議發給承租人、收租；我們只記錄。' : '協議和後續由顧問接手，可由我們代收租金，按你的委託內容收費。' }}</text>
+        </template>
         <template v-if="handling === 'agent'">
           <text class="field-label">租金怎樣付</text>
           <view class="segmented"><text class="seg" :class="{ on: collection === '直付' }" @click="collection = '直付'">直接付給你</text><text class="seg" :class="{ on: collection === '代收' }" @click="collection = '代收'">由我們代收</text></view>
@@ -69,7 +73,8 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { api, getUser } from '../../lib/api'
+import { api, getUser, isSelfManaged } from '../../lib/api'
+const selfManaged = isSelfManaged()
 let plateId = ''
 const options = ref(null), loaded = ref(false), busy = ref(false)
 const renter = ref({ name: '', phone: '', idNo: '' }), lessorKey = ref('client:'), useCurrent = ref(true), vehiclePlate = ref(''), pickedDrivers = ref({}), newDriver = ref('')

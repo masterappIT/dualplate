@@ -8,7 +8,7 @@ import { advanceClientRental, confirmedVersion, contractFor, contractView, curre
 import { agreementTemplate, fillTemplate, issueRenterLink } from './renter-portal.js'
 
 // 客戶自行新增出租（docs/tasks/custody-feedback-2026-10-18.md 第 5A 項，協議見 docs/tasks/rental-agreement-draft.md）。
-// 只開放托管客戶；已有出租在處理中或出租中、已標記不再續期的牌照不能新增。換車、換司機每項預設交給我們辦（開工單），
+// 托管客戶可交給我們代理和代收；自管客戶只可自行負責、租客直接付款（第 11 步）。已有出租在處理中或出租中、已標記不再續期的牌照不能新增。換車、換司機每項預設交給我們辦（開工單），
 // 也可自行辦理（辦好後在「有變動？」回報）。交給我們代理的，另開「出租代理」工單由員工接手協議和後續。員工不用批准。
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 const clean = (value, max = 120) => typeof value === 'string' ? value.trim().slice(0, max) : ''
@@ -28,7 +28,7 @@ const lessorCompanies = (customer, plate) => plate.group_id ? db.prepare("SELECT
 
 // 為甚麼這個牌照不能新增出租；null＝可以
 function blockReason(customer, plate) {
-  if (customer.is_self || selfManaged(customer)) return '自行新增出租暫時只開放給委託我們代辦的客戶'
+  if (customer.is_self) return '自行新增出租暫時只開放給委託我們代辦的客戶'
   if (plate.stopped_on) return '這個牌照已標記不再續期，不能新增出租'
   if (plate.usage_status === '出租中' || db.prepare(`SELECT 1 FROM rental_contracts WHERE plate_asset_id=? AND status IN (${openStatuses.map(() => '?').join(',')})`).get(plate.id, ...openStatuses)) return '這個牌照已有出租在處理中或出租中'
   return null
@@ -97,6 +97,8 @@ function checkNew(customer, plate, body) {
   const cycle = body.cycle ?? 'monthly'; if (!cycles.includes(cycle)) return { error: '收租週期無效' }
   const dueDay = body.dueDay ?? 1; if (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > 28) return { error: '每期收租日須為 1–28' }
   if (!['agent', 'self'].includes(body.handling)) return { error: '請選擇交給我們代理或自行負責' }
+  // 自管客戶自己記出租（docs/tasks/self-managed-fixes-plan.md 第 11 步）：只可自行負責、租客直接付給你；代理和代收是托管服務，可按「交給我們代收」委託我們
+  if (selfManaged(customer) && body.handling !== 'self') return { error: '交給我們代理或代收只限托管客戶；可在出租區按「交給我們代收」委託我們' }
   const collection = body.collectionMode ?? '直付'; if (!['直付', '代收'].includes(collection)) return { error: '收租方式無效' }
   if (collection === '代收' && body.handling !== 'agent') return { error: '只有交給我們代理的出租可以由我們代收租金' }
   // 要辦的手續：換了車才要換車；有新司機才要換司機。每項預設交給我們辦
