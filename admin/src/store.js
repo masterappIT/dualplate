@@ -620,9 +620,10 @@ async function readImageFile(event) {
   });
 }
 // recognize=false：只保存正本，不辨識、不改批文卡資料（管理者 2026-10-18）
+// 第二個參數可以是檔案欄位事件，或對準框裁好的卡面 data URL（管理者 2026-10-18）
 async function uploadCard(side, event, recognize = true) {
   try {
-    const image = await readImageFile(event);
+    const image = typeof event === "string" ? event : await readImageFile(event);
     if (!image) return;
     const result = await api(
       "/plate-assets/" + selectedPlate.value.id + "/card/" + side,
@@ -640,7 +641,7 @@ async function uploadCard(side, event, recognize = true) {
   } catch (e) {
     showError(e);
   } finally {
-    event.target.value = "";
+    if (event?.target) event.target.value = "";
   }
 }
 function fieldStatusText(status) {

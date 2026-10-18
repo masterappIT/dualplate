@@ -203,3 +203,14 @@ select:not([multiple]):focus-visible { outline: none; border-color: var(--primar
   .table-card-field.is-wide:not(:first-of-type) { border-top: 1px solid var(--border); margin-top: 4px; }
   .table-card-field:has(.fee-actions:empty), .table-card-field:has(.row-actions:empty) { display: none; }
 }
+/* 批文卡對準框（CardCropper）：相片在下，框外加遮罩，只保存框內卡面 */
+.card-cropper-stage { position: relative; overflow: hidden; border-radius: var(--r-card); background: var(--ink); touch-action: none; user-select: none; }
+.card-cropper-picture { position: absolute; left: 0; top: 0; transform-origin: 0 0; max-width: none; pointer-events: none; }
+.card-cropper-frame { position: absolute; border: 3px solid var(--card); border-radius: var(--r-panel); box-shadow: 0 0 0 2000px var(--scrim); pointer-events: none; }
+.card-cropper-pick { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.card-cropper-error { margin: 0; color: var(--status-overdue); font-size: 13px; }
+.card-original-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; margin-top: 12px; }
+.card-original { display: grid; gap: 4px; width: 132px; padding: 0; border: 0; background: none; text-align: left; cursor: pointer; }
+.card-original img, .card-original .card-placeholder { width: 132px; aspect-ratio: 1015 / 645; min-height: 0; object-fit: cover; border: 1px solid var(--border); border-radius: var(--r-control); }
+.card-original strong { font-size: 12px; }
+.card-original-full { display: block; width: 100%; border-radius: var(--r-card); }

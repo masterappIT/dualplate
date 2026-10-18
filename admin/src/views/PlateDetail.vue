@@ -46,10 +46,25 @@
           {{ selectedPlate.card_updated_by || "尚未更新" }}
         </p>
       </div>
+      <!-- 上傳放在標題列（管理者 2026-10-18）：選檔案後先對準框；還沒有正本時只可上傳並讀取 -->
+      <div class="page-actions">
+        <button class="button primary" @click="openCrop('read')">上傳並讀取內容</button>
+        <button v-if="hasOriginal" class="button" @click="openCrop('save')">只保存正本</button>
+      </div>
     </div>
     <div class="approval-admin-grid">
       <div>
         <ApprovalCard :key="selectedPlate.id" :data="cardDraft" />
+        <!-- 原件縮圖放在模擬卡下面，點開放大對照（原本收在摺疊區） -->
+        <p class="cell-sub">原件掃描與重新上傳（供核對）</p>
+        <div class="card-original-row">
+          <button v-for="side in ['front', 'back']" :key="side" type="button" class="card-original" :disabled="!selectedPlate.cardImages?.[side]" @click="viewing = side">
+            <img v-if="selectedPlate.cardImages?.[side]" :src="selectedPlate.cardImages[side]" :alt="`${side === 'front' ? '正面' : '背面'}原件`" />
+            <span v-else class="card-placeholder">尚未上傳</span>
+            <strong>{{ side === "front" ? "正面" : "背面" }}</strong>
+          </button>
+        </div>
+        <small class="cell-sub">只保存正本：資料不變，只留相片記錄。上傳並讀取內容：辨識後填入欄位，標為待核對。</small>
         <p class="preview-note">
           模板按提供的批文卡原件重繪；文字由欄位資料即時生成。上傳後請逐欄核對。
         </p>
@@ -71,27 +86,11 @@
         <button class="button" @click="saveCard">儲存並核對</button>
       </div>
     </div>
-    <!-- 平時收起，保持頁面整潔；要核對或重新上傳時才展開（管理者 2026-10-18） -->
-    <details class="scan-details">
-      <summary>原件掃描與重新上傳（供核對）</summary>
-      <div class="card-upload-grid">
-        <div v-for="side in ['front', 'back']" :key="side">
-          <strong>{{ side === "front" ? "正面" : "背面" }}</strong
-          ><img
-            v-if="selectedPlate.cardImages?.[side]"
-            :src="selectedPlate.cardImages[side]"
-            class="card-image"
-          />
-          <div v-else class="card-placeholder">尚未上傳</div>
-          <div class="card-upload-actions">
-            <label class="button file-button">只保存正本<input type="file" accept="image/png,image/jpeg" :aria-label="`只保存${side === 'front' ? '正面' : '背面'}正本`" @change="uploadCard(side, $event, false)" /></label>
-            <label class="button file-button">上傳並讀取內容<input type="file" accept="image/png,image/jpeg" :aria-label="`上傳${side === 'front' ? '正面' : '背面'}並讀取內容`" @change="uploadCard(side, $event)" /></label>
-          </div>
-        </div>
-      </div>
-      <small class="cell-sub">只保存正本：資料不變，只留相片記錄。上傳並讀取內容：辨識後填入欄位，標為待核對。</small>
-    </details>
   </section>
+  <CardCropper :open="cropOpen" :side="cropSide" :mode="cropMode" @close="cropOpen = false" @confirm="onCrop" />
+  <Modal :open="!!viewing" :title="viewing === 'back' ? '背面原件' : '正面原件'" :width="880" close-on-overlay @close="viewing = ''">
+    <img v-if="viewing && selectedPlate.cardImages?.[viewing]" :src="selectedPlate.cardImages[viewing]" class="card-original-full" alt="" />
+  </Modal>
   <PlateDrivers ref="plateDrivers" :plate-id="selectedPlate.id" :customer-id="selectedPlate.customer_id" @saved="showSuccess" />
   <ExpiryPanel
     owner-type="plate"
@@ -200,6 +199,8 @@ import Select from '../components/ui/Select.vue';
 import DateInput from '../components/ui/DateInput.vue';
 import PlateDrivers from '../components/business/PlateDrivers.vue'
 import CompanyName from '../components/business/CompanyName.vue'
+import CardCropper from '../components/business/CardCropper.vue'
+import Modal from '../components/ui/Modal.vue'
 const {
   selectedPlate,
   view,
@@ -224,6 +225,18 @@ const {
   newRequest,
   openVehicle,
 } = useAdminStore();
+// 批文卡上傳：先開對準框，裁好的卡面才上傳；read＝上傳並讀取內容，save＝只保存正本
+const hasOriginal = computed(() => !!(selectedPlate.value?.cardImages?.front || selectedPlate.value?.cardImages?.back))
+const cropOpen = ref(false), cropMode = ref('read'), cropSide = ref('front'), viewing = ref('')
+function openCrop(mode) {
+  cropMode.value = hasOriginal.value ? mode : 'read'
+  cropSide.value = selectedPlate.value?.cardImages?.front && !selectedPlate.value?.cardImages?.back ? 'back' : 'front'
+  cropOpen.value = true
+}
+async function onCrop({ side, image }) {
+  cropOpen.value = false
+  await uploadCard(side, image, cropMode.value === 'read')
+}
 // 從批文卡建檔或匯入的牌照沒有車輛記錄：按港澳車牌登記並綁定，然後打開車輛頁上傳證件
 const boundVehicle = computed(() => vehicles.value.find(vehicle => vehicle.id === selectedPlate.value?.vehicle_id) || null)
 const registering = ref(false)

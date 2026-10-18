@@ -116,6 +116,7 @@
     </template>
     <wd-action-sheet custom-class="choice-sheet" v-model="sheet.show" :title="sheet.title" :actions="sheet.actions" cancel-text="取消" @select="onSelect" @close="onClose" />
     <wd-message-box />
+    <CardCapture ref="capture"/>
   </view>
 </template>
 <script setup>
@@ -124,12 +125,13 @@ const { sheet,choose,onSelect,onClose }=useChoice(),confirmBox=useConfirm()
 import { ref,computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { api,cardPhoto,forgetCardOriginal } from '../../lib/api'
+import CardCapture from '../../components/CardCapture.vue'
 const names={vehicle_change:'自行換車',renewal:'自行續期',driver_change:'自行換司機',stop_renewal:'不再續期',inspection_done:'自行驗車',filing_done:'自行備案',tax_paid:'自行繳交行車稅',crossing_change:'自行口岸變更',company_change:'自行商號變更',replacement:'自行補領'}
 // 驗車、新批文備案只是標記一期辦好，不用拍新批文卡
 const cardText=ref({crossing:'',crpExpiresOn:'',company:'',contractor:'',serial:'',cardNumber:''}),before=ref({})
 const markProof={inspection_done:'檢驗標誌或檢驗結果',filing_done:'備案回執',tax_paid:'行車稅繳費收據'},markDoing={inspection_done:'驗車',filing_done:'新批文備案',tax_paid:'繳交澳門行車稅'}
 const marking=computed(()=>!!markProof[kind.value]),mark=ref({period:'',name:'',label:'',dueOn:''})
-const plateId=ref(''),kind=ref('vehicle_change'),form=ref({}),loaded=ref(false),busy=ref(false),submitting=ref(false),uploaded=ref({})
+const capture=ref(null),plateId=ref(''),kind=ref('vehicle_change'),form=ref({}),loaded=ref(false),busy=ref(false),submitting=ref(false),uploaded=ref({})
 const todayIso=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 const today=todayIso(),handledOn=ref(today)
 const vehicle=ref({plate:'',brand:'',model:'',firstRegisteredOn:'',vin:''}),dates=ref({}),renewal=ref({}),filingDone=ref(false),drivers=ref([]),stop=ref({reason:'',note:''}),photos=ref([])
@@ -160,7 +162,7 @@ async function load(){try{form.value=await api('/my/plates/'+encodeURIComponent(
 function setDone(doc,done){renewal.value={...renewal.value,[doc.code]:{done,expiresOn:done?(renewal.value[doc.code]?.expiresOn||''):''}}}
 function setMain(index){drivers.value=drivers.value.map((d,i)=>({...d,role:i===index?'主':'副'}))}
 function addDriver(){drivers.value.push({name:'',role:drivers.value.some(d=>d.role==='主')?'副':'主',phone:'',dates:{}})}
-function uploadCard(side){uni.chooseImage({count:1,sizeType:['original'],sourceType:['album','camera'],success:async result=>{busy.value=true;try{const image=(await cardPhoto(result)).data;await api('/plate-assets/'+plateId.value+'/card/'+side,'POST',{image});forgetCardOriginal(plateId.value);uploaded.value={...uploaded.value,[side]:true};form.value=await api('/my/plates/'+encodeURIComponent(plateId.value)+'/self-handled/form');fillDefaults();uni.showToast({title:'已上傳，請核對下面的資料',icon:'none'})}catch(e){uni.showToast({title:e.message||'上傳失敗',icon:'none'})}finally{busy.value=false}}})}
+async function uploadCard(side){const photo=await capture.value.open({side});if(!photo)return;busy.value=true;try{const image=photo.data;await api('/plate-assets/'+plateId.value+'/card/'+side,'POST',{image});forgetCardOriginal(plateId.value);uploaded.value={...uploaded.value,[side]:true};form.value=await api('/my/plates/'+encodeURIComponent(plateId.value)+'/self-handled/form');fillDefaults();uni.showToast({title:'已上傳，請核對下面的資料',icon:'none'})}catch(e){uni.showToast({title:e.message||'上傳失敗',icon:'none'})}finally{busy.value=false}}
 function addPhoto(){uni.chooseImage({count:1,sizeType:['original'],sourceType:['album','camera'],success:async result=>{busy.value=true;try{photos.value.push(await cardPhoto(result))}catch(e){uni.showToast({title:e.message||'相片讀取失敗',icon:'none'})}finally{busy.value=false}}})}
 async function viewPhoto(index){const i=await choose('這張相片',['放大查看','移除這張']);if(i===0)uni.previewImage({urls:photos.value.map(p=>p.path),current:photos.value[index].path});else if(i===1)photos.value.splice(index,1)}
 function body(){

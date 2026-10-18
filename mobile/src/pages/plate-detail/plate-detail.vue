@@ -166,6 +166,7 @@
     <text v-if="!creating && summary.id && !plates[0]?.stopped_on" class="link stop-link" @click="openSelf('stop_renewal')">不再續期這個牌照 ›</text>
     <wd-action-sheet custom-class="choice-sheet" v-model="sheet.show" :title="sheet.title" :actions="sheet.actions" cancel-text="取消" @select="onSelect" @close="onClose" />
     <wd-message-box />
+    <CardCapture ref="capture"/>
   </view>
 </template>
 <script setup>
@@ -179,9 +180,10 @@ const cardSelfManaged=isSelfManaged()
 import { api,getUser,startRequest,requestTone,clientStage,detailText,selfHandled,money,cardPhoto,viewCardOriginal,forgetCardOriginal,viewVehicleDocument,daysLeft } from '../../lib/api'
 import PlateChip from '../../components/PlateChip.vue'
 import ApprovalCard from '../../components/ApprovalCard.vue'
+import CardCapture from '../../components/CardCapture.vue'
 import MainlandPlate from '../../components/MainlandPlate.vue'
 import HongKongPlate from '../../components/HongKongPlate.vue'
-const { sheet,choose,onSelect,onClose }=useChoice(),confirmBox=useConfirm()
+const { sheet,choose,onSelect,onClose }=useChoice(),confirmBox=useConfirm(),capture=ref(null)
 const vehicles=ref([]),detail=ref({}),plates=ref([]),plateDetail=ref({}),sources=ref([])
 const crossingBusy=ref(false),justCrossed=ref(false),loaded=ref(false),cardBack=ref(false),allDeadlines=ref(false)
 const healthLabel={ok:'正常',due:'快到期',overdue:'已逾期',pending:noDatesWord()},healthTone={ok:'',due:'amber',overdue:'red',pending:'gray'}
@@ -217,10 +219,10 @@ function editCard(p){cardDraft.value={...(plateDetail.value[p.id]?.cardData||{})
 function fieldStatusText(status){return status?.status==='uncertain'?'請核對':status?.status==='failed'?'未能辨識，請手動填寫':''}
 function fieldStatusClass(status){return status?.status==='failed'?'failed':'uncertain'}
 async function saveCard(p){const before=plateDetail.value[p.id]?.cardData||{},why=await askWhy(before,cardDraft.value);if(why===null)return;try{const updated=await api('/plate-assets/'+p.id,'PUT',{cardData:cardDraft.value});plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editingCardId.value='';summary.value=await api('/my/plates/'+p.id);loadPending();if(why)return openSelf(why.kind,why.newPlate);uni.showToast({title:'已更新，顧問會再核對',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}}
-// 上傳批文卡：先選正面或背面，再選「只保存正本」（資料不變，只留相片）或「上傳並讀取內容」（辨識、填入、標待核對）
-async function uploadCard(p){const face=await choose('上傳哪一面？',['正面','背面']);if(face<0)return;const side=face===0?'front':'back';const mode=await choose('怎樣處理這張相片？',[{title:'只保存正本',sub:'資料不變，只留相片記錄'},{title:'上傳並讀取內容',sub:'系統讀出卡上的文字填入，顧問會再核對'}]);if(mode===0)saveCardOriginal(p,side);else if(mode===1)readCard(p,side)}
-function saveCardOriginal(p,side){uni.chooseImage({count:1,sizeType:['original'],sourceType:['album','camera'],success:async result=>{uni.showLoading({title:'正在上傳',mask:true});try{const image=(await cardPhoto(result)).data;await api('/plate-assets/'+p.id+'/card/'+side,'POST',{image,recognize:false});forgetCardOriginal(p.id);const updated=await api('/plate-assets/'+p.id);plateDetail.value={...plateDetail.value,[p.id]:updated};uni.hideLoading();uni.showToast({title:'正本已保存，資料沒有改動',icon:'none'})}catch(e){uni.hideLoading();uni.showToast({title:e.message||'上傳失敗',icon:'none'})}}})}
-function readCard(p,side){uni.chooseImage({count:1,sizeType:['original'],sourceType:['album','camera'],success:async result=>{uni.showLoading({title:'正在上傳辨識',mask:true});try{const image=(await cardPhoto(result)).data;const before={...(plateDetail.value[p.id]?.cardData||{})};const response=await api('/plate-assets/'+p.id+'/card/'+side,'POST',{image});forgetCardOriginal(p.id);fieldStatus.value=response.fieldStatus||{};const updated=await api('/plate-assets/'+p.id);plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editCard(p);summary.value=await api('/my/plates/'+p.id);loadPending();uni.hideLoading();const why=await askWhy(before,response.cardData||{},true);if(why){editingCardId.value='';return openSelf(why.kind,why.newPlate)}uni.showToast({title:'已辨識，請核對欄位',icon:'none'})}catch(e){uni.hideLoading();uni.showToast({title:e.message||'上傳失敗',icon:'none'})}}})}
+// 上傳批文卡：先選正面或背面；還沒有正本時直接對框讀取（管理者 2026-10-18），已有正本才再選「只保存正本」（資料不變，只留相片）或「上傳並讀取內容」（辨識、填入、標待核對）
+async function uploadCard(p){const face=await choose('上傳哪一面？',['正面','背面']);if(face<0)return;const side=face===0?'front':'back';if(!originalSides(p).length)return readCard(p,side);const mode=await choose('怎樣處理這張相片？',[{title:'只保存正本',sub:'資料不變，只留相片記錄'},{title:'上傳並讀取內容',sub:'系統讀出卡上的文字填入，顧問會再核對'}]);if(mode===0)saveCardOriginal(p,side);else if(mode===1)readCard(p,side)}
+async function saveCardOriginal(p,side){const photo=await capture.value.open({side});if(!photo)return;uni.showLoading({title:'正在上傳',mask:true});try{const image=photo.data;await api('/plate-assets/'+p.id+'/card/'+side,'POST',{image,recognize:false});forgetCardOriginal(p.id);const updated=await api('/plate-assets/'+p.id);plateDetail.value={...plateDetail.value,[p.id]:updated};uni.hideLoading();uni.showToast({title:'正本已保存，資料沒有改動',icon:'none'})}catch(e){uni.hideLoading();uni.showToast({title:e.message||'上傳失敗',icon:'none'})}}
+async function readCard(p,side){const photo=await capture.value.open({side});if(!photo)return;uni.showLoading({title:'正在上傳辨識',mask:true});try{const image=photo.data;const before={...(plateDetail.value[p.id]?.cardData||{})};const response=await api('/plate-assets/'+p.id+'/card/'+side,'POST',{image});forgetCardOriginal(p.id);fieldStatus.value=response.fieldStatus||{};const updated=await api('/plate-assets/'+p.id);plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editCard(p);summary.value=await api('/my/plates/'+p.id);loadPending();uni.hideLoading();const why=await askWhy(before,response.cardData||{},true);if(why){editingCardId.value='';return openSelf(why.kind,why.newPlate)}uni.showToast({title:'已辨識，請核對欄位',icon:'none'})}catch(e){uni.hideLoading();uni.showToast({title:e.message||'上傳失敗',icon:'none'})}}
 // 上傳過的批文卡照片（正本）：有哪一面就看哪一面，預設打開目前翻到的那面
 const originalSides=p=>['front','back'].filter(side=>plateDetail.value[p.id]?.cardImages?.[side])
 function viewOriginal(p){const sides=originalSides(p);viewCardOriginal(p.id,sides,cardBack.value?'back':'front')}
