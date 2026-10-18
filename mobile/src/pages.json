@@ -98,6 +98,18 @@
       }
     },
     {
+      "path": "pages/company-new/company-new",
+      "style": {
+        "navigationBarTitleText": "新增公司"
+      }
+    },
+    {
+      "path": "pages/plate-delete/plate-delete",
+      "style": {
+        "navigationBarTitleText": "刪除牌照"
+      }
+    },
+    {
       "path": "pages/signup/signup",
       "style": {
         "navigationBarTitleText": "申請使用"

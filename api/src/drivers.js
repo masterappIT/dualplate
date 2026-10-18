@@ -32,6 +32,12 @@ function registerFromCard(plate, tenantId) {
   writeRegistration(plate.id, rows.filter(row => row.role === '主').concat(rows.filter(row => row.role === '副').slice(0, 2)))
   return true
 }
+// 客戶自己建檔、或修改批文卡駕駛人時，按批文卡登記司機（docs/tasks/self-managed-fixes-plan.md 第 3 步；與員工按「按批文卡登記」同一做法）。
+// beforeCard：修改前的批文卡；駕駛人沒有改動就不重新登記，以免蓋掉客戶自己調整過的登記。回傳是否有改動
+export function registerClientCard(plate, tenantId, beforeCard = null) {
+  if (beforeCard && ['driver1', 'driver2', 'driver3'].map(key => clean(beforeCard[key], 60)).join('|') === cardNames(plate).join('|')) return false
+  return registerFromCard(plate, tenantId)
+}
 function writeRegistration(plateId, rows) {
   db.prepare('DELETE FROM plate_drivers WHERE plate_asset_id=?').run(plateId)
   rows.forEach((row, index) => db.prepare('INSERT INTO plate_drivers(plate_asset_id,driver_id,role,sort,registered_on) VALUES (?,?,?,?,?)').run(plateId, row.driverId, row.role, index, row.registeredOn || today()))

@@ -26,7 +26,8 @@ const { customers, plates, companyRecords, refresh, showSuccess, showError } = u
 // 合約／承租方憑證／代收結算／合約範本
 const deskTab = ref(route.query.tab && ['uploads', 'settlement', 'template'].includes(route.query.tab) ? route.query.tab : 'contracts')
 const contracts = ref([]), loading = ref(true), listError = ref(''), selected = ref(null), detailError = ref(''), busy = ref(false)
-const status = ref(''), customerId = ref(''), dialog = ref(''), formError = ref(''), receiptFile = ref(null), proofBusy = ref(false)
+// 從客戶頁「查看出租」過來：先篩選那位客戶
+const status = ref(''), customerId = ref(String(route.query.customerId || '')), dialog = ref(''), formError = ref(''), receiptFile = ref(null), proofBusy = ref(false)
 const invoice = ref(null), receipt = ref({ receivedOn: today(), amount: '', receivedBy: '', notes: '' })
 const termination = ref({ endedOn: today(), reason: '' })
 const form = ref({})

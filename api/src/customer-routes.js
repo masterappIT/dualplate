@@ -68,6 +68,11 @@ export async function customerRoutes(req, res, url, user, h) {
   }
   // Vehicle deadlines belong to the plate the vehicle is mounted on.
   const visible = list => list.filter(item => item.level !== 'missing')
+  // 還沒有填日期的事項（docs/tasks/self-managed-fixes-plan.md 第 2 步）：按事項分，只列「你自行辦理」的；我們負責的由員工在後台補，照舊不給客戶看。
+  // fill 說明在哪裏補：date＝直接填到期日（editable，沿用 /api/my/dates）；other＝由別的資料推算，hint 寫明要補甚麼
+  const undatedHints = { approval: '在「批文卡」補上有效期', crossing_90: '在「90 天過關」記錄最近過關日期', inspection: '在「車輛與證件」補上首次登記日期', hk_nar1: '在「我的公司」補上公司成立日期' }
+  const undated = list => list.filter(item => item.level === 'missing' && item.handledBy === 'you' && (item.editable || undatedHints[item.code]))
+    .map(item => ({ code: item.code, name: item.name, ownerType: item.ownerType, ownerId: item.ownerId, ownerLabel: item.ownerLabel, fill: item.editable ? 'date' : 'other', hint: item.editable ? '' : undatedHints[item.code] }))
   // Company deadlines point at a plate of the same company group, when there is one.
   const plateOf = item => item.ownerType === 'plate' ? item.ownerId : item.ownerType === 'driver' ? mainPlate(item.ownerId) : item.ownerType === 'vehicle' ? plates.find(plate => plate.vehicle_id === item.ownerId)?.id : plates.find(plate => plate.group_id && companies.some(company => company.id === item.ownerId && company.group_id === plate.group_id))?.id
   function groupCompanies(groupId) {
@@ -137,9 +142,14 @@ export async function customerRoutes(req, res, url, user, h) {
       group.plates = plates.filter(plate => plate.group_id === group.id)
       group.plates.forEach(plate => linked.add(plate.id))
       return { id: group.id, name: group.name, ...members, plates: group.plates.map(plate => ({ id: plate.id, label: plateLabel(plate), indicatorCategory: plate.indicator_category || '', port: plate.port || '' })),
-        deadlines: visible(all).filter(item => item.ownerType === 'company' && companies.some(company => company.id === item.ownerId && company.group_id === group.id)) }
+        deadlines: visible(all).filter(item => item.ownerType === 'company' && companies.some(company => company.id === item.ownerId && company.group_id === group.id)),
+        undated: undated(all.filter(item => item.ownerType === 'company' && companies.some(company => company.id === item.ownerId && company.group_id === group.id))) }
     })
-    const loose = companies.filter(item => !item.group_id).map(companyFields)
+    // 不屬於任何牌照的公司（例如客戶在「我的公司」新增、沒選牌照）：同樣列出公司事項和還沒有填日期的事項
+    const loose = companies.filter(item => !item.group_id).map(company => {
+      const own = all.filter(item => item.ownerType === 'company' && item.ownerId === company.id)
+      return { ...companyFields(company), deadlines: visible(own), undated: undated(own) }
+    })
     return json(res, 200, { groups: result, ungrouped: loose }), true
   }
   if (reminderPut) {
@@ -168,7 +178,7 @@ export async function customerRoutes(req, res, url, user, h) {
     const own = all.filter(item => plateOf(item) === plate.id || (item.ownerType === 'company' && companies.some(company => company.id === item.ownerId && company.group_id && company.group_id === plate.group_id)))
     const requests = query('SELECT id,title,status,stage,updated_at FROM requests WHERE customer_id=? AND plate_asset_id=? ORDER BY updated_at DESC', customer.id, plate.id)
     const crossing = crossingSummary(customer.tenant_id, plate.id)
-    return json(res, 200, { ...summary, crossing: { enabled: crossing.enabled, lastCrossedOn: crossing.lastCrossedOn, nextDueOn: crossing.nextDueOn, days: crossing.days }, deadlines: visible(own).sort((a, b) => String(a.dueOn).localeCompare(String(b.dueOn))), requests: requests.map(item => ({ id: item.id, title: item.title, status: requestStatus(item.status), stage: item.stage, updatedAt: item.updated_at })), companyGaps: companyGaps(customer.tenant_id, plate.group_id), drivers: query("SELECT d.id, d.name, pd.role FROM plate_drivers pd JOIN drivers d ON d.id=pd.driver_id WHERE pd.plate_asset_id=? ORDER BY CASE pd.role WHEN '主' THEN 0 ELSE 1 END, pd.sort", plate.id) }), true
+    return json(res, 200, { ...summary, crossing: { enabled: crossing.enabled, lastCrossedOn: crossing.lastCrossedOn, nextDueOn: crossing.nextDueOn, days: crossing.days }, deadlines: visible(own).sort((a, b) => String(a.dueOn).localeCompare(String(b.dueOn))), undated: undated(own), requests: requests.map(item => ({ id: item.id, title: item.title, status: requestStatus(item.status), stage: item.stage, updatedAt: item.updated_at })), companyGaps: companyGaps(customer.tenant_id, plate.group_id), drivers: query("SELECT d.id, d.name, pd.role FROM plate_drivers pd JOIN drivers d ON d.id=pd.driver_id WHERE pd.plate_asset_id=? ORDER BY CASE pd.role WHEN '主' THEN 0 ELSE 1 END, pd.sort", plate.id) }), true
   }
   return fail(res, 404, '找不到此頁'), true
 }

@@ -38,8 +38,17 @@
             <view v-else-if="item.markable" class="date-edit" @click="markDone(item)"><DueDate :date="item.dueOn" :days="item.daysLeft" :level="item.level" /><text class="link">已辦好</text></view>
             <view v-else class="date-edit"><DueDate :date="item.dueOn" :days="item.daysLeft" :level="item.level" /><text class="link date-spacer" aria-hidden="true">已辦好</text></view>
           </view>
-          <text v-if="!deadlineList.length" class="line-sub">{{ summary.health==='pending' ? '你的顧問正在整理這個牌照的到期資料。' : '半年內沒有到期項目。' }}</text>
+          <text v-if="!deadlineList.length && !undatedList.length" class="line-sub">{{ summary.health==='pending' ? '你的顧問正在整理這個牌照的到期資料。' : '半年內沒有到期項目。' }}</text>
           <view v-if="deadlineList.length > 5" class="more" @click="allDeadlines=!allDeadlines">{{ allDeadlines ? '收起' : '顯示全部 '+deadlineList.length+' 項' }}</view>
+        </view>
+        <!-- 還沒有填日期（docs/tasks/self-managed-fixes-plan.md 第 2 步）：只列你自行辦理的事項；填了到期日就移到上面 -->
+        <view v-if="undatedList.length" class="card list undated">
+          <text class="undated-title">還沒有填日期</text>
+          <view v-for="(item,index) in undatedList" :key="'u'+index" class="line">
+            <view class="grow"><text class="line-title">{{ item.name }}</text><text v-if="item.ownerType!=='plate'" class="line-sub">{{ item.ownerLabel }}</text><text v-if="item.hint" class="line-sub">{{ item.hint }}</text></view>
+            <picker v-if="item.fill==='date'" mode="date" @change="fillDate(item,$event.detail.value)"><view class="date-edit"><text class="link">填日期</text></view></picker>
+          </view>
+          <text class="line-sub undated-note">填上到期日後，到期前會提醒你。</text>
         </view>
       </view>
       <view :id="'fold-crossing'" class="list-card row fold-head" @click="toggle('crossing')"><text class="fold-title">90 天過關</text><text class="fold-sum grow">{{ crossingSummary }}</text><text class="chev">{{ open.crossing ? '⌃' : '›' }}</text></view>
@@ -147,7 +156,7 @@
         <view v-if="showEdit" class="edit-file">
           <text class="field-label">內地車牌號</text><input class="field" v-model="plateForm.mainlandPlate" placeholder="尚未上牌可留空"/>
           <text class="field-label">香港／澳門車牌號</text><input class="field" v-model="plateForm.localPlate" placeholder="尚未上牌可留空"/>
-          <text class="field-label">上牌狀態</text><picker :range="['待核對','未上牌','已上牌']" @change="plateForm.installationStatus=['待核對','未上牌','已上牌'][Number($event.detail.value)]"><view class="field picker"><text>{{ plateForm.installationStatus }}</text><text class="chev">›</text></view></picker>
+          <text class="field-label">上牌狀態</text><picker :range="installOptions" @change="plateForm.installationStatus=installOptions[Number($event.detail.value)]"><view class="field picker"><text :class="installWord(plateForm.installationStatus)==='未填寫'?'note-gray':''">{{ installWord(plateForm.installationStatus) }}</text><text class="chev">›</text></view></picker>
           <text class="field-label">綁定車輛</text><picker :range="vehicleOptions(p)" range-key="label" @change="plateForm.vehicleId=vehicleOptions(p)[Number($event.detail.value)]?.id||''"><view class="field picker"><text>{{ vehicleOptions(p).find(v=>v.id===plateForm.vehicleId)?.label || '未綁定' }}</text><text class="chev">›</text></view></picker>
           <text class="field-label">批文卡有效期至</text><input class="field num" v-model="plateForm.cardExpiresOn" placeholder="YYYY-MM-DD"/>
           <text class="field-label">備註</text><textarea class="field notes" v-model="plateForm.notes" placeholder="補充這個兩地牌的資料"/>
@@ -164,6 +173,8 @@
       </view>
     </view>
     <text v-if="!creating && summary.id && !plates[0]?.stopped_on" class="link stop-link" @click="openSelf('stop_renewal')">不再續期這個牌照 ›</text>
+    <!-- 自管客戶刪除建錯的牌照（docs/tasks/self-managed-fixes-plan.md 第 13 步）；托管客戶目前狀態不動 -->
+    <text v-if="cardSelfManaged && !creating && summary.id" class="link stop-link delete-link" @click="openDelete">刪除這個牌照 ›</text>
     <wd-action-sheet custom-class="choice-sheet" v-model="sheet.show" :title="sheet.title" :actions="sheet.actions" cancel-text="取消" @select="onSelect" @close="onClose" />
     <wd-message-box />
     <CardCapture ref="capture"/>
@@ -177,6 +188,9 @@ import { canEntrust,startEntrust,isSelfManaged,unsetWord,noDatesWord } from '../
 function openScope(id){uni.navigateTo({url:'/pages/scope/scope?id='+id})}
 // 自管客戶自己建檔，沒有顧問核對批文卡：不顯示「待核對」，只顯示有效期
 const cardSelfManaged=isSelfManaged()
+// 上牌狀態（docs/tasks/self-managed-fixes-plan.md 第 6 步）：自管客戶沒有人核對，只可選未上牌／已上牌，沒有選時顯示「未填寫」；托管照舊
+const installOptions=cardSelfManaged?['未上牌','已上牌']:['待核對','未上牌','已上牌']
+const installWord=status=>cardSelfManaged&&status==='待核對'?'未填寫':status
 import { api,getUser,startRequest,requestTone,clientStage,detailText,selfHandled,money,cardPhoto,viewCardOriginal,forgetCardOriginal,viewVehicleDocument,daysLeft } from '../../lib/api'
 import PlateChip from '../../components/PlateChip.vue'
 import ApprovalCard from '../../components/ApprovalCard.vue'
@@ -189,6 +203,7 @@ const crossingBusy=ref(false),justCrossed=ref(false),loaded=ref(false),cardBack=
 const healthLabel={ok:'正常',due:'快到期',overdue:'已逾期',pending:noDatesWord()},healthTone={ok:'',due:'amber',overdue:'red',pending:'gray'}
 // 90 天過關有自己的卡片，不在到期清單重複
 const deadlineList=computed(()=>(summary.value.deadlines||[]).filter(item=>!(summary.value.crossing?.enabled&&item.name==='90 天過關')))
+const undatedList=computed(()=>summary.value.undated||[])
 const shownDeadlines=computed(()=>allDeadlines.value?deadlineList.value:deadlineList.value.slice(0,5))
 function deadlineSub(item){return [item.ownerType==='plate'?'':item.ownerLabel,detailText(item.detail)].filter(Boolean).join(' · ')}
 const boundVehicles=computed(()=>vehicles.value.filter(v=>v.id===plates.value[0]?.vehicle_id))
@@ -225,11 +240,13 @@ async function saveCardOriginal(p,side){const photo=await capture.value.open({si
 async function readCard(p,side){const photo=await capture.value.open({side});if(!photo)return;uni.showLoading({title:'正在上傳辨識',mask:true});try{const image=photo.data;const before={...(plateDetail.value[p.id]?.cardData||{})};const response=await api('/plate-assets/'+p.id+'/card/'+side,'POST',{image});forgetCardOriginal(p.id);fieldStatus.value=response.fieldStatus||{};const updated=await api('/plate-assets/'+p.id);plateDetail.value={...plateDetail.value,[p.id]:updated};plates.value=plates.value.map(item=>item.id===p.id?updated:item);editCard(p);summary.value=await api('/my/plates/'+p.id);loadPending();uni.hideLoading();const why=await askWhy(before,response.cardData||{},true);if(why){editingCardId.value='';return openSelf(why.kind,why.newPlate)}uni.showToast({title:'已辨識，請核對欄位',icon:'none'})}catch(e){uni.hideLoading();uni.showToast({title:e.message||'上傳失敗',icon:'none'})}}
 // 上傳過的批文卡照片（正本）：有哪一面就看哪一面，預設打開目前翻到的那面
 const originalSides=p=>['front','back'].filter(side=>plateDetail.value[p.id]?.cardImages?.[side])
+function openDelete(){uni.navigateTo({url:'/pages/plate-delete/plate-delete?id='+encodeURIComponent(plateId)})}
 function viewOriginal(p){const sides=originalSides(p);viewCardOriginal(p.id,sides,cardBack.value?'back':'front')}
 // 客戶自行修改：立即生效，顧問再核對（docs/v1-plan.md §三）
 const pending=ref([]),drivers=ref([]),driverForm=ref({}),editingDriverId=ref(''),savingDriver=ref(false),vehicleForm=ref({}),editingVehicleId=ref(''),savingVehicle=ref(false)
 const isPending=(type,id,field)=>pending.value.some(x=>x.entityType===type&&x.entityId===id&&(!field||x.field===field))
 async function loadPending(){try{pending.value=await api('/my/pending')}catch{pending.value=[]}}
+async function fillDate(item,date){if(!date)return;try{await api('/my/dates','PUT',{ownerType:item.ownerType,ownerId:item.ownerId,code:item.code,expiresOn:date});summary.value=await api('/my/plates/'+plateId);loadPending();uni.showToast({title:cardSelfManaged?'已記錄，到期前會提醒你':'已記錄，顧問會再核對',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}}
 async function saveDate(item,date){if(!date||date===item.dueOn)return;try{await api('/my/dates','PUT',{ownerType:item.ownerType,ownerId:item.ownerId,code:item.code,expiresOn:date});summary.value=await api('/my/plates/'+plateId);loadPending();uni.showToast({title:'到期日已更新，顧問會再核對',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}}
 function editDriver(d){if(editingDriverId.value===d.id){editingDriverId.value='';return}const full=drivers.value.find(x=>x.id===d.id)||{};driverForm.value={name:full.name||d.name,phone:full.phone||'',hkIdNo:full.hkIdNo||'',homeReturnPermitNo:full.homeReturnPermitNo||''};editingDriverId.value=d.id}
 async function saveDriver(){if(savingDriver.value)return;savingDriver.value=true;try{await api('/my/drivers/'+editingDriverId.value,'PATCH',driverForm.value);editingDriverId.value='';const [mine,list]=await Promise.all([api('/my/plates/'+plateId),api('/my/drivers')]);summary.value=mine;drivers.value=list;loadPending();uni.showToast({title:'已更新，顧問會再核對',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{savingDriver.value=false}}
@@ -264,7 +281,7 @@ function toggle(key){open.value={...open.value,[key]:!open.value[key]}}
 function openFold(key){open.value={...open.value,[key]:true};nextTick(()=>setTimeout(()=>uni.pageScrollTo({selector:'#fold-'+key,duration:200}),50))}
 const clientTodoCount=computed(()=>(summary.value.deadlines||[]).filter(i=>['due','overdue'].includes(i.level)&&(i.handledBy==='you'||i.code==='crossing_90')).length)
 const levelWord={overdue:'已逾期',due:'快到期'}
-const deadlineSummary=computed(()=>{const list=deadlineList.value;if(!list.length)return summary.value.health==='pending'?(cardSelfManaged?'未填到期日':'整理中'):'半年內沒有';const urgent=list.filter(i=>['overdue','due'].includes(i.level));return list.length+' 項'+(urgent.length?' · '+urgent.length+' 項'+levelWord[urgent.some(i=>i.level==='overdue')?'overdue':'due']:'')})
+const deadlineSummary=computed(()=>{const list=deadlineList.value,gap=undatedList.value.length?undatedList.value.length+' 項未填日期':'';if(!list.length)return gap||(summary.value.health==='pending'?(cardSelfManaged?'未填到期日':'整理中'):'半年內沒有');const urgent=list.filter(i=>['overdue','due'].includes(i.level));return list.length+' 項'+(urgent.length?' · '+urgent.length+' 項'+levelWord[urgent.some(i=>i.level==='overdue')?'overdue':'due']:'')+(gap?' · '+gap:'')})
 const crossingSummary=computed(()=>{const c=summary.value.crossing;return !c?.enabled?'未開啟':c.lastCrossedOn?'上次 '+c.lastCrossedOn:'未記錄過關日期'})
 const vehicleSummary=computed(()=>{const v=boundVehicles.value[0];if(!v)return '尚未登記車輛';const list=docs.value[v.id]?.documents||[];return v.plate+(list.length?' · 證件 '+list.filter(d=>d.uploaded).length+'/'+list.length+' 已上傳':'')})
 const driverSummary=computed(()=>{const list=summary.value.drivers||[];if(!list.length)return '未登記';const main=list.find(d=>d.role==='主')||list[0];return main.name+'（'+(main.role==='主'?'主':'副')+'）'+(list.length>1?' 等 '+list.length+' 人':'')})
@@ -353,4 +370,6 @@ import StampMark from '../../components/StampMark.vue'
 .guidance-line{display:flex;align-items:flex-start;gap:12px;padding:4px 0;font-size:var(--fs-body);line-height:1.5;color:var(--ink-2)}
 .go-create{margin-top:16px}
 .stop-link{display:block;text-align:center;padding:16px 0 4px;color:var(--ink-2)}
+.undated{margin-top:12px}.undated-title{display:block;color:var(--ink-3);font-size:var(--fs-meta);font-weight:700}.undated-note{margin-top:8px}
+.delete-link{padding-top:8px}
 </style>

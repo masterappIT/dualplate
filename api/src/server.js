@@ -16,7 +16,7 @@ import { entrustmentRoutes } from './entrustment-routes.js'
 import { portalRoutes, publicPortalRoutes } from './client-portal.js'
 import { workOrderRoutes } from './work-order-routes.js'
 import { viewRoutes } from './view-routes.js'
-import { driverRoutes } from './drivers.js'
+import { driverRoutes, registerClientCard } from './drivers.js'
 import { rentalRoutes, legacyStart, legacyEnd, activeContract } from './rentals.js'
 import { feeRoutes } from './fees.js'
 import { pricingRoutes } from './pricing.js'
@@ -28,13 +28,14 @@ import { clientEditRoutes, changeReviewRoutes, logCreated, logCompanyCreated, lo
 import { selfHandledClientRoutes, selfHandledReviewRoutes } from './self-handled.js'
 import { vehicleDocumentRoutes } from './vehicle-documents.js'
 import { publicTermsRoutes, termsGate, termsRoutes } from './terms.js'
-import { plateCompanyRoutes, linkPlateCompanies } from './plate-companies.js'
+import { plateCompanyRoutes, linkPlateCompanies, linkEditedCard } from './plate-companies.js'
 import { seedDemo } from './demo-seed.js'
 import { serviceModeRoutes, modes, startSelfManaged, loginLimit } from './service-mode.js'
 import { seal } from './password-vault.js'
 import { supportRoutes } from './support.js'
 import { signupPublicRoutes, signupRoutes, applicationLogin } from './signup.js'
 import { accountClosureRoutes } from './account-closure.js'
+import { plateDeleteRoutes } from './plate-delete.js'
 import { customerLifecycleRoutes, endedPathBlock, endedBodyBlock, endedLogin } from './customer-lifecycle.js'
 import { todayCountRoutes } from './today-counts.js'
 import { passwordProblem, authenticate, createSession, lockedMinutes, recordFailure, clearFailures, loginPhone, PHONE_RULE, clientIp, audit, auditRoutes, logError, health } from './security.js'
@@ -197,6 +198,7 @@ export const server = http.createServer(async (req, res) => {
     if (await supportRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await signupRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await accountClosureRoutes(req, res, url, user, { json, fail, parseBody, clientIp })) return
+    if (await plateDeleteRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await workOrderRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await driverRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await vehicleDocumentRoutes(req, res, url, user, { json, fail, parseBody })) return
@@ -212,7 +214,7 @@ export const server = http.createServer(async (req, res) => {
     if (await clientEditRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await selfHandledReviewRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await selfHandledClientRoutes(req, res, url, user, { json, fail, parseBody })) return
-    if (await plateCompanyRoutes(req, res, url, user, { json, fail })) return
+    if (await plateCompanyRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (await customerRoutes(req, res, url, user, { json, fail, query, one, plateFor, parseBody })) return
     if (path === '/api/import/plates' && req.method === 'POST') {
       if (user.role !== 'admin') return fail(res, 403, '無權限')
@@ -442,6 +444,7 @@ export const server = http.createServer(async (req, res) => {
           // 只限客戶自行建檔；員工從申請案件建檔照舊，在牌照頁選公司組
           const linked = linkPlateCompanies({ tenantId: user.tenant_id, plate: one('SELECT * FROM plate_assets WHERE id=?', assetId), card: proposedCard, explicitGroupId: b.groupId || null, userId: user.id })
           logCreated({ tenantId: user.tenant_id, user, plate: one('SELECT * FROM plate_assets WHERE id=?', assetId) })
+          registerClientCard(one('SELECT * FROM plate_assets WHERE id=?', assetId), user.tenant_id)
           for (const company of linked.created) logCompanyCreated({ tenantId: user.tenant_id, user, customerId: b.customerId, company })
         }
         if (b.sourceRequestId) {
@@ -465,7 +468,7 @@ export const server = http.createServer(async (req, res) => {
       if (!['待核對','未上牌','已上牌'].includes(installation) || !['待核對','自用','出租中','暫停使用'].includes(usage)) return fail(res, 400, '牌照狀態無效')
       const vehicleId = b.vehicleId === undefined ? old.vehicle_id : b.vehicleId || null
       if (vehicleId) { const v = one('SELECT * FROM vehicles WHERE id=?', vehicleId); if (!v || v.customer_id !== old.customer_id || v.route !== old.route) return fail(res, 400, '車輛與客戶或路線不符') }
-      if (installation === '已上牌' && !vehicleId && usage !== '出租中') return fail(res, 400, '自用已上牌須指定車輛')
+      if (installation === '已上牌' && !vehicleId && usage !== '出租中') return fail(res, 400, '已上牌請先綁定車輛')
       if (installation === '未上牌' && vehicleId) return fail(res, 400, '未上牌不能綁定車輛')
       const groupId = b.groupId === undefined ? old.group_id : b.groupId || null
       if (groupId) { const parent = one('SELECT * FROM company_groups WHERE id=? AND tenant_id=?', groupId, user.tenant_id); if (!parent) return fail(res, 404, '公司組不存在'); if (parent.customer_id !== old.customer_id) return fail(res, 400, '公司組與客戶不符') }
@@ -503,6 +506,8 @@ export const server = http.createServer(async (req, res) => {
       try {
         db.prepare('UPDATE plate_assets SET card_data=?,card_status=?,card_number=?,card_expires_on=?,mainland_plate=?,local_plate=?,card_updated_by=?,card_updated_at=?,updated_at=? WHERE id=?').run(JSON.stringify(proposed),nextStatus,proposed.cardNumber||null,proposed.validTo||null,proposed.mainlandPlate||null,proposed.localPlate||null,user.name,now(),now(),old.id)
         if (user.role === 'customer') logCardChanges({ tenantId: user.tenant_id, user, plate: old, before: cardData(old.card_data), after: proposed })
+        if (user.role === 'customer') registerClientCard(one('SELECT * FROM plate_assets WHERE id=?', old.id), user.tenant_id, cardData(old.card_data))
+        if (user.role === 'customer') for (const company of linkEditedCard({ tenantId: user.tenant_id, plate: one('SELECT * FROM plate_assets WHERE id=?', old.id), before: cardData(old.card_data), card: proposed, userId: user.id }).created) logCompanyCreated({ tenantId: user.tenant_id, user, customerId: old.customer_id, company })
         db.exec('COMMIT')
       } catch (error) { db.exec('ROLLBACK'); throw error }
       return json(res, 200, plateDetail(user, old.id))
@@ -543,6 +548,8 @@ export const server = http.createServer(async (req, res) => {
         db.prepare('INSERT INTO approval_card_images VALUES (?,?,?,?) ON CONFLICT(plate_asset_id,side) DO UPDATE SET mime=excluded.mime,data=excluded.data').run(item.id,side,mime,image)
         db.prepare('UPDATE plate_assets SET card_data=?,card_status=?,card_number=?,card_expires_on=?,mainland_plate=?,local_plate=?,card_updated_by=?,card_updated_at=?,updated_at=? WHERE id=?').run(JSON.stringify(proposed),'待核對',proposed.cardNumber||null,proposed.validTo||null,proposed.mainlandPlate||null,proposed.localPlate||null,user.name,now(),now(),item.id)
         if (user.role === 'customer') logCardChanges({ tenantId: user.tenant_id, user, plate: item, before: existing, after: proposed })
+        if (user.role === 'customer') registerClientCard(one('SELECT * FROM plate_assets WHERE id=?', item.id), user.tenant_id, existing)
+        if (user.role === 'customer') for (const company of linkEditedCard({ tenantId: user.tenant_id, plate: one('SELECT * FROM plate_assets WHERE id=?', item.id), before: existing, card: proposed, userId: user.id }).created) logCompanyCreated({ tenantId: user.tenant_id, user, customerId: item.customer_id, company })
         db.exec('COMMIT')
       } catch (error) { db.exec('ROLLBACK'); throw error }
       return json(res, 200, { side, uploaded: true, recognized: recognized.cardData, fieldStatus: recognized.fieldStatus, cardData: proposed, needsReview: true })

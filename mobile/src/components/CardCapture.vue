@@ -1,7 +1,8 @@
 <template>
   <!-- 批文卡對準框（管理者 2026-10-18）：拍照、從相冊選都先把卡對進框，只上傳框內卡面連框外一圈（每邊 6%，固定 2274×1445 JPEG），
        不保存整張原圖，所以不用再壓縮。伺服器在這張圖裏找出卡的真正邊界再辨識和保存（api/src/card-face.js），卡沒有剛好填滿框也讀得到。
-       網頁版用鏡頭（getUserMedia）＋原生 canvas；開不了鏡頭就改從相冊選、拖動縮放對框。其他平台暫時沿用系統選相片。 -->
+       網頁版用鏡頭（getUserMedia）＋原生 canvas；開不了鏡頭（拒絕權限、內置瀏覽器不支援）就留在框內，讓客戶自己按「從相冊選」
+       （瀏覽器只准用戶親手按才打開選檔），選好後拖動縮放對框。其他平台暫時沿用系統選相片。 -->
   <view v-if="show" class="capture">
     <!-- #ifdef H5 -->
     <view ref="stage" class="stage" />
@@ -9,20 +10,21 @@
     <view class="frame" :style="frameStyle"><view class="corner tl" /><view class="corner tr" /><view class="corner bl" /><view class="corner br" /></view>
     <view class="top"><text class="close" @click="cancel">✕</text><text class="title">{{ mode === 'camera' ? '拍批文卡' : '對準批文卡' }}</text></view>
     <view class="sides" :style="{ top: (frame.top - 48) + 'px' }"><text class="side" :class="{ on: side === 'front' }">① 正面</text><text class="side" :class="{ on: side === 'back' }">② 背面</text></view>
-    <text class="hint" :style="{ top: (frame.top + frame.height + 18) + 'px' }">{{ mode === 'camera' ? `把批文卡${sideName}對準框內，四角對齊框線\n光線充足、避免反光` : '雙指縮放、拖動相片，讓卡面對齊框線\n框外的部分不會保存' }}</text>
+    <text class="hint" :style="{ top: (frame.top + frame.height + 18) + 'px' }">{{ mode === 'camera' ? `把批文卡${sideName}對準框內，四角對齊框線\n光線充足、避免反光` : picked ? '雙指縮放、拖動相片，讓卡面對齊框線\n框外的部分不會保存' : `無法開啟鏡頭\n請按下面「從相冊選」，選一張批文卡${sideName}相片` }}</text>
     <view v-if="mode === 'camera'" class="bottom">
       <view class="album" @click="pickAlbum"><view class="album-icon" /><text>從相冊選</text></view>
       <view class="shutter" @click="shoot" />
       <view class="album" />
     </view>
-    <view v-else class="buttons"><button class="ghost" @click="pickAlbum">重選</button><button class="confirm" @click="confirmAlbum">確認</button></view>
+    <view v-else-if="picked" class="buttons"><button class="ghost" @click="pickAlbum">重選</button><button class="confirm" @click="confirmAlbum">確認</button></view>
+    <view v-else class="buttons"><button class="confirm" @click="pickAlbum">從相冊選</button></view>
   </view>
 </template>
 <script setup>
 import { ref, computed, nextTick, onBeforeUnmount } from 'vue'
 import { cardPhoto } from '../lib/api'
 const OUT_W = 2030, OUT_H = 1290, MARGIN = 0.06, FULL_W = Math.round(OUT_W * (1 + 2 * MARGIN)), FULL_H = Math.round(OUT_H * (1 + 2 * MARGIN))
-const show = ref(false), mode = ref('camera'), side = ref('front'), stage = ref(null)
+const show = ref(false), mode = ref('camera'), side = ref('front'), stage = ref(null), picked = ref(false)
 const frame = ref({ left: 20, top: 300, width: 350, height: 222 })
 const sideName = computed(() => side.value === 'front' ? '正面' : '背面')
 const frameStyle = computed(() => ({ left: frame.value.left + 'px', top: frame.value.top + 'px', width: frame.value.width + 'px', height: frame.value.height + 'px' }))
@@ -44,13 +46,14 @@ async function open(options = {}) {
   layout(); mode.value = 'camera'; show.value = true
   const promise = new Promise(resolve => { finish = resolve })
   await nextTick()
-  try { await startCamera() } catch { uni.showToast({ title: '無法開啟鏡頭，請從相冊選擇', icon: 'none' }); mode.value = 'album'; pickAlbum() }
+  // 開不了鏡頭：不自動彈出相冊（這時已不是用戶親手按，瀏覽器會擋下），留在框內等客戶按「從相冊選」
+  try { await startCamera() } catch { mode.value = 'album' }
   return promise
   // #endif
 }
 // #ifdef H5
 const host = () => stage.value?.$el || stage.value
-function clearStage() { const el = host(); if (el) el.innerHTML = ''; video = null; img = null; pointers.clear(); pinch = null }
+function clearStage() { const el = host(); if (el) el.innerHTML = ''; video = null; img = null; picked.value = false; pointers.clear(); pinch = null }
 function stopCamera() { stream?.getTracks().forEach(track => track.stop()); stream = null }
 async function startCamera() {
   if (!navigator.mediaDevices?.getUserMedia) throw new Error('no camera')
@@ -85,10 +88,10 @@ function shoot() {
 function pickAlbum() {
   uni.chooseImage({ count: 1, sizeType: ['original'], sourceType: ['album'], success: result => {
     const image = new Image()
-    image.onload = () => { stopCamera(); clearStage(); mode.value = 'album'; img = image; placeImage() }
+    image.onload = () => { stopCamera(); clearStage(); mode.value = 'album'; img = image; picked.value = true; placeImage() }
     image.onerror = () => uni.showToast({ title: '這張照片無法讀取，請改用相機拍攝或選 JPG、PNG 照片', icon: 'none' })
     image.src = result.tempFilePaths[0]
-  }, fail: () => { if (mode.value === 'album' && !img) cancel() } })
+  } })
 }
 // 相片先放大到剛好蓋滿框，之後可拖動、雙指縮放（電腦用滾輪）
 function placeImage() {
@@ -140,7 +143,7 @@ defineExpose({ open, cancel, isOpen: () => show.value })
 .album{width:72px;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:var(--fs-meta)}
 .album-icon{width:36px;height:36px;border:2px solid #fff;border-radius:var(--r-card)}
 .shutter{width:76px;height:76px;border-radius:50%;border:4px solid #fff;box-sizing:border-box;padding:5px;background:#fff;background-clip:content-box}
-.buttons{position:absolute;left:20px;right:20px;bottom:48px;display:flex;gap:12px}
+.buttons{position:absolute;left:50%;transform:translateX(-50%);width:calc(100% - 40px);max-width:560px;bottom:48px;display:flex;gap:12px}
 .buttons button{flex:1;height:48px;line-height:48px;border-radius:var(--r-control);font-size:16px;font-weight:600;margin:0}
 .buttons .ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.7)}
 .buttons .confirm{background:var(--jade);color:#fff;border:0}

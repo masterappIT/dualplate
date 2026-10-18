@@ -23,6 +23,24 @@ export const SELF_MANAGED_LOGIN_LIMIT = 1
 export const loginLimit = customer => modeOf(customer) === '自管' ? SELF_MANAGED_LOGIN_LIMIT : Infinity
 const loginCount = customerId => db.prepare("SELECT COUNT(*) count FROM users WHERE customer_id=? AND role='customer'").get(customerId).count
 
+// 托管時期留下、切換為自管後仍要我們處理的事（docs/tasks/self-managed-fixes-plan.md 第 5 步）：由我們代收租金的出租、未完成的工單。
+// 只提示並連到該處處理，不自動改任何資料；未完成的工單會擋住客戶注銷帳號（account-closure.js）
+const collectedRentals = (tenantId, customerId) => db.prepare("SELECT COUNT(*) count FROM rental_contracts r JOIN plate_assets p ON p.id=r.plate_asset_id WHERE r.tenant_id=? AND p.customer_id=? AND r.collection_mode='代收' AND r.status IN ('草擬','待換車','生效')").get(tenantId, customerId).count
+// before：只算這個時間之前開的工單（自管期間的按次委託照常辦理，不算）；不填即全部
+const openOrders = (customerId, before = '9999-12-31') => db.prepare("SELECT COUNT(*) count FROM requests WHERE customer_id=? AND status NOT IN ('已完成','已取消') AND created_at<?").get(customerId, before).count
+const lastSelfManagedSwitch = customerId => db.prepare("SELECT changed_at FROM customer_mode_changes WHERE customer_id=? AND from_mode='托管' AND to_mode='自管' ORDER BY changed_at DESC LIMIT 1").get(customerId)?.changed_at
+const rentalsLink = customerId => ({ label: '查看出租', to: { path: '/rentals', query: { customerId } } })
+const ordersLink = customerId => ({ label: '查看工單', to: { path: `/customers/${customerId}`, query: { tab: 'business' } } })
+
+// 托管客戶切換為自管之前，在切換框列出要另行處理的事
+function beforeSelfManaged(tenantId, customer) {
+  if (modeOf(customer) !== '托管') return []
+  const list = [], rentals = collectedRentals(tenantId, customer.id), orders = openOrders(customer.id)
+  if (rentals) list.push({ kind: 'collected_rentals', text: `有 ${rentals} 份出租由我們代收：切換後不會自動停止代收，請和客戶確定之後的收租安排`, link: rentalsLink(customer.id) })
+  if (orders) list.push({ kind: 'open_orders', text: `有 ${orders} 張工單未完成：切換後照常辦理，請辦完或取消；未完成時客戶不能注銷帳號`, link: ordersLink(customer.id) })
+  return list
+}
+
 // 對不上的情況：托管卻沒有我們負責的事項；自管卻仍有我們負責的逐項設定或生效中的年費；合約快到期或已過期仍標托管
 function warnings(tenantId, customer) {
   const list = [], mode = modeOf(customer)
@@ -40,6 +58,10 @@ function warnings(tenantId, customer) {
     const leftover = db.prepare(`SELECT COUNT(*) count FROM service_scopes WHERE tenant_id=? AND ended_on IS NULL AND handler<>'client' AND ((owner_type='plate' AND owner_id IN (SELECT id FROM plate_assets WHERE customer_id=?)) OR (owner_type='company' AND owner_id IN (SELECT id FROM companies WHERE customer_id=?)))`).get(tenantId, customer.id, customer.id).count
     if (leftover) list.push({ kind: 'leftover_scope', text: `標為自管，代理範圍仍有 ${leftover} 項設為我們負責或外包；自管期間一律由客戶自理` })
     if (db.prepare('SELECT 1 FROM customer_billing WHERE customer_id=? AND active=1').get(customer.id)) list.push({ kind: 'billing_active', text: '標為自管，但年費設定仍然生效；自管期間不會產生年費' })
+    const rentals = collectedRentals(tenantId, customer.id)
+    if (rentals) list.push({ kind: 'collected_rentals', text: `標為自管，但仍有 ${rentals} 份出租由我們代收；請和客戶確定之後的收租安排`, link: rentalsLink(customer.id) })
+    const switchedAt = lastSelfManagedSwitch(customer.id), orders = switchedAt ? openOrders(customer.id, switchedAt) : 0
+    if (orders) list.push({ kind: 'open_orders', text: `標為自管，但仍有 ${orders} 張托管時期的工單未完成；請辦完或取消，未完成時客戶不能注銷帳號`, link: ordersLink(customer.id) })
     { const logins = loginCount(customer.id); if (logins > SELF_MANAGED_LOGIN_LIMIT) list.push({ kind: 'extra_logins', text: `標為自管，但有 ${logins} 個登入；自管客戶目前只可有 ${SELF_MANAGED_LOGIN_LIMIT} 個，現有的照常可用，不能再新增` }) }
   }
   return list
@@ -58,6 +80,7 @@ export function modeView(tenantId, customer) {
   return {
     mode: modeOf(customer), since: customer.mode_since || null, by: customer.mode_by || null, contractEndsOn: customer.contract_ends_on || null, source: customer.signup_source || null,
     warnings: warnings(tenantId, customer),
+    beforeSelfManaged: beforeSelfManaged(tenantId, customer),
     history: history.map(row => ({ fromMode: row.from_mode, toMode: row.to_mode, effectiveOn: row.effective_on, contractEndsOn: row.contract_ends_on, changedByName: row.changed_by_name, changedAt: row.changed_at }))
   }
 }

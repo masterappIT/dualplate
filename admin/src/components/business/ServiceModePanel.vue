@@ -2,6 +2,7 @@
 // 委託方式：托管或自管（docs/requirements.md 5.6.2，2026-10-18）。管理者人手切換並記生效日；托管可填合約結束日（到期前 30 天提醒）；
 // 標記和代理範圍、年費對不上時列出提示。員工只可查看。
 import { ref, computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import Button from '../ui/Button.vue'
 import Tag from '../ui/Tag.vue'
 import FormDialog from './FormDialog.vue'
@@ -10,6 +11,7 @@ import DateInput from '../ui/DateInput.vue'
 import KeyValue from '../ui/KeyValue.vue'
 import { api, user } from '../../api'
 
+const router = useRouter()
 const props = defineProps({ customerId: { type: String, required: true }, readonly: { type: Boolean, default: false } })
 const emit = defineEmits(['changed'])
 const isAdmin = user()?.role === 'admin'
@@ -53,7 +55,7 @@ async function save() {
     <template v-else-if="info">
       <KeyValue :items="items" />
       <ul v-if="info.warnings.length" class="mode-warnings">
-        <li v-for="item in info.warnings" :key="item.kind"><Tag tone="warning">要處理</Tag><span>{{ item.text }}</span></li>
+        <li v-for="item in info.warnings" :key="item.kind"><Tag tone="warning">要處理</Tag><span>{{ item.text }}<button v-if="item.link" type="button" class="text-button mode-link" @click="router.push(item.link.to)">{{ item.link.label }} ›</button></span></li>
       </ul>
       <div v-if="isAdmin && !readonly" class="heading-actions">
         <Button v-if="info.mode === '托管'" size="sm" @click="openEnds">{{ info.contractEndsOn ? '修改合約結束日' : '填寫合約結束日' }}</Button>
@@ -67,6 +69,13 @@ async function save() {
   </section>
 
   <FormDialog :open="dialog === 'switch'" :title="`切換為${other}`" :sub="other === '自管' ? '切換後，這位客戶的全部事項改由客戶自理：只提醒客戶，不再產生我們的工作，也不產生年費。' : '切換後，按委託範本和代理範圍由我們負責；請按合約核對代理範圍和收費。'" layout="stack" :width="560" :saving="saving" submit-text="確認切換" @close="dialog = ''" @submit="save">
+    <!-- 托管時期留下、要另行處理的事（docs/tasks/self-managed-fixes-plan.md 第 5 步）：只提示，切換不會改動這些資料 -->
+    <div v-if="other === '自管' && info?.beforeSelfManaged?.length" class="switch-notes">
+      <strong>切換前請留意</strong>
+      <ul class="mode-warnings">
+        <li v-for="item in info.beforeSelfManaged" :key="item.kind"><Tag tone="warning">要處理</Tag><span>{{ item.text }}<button type="button" class="text-button mode-link" @click="dialog = ''; router.push(item.link.to)">{{ item.link.label }} ›</button></span></li>
+      </ul>
+    </div>
     <Field label="生效日" required hint="合約生效或結束的日子；不可遲於今天。"><DateInput v-model="form.effectiveOn" label="生效日" /></Field>
     <Field v-if="other === '托管'" label="合約結束日" hint="選填；到期前 30 天在今日工作提醒你。"><DateInput v-model="form.contractEndsOn" label="合約結束日" /></Field>
     <p v-if="formError" class="error" role="alert">{{ formError }}</p>
@@ -81,4 +90,6 @@ async function save() {
 .mode-warnings { display: grid; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
 .mode-warnings li { display: flex; align-items: flex-start; gap: 8px; }
 .mode-history, .service-mode .heading-actions { margin-top: 12px; }
+.mode-link { margin-left: 8px; white-space: nowrap; }
+.switch-notes .mode-warnings { margin-top: 8px; }
 </style>

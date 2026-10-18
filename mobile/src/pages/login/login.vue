@@ -49,6 +49,8 @@
       <!-- #endif -->
       <button class="btn-line signup-button" @click="goSignup">沒有帳戶？申請使用</button>
       <text class="help">托管客戶的帳戶由顧問開通。忘記密碼請聯絡我們。</text>
+      <!-- 忘記密碼：列出已設定的 WhatsApp／微信（docs/tasks/self-managed-fixes-plan.md 第 7 步）；都沒有設定時不顯示 -->
+      <ContactCard v-if="!application" public :messages="false" title="忘記密碼？" />
       <view class="terms-links"><text class="link" @click="openTerms('terms')">服務條款</text><text class="terms-dot">·</text><text class="link" @click="openTerms('privacy')">私隱聲明</text></view>
       <view v-if="done" class="done"><StampMark text="已登入" tone="jade" play /></view>
     </view>
