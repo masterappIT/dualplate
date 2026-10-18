@@ -1,10 +1,10 @@
 <template>
   <ListPage title="客戶" desc="一張表掌握客戶、牌照、公司組與下一個到期事項。" table-title="客戶列表" :list="list" :columns="columns" :min-width="760">
     <template #actions><Button v-if="user()?.role === 'admin'" variant="primary" @click="modal = 'customer'">＋ 新增客戶</Button></template>
-    <template #search><Field label="搜尋客戶"><TextInput v-model="customerSearch" placeholder="搜尋客戶名稱或類型" /></Field><Field label="委託方式"><Segmented v-model="modeFilter" :options="modeOptions" label="委託方式" /></Field></template>
-    <template #cell-name="{ row }"><HoverCard><button class="text-button" @click="openCustomer(row)"><strong>{{ row.name }}</strong></button><template #card><strong>{{ row.name }}</strong><p>{{ row.kind }} · {{ row.plateCount }} 個牌照 · {{ row.groupCount }} 個公司組</p><p>電話：{{ phoneText(row.phone) || '未填' }}</p></template></HoverCard><Tag v-if="row.is_self" tone="ok">自有</Tag><Tag v-else-if="row.closed_on" tone="neutral">已注銷</Tag><Tag v-else-if="row.service_mode === '自管'" tone="neutral">自管</Tag><small>{{ phoneText(row.phone) || '未填電話' }}</small></template>
-    <template #cell-health="{ row }"><span class="health-state"><i class="health-dot" :class="`health-${row.health}`" />{{ healthLabel(row.health) }}</span></template>
-    <template #cell-nextDue="{ row }"><DueDate :date="row.nextDue === '—' ? null : row.nextDue" /></template>
+    <template #search><Field label="搜尋客戶"><TextInput v-model="customerSearch" placeholder="搜尋客戶名稱或類型" /></Field><Field label="委託方式" class="field-auto"><Segmented v-model="modeFilter" :options="modeOptions" label="委託方式" /></Field></template>
+    <template #cell-name="{ row }"><HoverCard><button class="text-button" @click="openCustomer(row)"><strong>{{ row.name }}</strong></button><template #card><strong>{{ row.name }}</strong><p>{{ row.kind }} · {{ row.plateCount }} 個牌照 · {{ row.groupCount }} 個公司組</p><p>電話：{{ phoneText(row.phone) || '未填' }}</p><p v-if="row.is_self">本公司自己的公司和牌照都放在這裏。</p></template></HoverCard><Tag v-if="row.is_self" tone="ok">自有</Tag><Tag v-else-if="row.closed_on" tone="neutral">已注銷</Tag><Tag v-else-if="row.ended_on" tone="neutral">已結束</Tag><Tag v-else-if="row.service_mode === '自管'" tone="neutral">自管</Tag><small>{{ phoneText(row.phone) || '未填電話' }}</small><small v-if="row.is_self" class="cell-sub">本公司自己的公司和牌照都放在這裏</small></template>
+    <template #cell-health="{ row }"><span v-if="row.ended_on">已於 <span class="num">{{ row.ended_on }}</span> 結束服務</span><span v-else class="health-state"><i class="health-dot" :class="`health-${row.health}`" />{{ healthLabel(row.health) }}</span></template>
+    <template #cell-nextDue="{ row }"><span v-if="row.ended_on">不再提醒</span><DueDate v-else :date="row.nextDue === '—' ? null : row.nextDue" /></template>
     <template #cell-action="{ row }"><button class="text-button" @click="openCustomer(row)">查看 →</button></template>
   </ListPage>
 </template>
@@ -22,10 +22,10 @@ import { user, phoneText } from '../api'
 import { useListPage } from '../composables/list'
 import { useAdminStore } from '../store'
 const { modal, customerSearch, customerRows, openCustomer, refresh } = useAdminStore()
-// 托管／自管篩選（docs/requirements.md 5.6.2）；本公司自有歸在「全部」
+// 托管／自管篩選（docs/requirements.md 5.6.2）；本公司自有歸在「全部」。已結束服務的客戶默認不列出，用「已結束」找回
 const modeFilter = ref('all')
-const modeOptions = [{ value: 'all', label: '全部' }, { value: '托管', label: '托管' }, { value: '自管', label: '自管' }]
-const shownRows = computed(() => modeFilter.value === 'all' ? customerRows.value : customerRows.value.filter(row => !row.is_self && (row.service_mode || '托管') === modeFilter.value))
+const modeOptions = [{ value: 'all', label: '全部' }, { value: '托管', label: '托管' }, { value: '自管', label: '自管' }, { value: 'ended', label: '已結束' }]
+const shownRows = computed(() => modeFilter.value === 'ended' ? customerRows.value.filter(row => row.ended_on) : customerRows.value.filter(row => !row.ended_on && (modeFilter.value === 'all' || (!row.is_self && (row.service_mode || '托管') === modeFilter.value))))
 const list = useListPage(shownRows, refresh)
 const columns = [{ key: 'name', title: '客戶' }, { key: 'kind', title: '類型' }, { key: 'plateCount', title: '牌照數' }, { key: 'groupCount', title: '公司組數' }, { key: 'health', title: '狀態' }, { key: 'nextDue', title: '下一個到期' }, { key: 'action', title: '操作', className: 'col-actions' }]
 const healthLabel = health => ({ red: '有逾期', amber: '需注意', green: '目前正常' }[health] || health)

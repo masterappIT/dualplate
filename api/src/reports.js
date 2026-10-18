@@ -58,7 +58,8 @@ export function computeReport(tenantId, customerId, period) {
 function ensureReports(tenantId) {
   const period = previousMonth()
   // 自管客戶沒有月報（月報是我們向托管客戶交代的工作）
-  for (const customer of db.prepare("SELECT id FROM customers WHERE tenant_id=? AND COALESCE(is_self,0)=0 AND service_mode<>'自管'").all(tenantId)) {
+  // 已結束服務的客戶：結束當月仍有月報（交代最後一個月），之後不再產生
+  for (const customer of db.prepare("SELECT id FROM customers WHERE tenant_id=? AND COALESCE(is_self,0)=0 AND service_mode<>'自管' AND (ended_on IS NULL OR ended_on>=?)").all(tenantId, `${period}-01`)) {
     if (db.prepare('SELECT 1 FROM monthly_reports WHERE customer_id=? AND period=?').get(customer.id, period)) continue
     const report = computeReport(tenantId, customer.id, period)
     // 這個月沒有任何工作、租金、收費、報帳和結算時不產生空白報告（例如月中才成為客戶）

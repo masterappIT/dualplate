@@ -11,7 +11,7 @@ import Modal from './ui/Modal.vue'
 import Button from './ui/Button.vue'
 
 const { modal, form, modalTitle, error, customers, selectedCustomer, selectedPlate, selectedVehicle, sources, createCustomer, createCustomerUser, createVehicle, createPlate, createRental, createInspection } = useAdminStore()
-const customerOptions = computed(() => [{ value: '', label: '請選擇客戶' }, ...customers.value.map(customer => ({ value: customer.id, label: customer.name }))])
+const customerOptions = computed(() => [{ value: '', label: '請選擇客戶' }, ...customers.value.filter(customer => !customer.ended_on).map(customer => ({ value: customer.id, label: customer.name }))])
 const sourceOptions = computed(() => [{ value: '', label: '待核對' }, ...sources.value.map(source => ({ value: source.id, label: `${source.id} · ${source.title}` }))])
 const routeOptions = [{ value: '粵港', label: '粵港' }, { value: '粵澳', label: '粵澳' }]
 const originOptions = ['香港', '內地', '澳門']

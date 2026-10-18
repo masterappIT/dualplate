@@ -65,7 +65,7 @@ export function modeView(tenantId, customer) {
 // 今日工作：托管合約 30 天內結束或已結束
 export function contractEndings(tenantId) {
   const limit = new Date(Date.parse(today() + 'T00:00:00Z') + REMIND_DAYS * 86400000).toISOString().slice(0, 10)
-  return db.prepare("SELECT id, name, contract_ends_on FROM customers WHERE tenant_id=? AND COALESCE(is_self,0)=0 AND service_mode='托管' AND contract_ends_on IS NOT NULL AND contract_ends_on<=? ORDER BY contract_ends_on, name").all(tenantId, limit)
+  return db.prepare("SELECT id, name, contract_ends_on FROM customers WHERE tenant_id=? AND COALESCE(is_self,0)=0 AND service_mode='托管' AND ended_on IS NULL AND contract_ends_on IS NOT NULL AND contract_ends_on<=? ORDER BY contract_ends_on, name").all(tenantId, limit)
     .map(row => ({ customerId: row.id, name: row.name, contractEndsOn: row.contract_ends_on, daysLeft: daysBetween(today(), row.contract_ends_on) }))
 }
 

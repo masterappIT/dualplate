@@ -34,13 +34,14 @@ import { seal } from './password-vault.js'
 import { supportRoutes } from './support.js'
 import { signupPublicRoutes, signupRoutes, applicationLogin } from './signup.js'
 import { accountClosureRoutes } from './account-closure.js'
+import { customerLifecycleRoutes, endedPathBlock, endedBodyBlock, endedLogin } from './customer-lifecycle.js'
 import { passwordProblem, authenticate, createSession, lockedMinutes, recordFailure, clearFailures, loginPhone, PHONE_RULE, clientIp, audit, auditRoutes, logError, health } from './security.js'
 
 const port = Number(process.env.PORT || 4100)
 const allowedOrigins = new Set((process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174').split(','))
 const json = (res, status, value) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(value)) }
 const fail = (res, status, message) => json(res, status, { error: message })
-const parseBody = async req => { let raw = ''; for await (const chunk of req) { raw += chunk; if (raw.length > 12000000) throw new Error('請求內容過大') } if (!raw) return {}; const body = JSON.parse(raw); if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('請求內容格式錯誤'); req.parsedBody = body; return body }
+const parseBody = async req => { let raw = ''; for await (const chunk of req) { raw += chunk; if (raw.length > 12000000) throw new Error('請求內容過大') } if (!raw) return {}; const body = JSON.parse(raw); if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('請求內容格式錯誤'); const ended = req.endedCheck?.(body); if (ended) throw Object.assign(new Error(ended), { status: 409 }); req.parsedBody = body; return body }
 const required = (body, keys) => keys.every(key => typeof body[key] === 'string' && body[key].trim())
 const clean = (value, max = 500) => String(value ?? '').trim().slice(0, max)
 const query = (sql, ...params) => db.prepare(sql).all(...params)
@@ -157,6 +158,9 @@ export const server = http.createServer(async (req, res) => {
       // 自行申請仍在審批或被拒絕：密碼正確才顯示狀態，不能進入 app
       const application = account ? null : applicationLogin(login, body.password)
       if (application) return json(res, 403, application)
+      // 已結束服務：密碼正確才說明服務已結束
+      const ended = account ? null : endedLogin(login, body.password, verifyPassword)
+      if (ended) return json(res, 403, ended)
       if (!account || !verifyPassword(String(body.password || ''), account.password_hash)) { recordFailure('customer', login, ip); return fail(res, 401, '帳號或密碼不正確') }
       clearFailures('customer', login)
       const token = createSession(account.id)
@@ -175,7 +179,11 @@ export const server = http.createServer(async (req, res) => {
     if (termsBlock) return json(res, 403, termsBlock)
     if (await termsRoutes(req, res, url, user, { json, fail, parseBody, clientIp })) return
     audit(req, res, user, path)
+    // 已結束服務的客戶：員工只可查看，不能修改（按網址；新增請求在讀取內容時按 customerId 檢查）
+    { const ended = endedPathBlock(user, req.method, path); if (ended) return fail(res, 409, ended) }
+    req.endedCheck = body => endedBodyBlock(user, req.method, path, body)
     if (await auditRoutes(req, res, url, user, { json, fail, parseBody })) return
+    if (await customerLifecycleRoutes(req, res, url, user, { json, fail, parseBody })) return
     if (path === '/api/me' && req.method === 'GET') return json(res, 200, { id: user.id, name: user.name, email: user.email, role: user.role, customerId: user.customer_id })
     if (path === '/api/catalog' && req.method === 'GET') return json(res, 200, { services, sources, routePlans: Object.fromEntries(services.map(s => [s.code, Object.fromEntries(s.routes.map(route => [route, planFor(s, route)]))])) })
     // 客戶自行新增出租：要在 /api/my/ 的只讀客戶路由之前
@@ -795,6 +803,7 @@ export const server = http.createServer(async (req, res) => {
   } catch (error) {
     if (error instanceof SyntaxError) return fail(res, 400, 'JSON 格式錯誤')
     if (error.message === '請求內容格式錯誤') return fail(res, 400, error.message)
+    if (error.status === 409) return fail(res, 409, error.message)
     if (String(error.message).includes('UNIQUE constraint')) return fail(res, 409, '資料已存在')
     logError(error, { method: req.method, path })
     return fail(res, 500, '伺服器處理失敗，請稍後再試；如持續發生請聯絡管理者')

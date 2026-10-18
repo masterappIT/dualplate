@@ -10,7 +10,7 @@ import DateInput from '../ui/DateInput.vue'
 import KeyValue from '../ui/KeyValue.vue'
 import { api, user } from '../../api'
 
-const props = defineProps({ customerId: { type: String, required: true } })
+const props = defineProps({ customerId: { type: String, required: true }, readonly: { type: Boolean, default: false } })
 const emit = defineEmits(['changed'])
 const isAdmin = user()?.role === 'admin'
 const info = ref(null), loading = ref(false), loadError = ref('')
@@ -55,7 +55,7 @@ async function save() {
       <ul v-if="info.warnings.length" class="mode-warnings">
         <li v-for="item in info.warnings" :key="item.kind"><Tag tone="warning">要處理</Tag><span>{{ item.text }}</span></li>
       </ul>
-      <div v-if="isAdmin" class="heading-actions">
+      <div v-if="isAdmin && !readonly" class="heading-actions">
         <Button v-if="info.mode === '托管'" size="sm" @click="openEnds">{{ info.contractEndsOn ? '修改合約結束日' : '填寫合約結束日' }}</Button>
         <Button size="sm" @click="openSwitch">切換為{{ other }}</Button>
       </div>

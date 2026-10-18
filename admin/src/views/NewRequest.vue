@@ -11,7 +11,7 @@ import Button from '../components/ui/Button.vue'
 import DateInput from '../components/ui/DateInput.vue'
 
 const { view, customers, services, newRequest, vehicles, plates, createRequest } = useAdminStore()
-const customerOptions = computed(() => customers.value.map(customer => ({ value: customer.id, label: customer.name })))
+const customerOptions = computed(() => customers.value.filter(customer => !customer.ended_on).map(customer => ({ value: customer.id, label: customer.name })))
 const serviceOptions = computed(() => [...services.value.filter(service => service.routes.includes(newRequest.value.route)).map(service => ({ value: service.code, label: service.name })), ...(templates.value.some(item => item.active && item.route === newRequest.value.route && item.service_code === 'custom') ? [{ value: 'custom', label: '自訂業務' }] : [])])
 const vehicleOptions = computed(() => [
   { value: '', label: '新申請／不指定' },

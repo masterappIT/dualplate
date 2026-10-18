@@ -167,6 +167,7 @@ body { background: var(--canvas); color: var(--ink); font-family: var(--font-bod
 .holder-kicker { color: var(--plate-yellow); font-size: 12px; font-weight: 700; letter-spacing: .2em; }
 .holder-main h1 { margin: 4px 0 2px; color: var(--card); font-size: 22px; }
 .holder-main p { margin: 0; color: var(--canvas-secondary); }
+.holder-main .holder-note { margin-top: 6px; }
 .holder-counts { display: flex; margin: 0; }
 .holder-counts > div { padding: 0 20px; border-left: 1px solid var(--canvas-line); text-align: center; }
 .holder-counts dt { color: var(--canvas-secondary); font-size: 12px; }
@@ -378,6 +379,8 @@ body { background: var(--canvas); color: var(--ink); font-family: var(--font-bod
 .text-button.show-all { display: block; margin: 12px auto 0; }
 .search-actions { margin-left: 0; }
 .search-form .field:first-child { width: min(100%, 280px); }
+/* 分段切換按選項多少決定寬度（例如客戶列表的委託方式有四項），不截斷 */
+.search-form .field.field-auto { width: auto; max-width: 100%; }
 /* 連結一律通行綠，不用瀏覽器預設藍 */
 a { color: var(--primary); }
 .text-link { color: var(--primary); font-weight: 700; text-decoration: none; }

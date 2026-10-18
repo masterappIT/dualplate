@@ -2,6 +2,7 @@ import { db, id, now } from './db.js'
 import { businessToday } from './rules.js'
 import { currencies } from './rentals.js'
 import { sniff } from './client-portal.js'
+import { endedCustomerIds } from './customer-lifecycle.js'
 
 // 收費、代墊與報價（docs/tasks/fees-brief.md）。只限管理者；金額以「分」為單位的整數，按幣種分開合計，不換算。
 db.exec(`CREATE TABLE IF NOT EXISTS fee_items(id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, customer_id TEXT NOT NULL, kind TEXT NOT NULL, request_id TEXT, plate_asset_id TEXT, description TEXT NOT NULL, currency TEXT NOT NULL, amount INTEGER NOT NULL,
@@ -53,10 +54,11 @@ function checkFee(item, { allowKinds = manualKinds } = {}) {
 
 // 每年該月 1 日起自動產生年費（冪等：同客戶同年只一筆）
 export function ensureAnnualFees(tenantId) {
-  const day = today(), year = day.slice(0, 4), month = Number(day.slice(5, 7))
+  const day = today(), year = day.slice(0, 4), month = Number(day.slice(5, 7)), ended = endedCustomerIds(tenantId)
   for (const billing of db.prepare("SELECT b.*, c.is_self, c.service_mode FROM customer_billing b JOIN customers c ON c.id=b.customer_id WHERE b.tenant_id=? AND b.active=1").all(tenantId)) {
     // 自管客戶沒有固定代辦費，年費設定即使仍生效也不產生（客戶頁會提示對不上）
-    if (billing.is_self || billing.service_mode === '自管' || month < billing.bill_month) continue
+    // 已結束服務的客戶不再產生年費
+    if (billing.is_self || billing.service_mode === '自管' || ended.has(billing.customer_id) || month < billing.bill_month) continue
     const start = `${year}-${String(billing.bill_month).padStart(2, '0')}-01`
     insertFee(tenantId, { customerId: billing.customer_id, kind: 'annual', description: `${year} 年度年費`, currency: billing.currency, amount: billing.annual_amount, incurredOn: start, dueOn: start, periodKey: year })
   }

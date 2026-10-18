@@ -1,6 +1,7 @@
 import { db, id, now } from './db.js'
 import { plateFacts, vehicleFacts } from './plate-facts.js'
 import { deadlineOwners } from './deadline-owners.js'
+import { endedCustomerIds } from './customer-lifecycle.js'
 import { driverFor } from './drivers.js'
 import { rentOverview } from './rentals.js'
 import { filingDeadlines } from './bookkeeping.js'
@@ -285,7 +286,9 @@ export async function phase1Routes(req, res, url, user, h) {
     const completions = new Set(query('SELECT * FROM rule_completions WHERE tenant_id=?', tenant).map(item => `${item.code}:${item.owner_id}:${item.period}`))
     const { rent, deadlines: rentDeadlines } = rentOverview(tenant)
     // 司機證件未填日期時只在司機列表顯示「待錄入」，不計入今日工作（大部分司機不會三種證件都有）
-    const deadlines = [...computeDeadlines({ rules: rules(), owners, tracked, completions, scopes: scopeMap(tenant), windowDays: days }).filter(item => item.level !== 'ok' && !(item.ownerType === 'driver' && item.level === 'missing')), ...rentDeadlines, ...filingDeadlines(tenant)]
+    // 已結束服務的客戶不出現在今日工作（到期事項已在 deadlineOwners 排除，這裏再排除租金和報帳）
+    const ended = endedCustomerIds(tenant)
+    const deadlines = [...computeDeadlines({ rules: rules(), owners, tracked, completions, scopes: scopeMap(tenant), windowDays: days }).filter(item => item.level !== 'ok' && !(item.ownerType === 'driver' && item.level === 'missing')), ...rentDeadlines, ...filingDeadlines(tenant)].filter(item => !ended.has(item.customerId))
     // 統一排序：逾期 → 需處理 → 即將到期 → 待錄入，同級按日期；租金與報帳項目和其他到期一起排
     const rank = { overdue: 0, due: 1, upcoming: 2, missing: 3 }
     deadlines.sort((a, b) => (rank[a.level] ?? 9) - (rank[b.level] ?? 9) || String(a.dueOn || '9999').localeCompare(String(b.dueOn || '9999')))

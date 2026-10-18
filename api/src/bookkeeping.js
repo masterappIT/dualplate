@@ -2,6 +2,7 @@ import { db, id, now } from './db.js'
 import { businessToday } from './rules.js'
 import { scopeMap, syncFilingFirm } from './entrustment.js'
 import { sniff } from './client-portal.js'
+import { endedCustomerIds } from './customer-lifecycle.js'
 
 // 內地公司每月報帳報稅追蹤（docs/tasks/bookkeeping-brief.md）。做帳外包給會計公司，系統只追蹤進度、回執與截止日。
 db.exec(`CREATE TABLE IF NOT EXISTS accounting_firms(id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, name TEXT NOT NULL, contact TEXT, phone TEXT, email TEXT, notes TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
@@ -27,8 +28,9 @@ export const dueFor = (tenantId, period) => db.prepare('SELECT due_on FROM filin
 // 每間在營內地公司生成到本月為止、最近 3 期的報帳工作（冪等）；客戶自理的不生成；按季者只在季首月。已註銷公司未完成的期數標記，不刪除。
 export function ensureFilings(tenantId) {
   const takenOver = db.prepare("SELECT 1 FROM service_scopes WHERE tenant_id=? AND owner_type='company' AND owner_id=? AND service='monthly_filing' AND handler='client' AND ended_on IS NOT NULL LIMIT 1")
-  const month = today().slice(0, 7), scopes = scopeMap(tenantId)
-  const companies = db.prepare("SELECT * FROM companies WHERE tenant_id=? AND jurisdiction='內地'").all(tenantId)
+  const month = today().slice(0, 7), scopes = scopeMap(tenantId), ended = endedCustomerIds(tenantId)
+  // 已結束服務的客戶不再產生報帳期數
+  const companies = db.prepare("SELECT * FROM companies WHERE tenant_id=? AND jurisdiction='內地'").all(tenantId).filter(company => !ended.has(company.customer_id))
   for (const company of companies) {
     const status = company.status || '存續'
     if (!activeStatuses.includes(status)) {
@@ -50,6 +52,7 @@ export function ensureFilings(tenantId) {
 
 export function filingStatus(row) {
   if (row.closed_reason === 'pre_system') return '啟用前已處理'
+  if (row.closed_reason === 'service_ended') return '客戶已結束服務'
   if (row.closed_reason) return '公司已註銷'
   if (row.paid_on || (row.filed_on && row.zero_filing)) return '已完成'
   if (row.filed_on) return '已申報'
