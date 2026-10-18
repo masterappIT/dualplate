@@ -743,6 +743,8 @@ export const server = http.createServer(async (req, res) => {
       const service = services.find(s => s.code === b.serviceCode && s.routes.includes(b.route))
       if (!service) return fail(res, 400, '服務類型與路線不相符')
       const customerId = user.role === 'admin' ? b.customerId : user.customer_id
+      // 要選牌照的服務（docs/tasks/self-managed-fixes-plan.md 第 8 步）：新申請不用、「其他代辦要求」可不指定；客戶提交其他服務必須選自己的牌照
+      if (user.role === 'customer' && !['new_application', 'other'].includes(service.code) && !b.plateAssetId) return fail(res, 400, '請先選擇牌照；還沒有牌照請先新增牌照')
       if (!customerId || !canAccessCustomer(user, customerId)) return fail(res, 400, '客戶不存在')
       if (b.vehicleId) { const vehicle = one('SELECT * FROM vehicles WHERE id=?', b.vehicleId); if (!vehicle || vehicle.customer_id !== customerId || vehicle.route !== b.route) return fail(res, 400, '車輛與客戶或路線不相符') }
       if (b.plateAssetId) { const plate = one('SELECT * FROM plate_assets WHERE id=?', b.plateAssetId); if (!plate || plate.customer_id !== customerId || plate.route !== b.route || !clean(plate.card_number)) return fail(res, 400, '兩地牌檔案與客戶或路線不相符') }

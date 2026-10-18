@@ -9,7 +9,9 @@
       <template v-else><text class="form-title">要辦甚麼？</text><text class="subtle">不確定就選「其他代辦要求」，寫下情況即可。</text></template>
       <view v-if="!fixedService" class="chips"><text v-for="s in shownServices" :key="s.code" class="chip" :class="{active:serviceCode===s.code}" @click="pickService(s.code)">{{ s.name }}</text></view>
       <text v-if="selfManaged && serviceCode && !fixedService" class="price-hint">{{ priceText }}</text>
-      <template v-if="needsPlate && !lockedPlate && !fixedService"><text class="field-label">哪個牌照？</text><picker :range="plateNames" @change="plateIndex=Number($event.detail.value)"><view class="field picker" :class="{placeholder:!plateIndex}"><text>{{ plateNames[plateIndex] }}</text><text class="chev">›</text></view></picker></template>
+      <!-- 沒有這條路線的牌照（docs/tasks/self-managed-fixes-plan.md 第 8 步）：要選牌照的服務先新增牌照，「其他代辦要求」照舊可不指定 -->
+      <view v-if="noPlateYet" class="no-plate"><text class="field-label">哪個牌照？</text><text class="subtle">還沒有{{ route }}牌照。這項要先新增牌照，才可以交給我們辦。</text><button class="btn-line add-plate" @click="addPlate">新增牌照</button></view>
+      <template v-else-if="needsPlate && !lockedPlate && !fixedService"><text class="field-label">哪個牌照？</text><picker :range="plateNames" @change="plateIndex=Number($event.detail.value)"><view class="field picker" :class="{placeholder:!plateIndex}"><text>{{ plateNames[plateIndex] }}</text><text class="chev">›</text></view></picker></template>
       <text class="field-label">補充說明（可不填）</text><textarea class="field description" v-model="description" :placeholder="entrust === 'scope' ? '想加入或取消哪些事項，例如香港商業登記證改由你們辦' : entrust === 'long' ? '想交給我們的事項，例如全部牌照續期、公司年報' : '例如新車資料、希望完成的日期'" />
       <button class="primary submit" :loading="submitting" :disabled="submitting" @click="submit">提交</button>
     </view>
@@ -27,11 +29,14 @@ const routes=['粵港','粵澳'],route=ref('粵港'),services=ref([]),vehicles=r
 const available=computed(()=>services.value.filter(s=>s.routes.includes(route.value))),availableNames=computed(()=>available.value.map(s=>s.name)),selectedService=computed(()=>available.value.find(s=>s.code===serviceCode.value)),vehicleOptions=computed(()=>vehicles.value.filter(v=>v.route===route.value)),vehicleNames=computed(()=>['不指定／新申請',...vehicleOptions.value.map(v=>v.plate)]),plateOptions=computed(()=>plates.value.filter(p=>p.route===route.value)),plateNames=computed(()=>[serviceCode.value==='other'?'不指定牌照':'請選擇牌照',...plateOptions.value.map(p=>[p.mainland_plate,p.local_plate].filter(Boolean).join(' · ')||p.card_number)])
 // 新申請不用選牌照；其他業務要選，「其他代辦要求」可不指定
 const needsPlate=computed(()=>!!serviceCode.value&&serviceCode.value!=='new_application')
+const noPlateYet=computed(()=>needsPlate.value&&serviceCode.value!=='other'&&!lockedPlate.value&&!fixedService.value&&!plateOptions.value.length)
+function addPlate(){uni.navigateTo({url:'/pages/plate-create/plate-create'})}
 watch(route,()=>{if(!available.value.some(s=>s.code===serviceCode.value))serviceCode.value='';title.value=selectedService.value?.name||'';vehicleIndex.value=0;plateIndex.value=0})
 function selectService(e){serviceCode.value=available.value[Number(e.detail.value)]?.code||'';title.value=selectedService.value?.name||'';plateIndex.value=0}
 async function load(){if(!getUser())return uni.navigateTo({url:'/pages/login/login'});try{const[catalog,v,p,r]=await Promise.all([api('/catalog'),api('/vehicles'),api('/plate-assets'),api('/requests')]);services.value=catalog.services;vehicles.value=v;plates.value=p;requests.value=r;await applyWanted()}catch(e){uni.showToast({title:e.message,icon:'none'})}}
 async function submit(){
   if(!serviceCode.value)return uni.showToast({title:'請先選擇要辦的事',icon:'none'})
+  if(noPlateYet.value)return uni.showToast({title:'請先新增牌照',icon:'none'})
   if(needsPlate.value&&serviceCode.value!=='other'&&plateOptions.value.length&&!plateIndex.value)return uni.showToast({title:'請選擇哪個牌照',icon:'none'})
   if(!title.value.trim())return uni.showToast({title:'請先選擇要辦的事',icon:'none'})
   submitting.value=true
@@ -73,6 +78,7 @@ onShow(load)
 .form-title{display:block;font-size:var(--fs-h);font-weight:800;color:var(--jade-deep)}
 .picker{display:flex;align-items:center;justify-content:space-between}.picker.placeholder{color:var(--ink-3)}
 .description{height:96px;line-height:1.5}
+.no-plate .subtle{display:block}.add-plate{width:100%;margin-top:12px}
 .price-hint{display:block;margin-top:12px;font-size:var(--fs-body);color:var(--jade-deep);font-weight:700}
 .submit{margin-top:16px}
 .list{padding:4px 16px}
