@@ -14,5 +14,12 @@ chmod 600 deploy.env.next
 mv deploy.env.next deploy.env
 docker compose --env-file deploy.env -f compose.yaml up -d --remove-orphans
 domain="$(sed -n 's/^MOBILE_DOMAIN=//p' deploy.env)"
-curl --fail --silent --show-error --max-time 15 --resolve "${domain}:443:127.0.0.1" "https://${domain}/api/health" | grep -q '"database":"ok"'
-printf 'Rollback healthy.\n'
+for _ in $(seq 1 30); do
+  if docker compose --env-file deploy.env -f compose.yaml exec -T web wget -qO- --header "Host: ${domain}" http://127.0.0.1/api/health 2>/dev/null | grep -q '"database":"ok"'; then
+    printf 'Rollback healthy.\n'
+    exit 0
+  fi
+  sleep 2
+done
+printf 'Rollback unhealthy.\n' >&2
+exit 1

@@ -1,0 +1,5 @@
+# 共用 Caddy 的網域設定（伺服器上的位置：/srv/infra/sites/dualplate.caddy）。
+# 只在兩個網域的 DNS 已指向本伺服器後才安裝，避免證書申請不斷失敗。
+dualplate.masterappinc.com, dualplateadmin.masterappinc.com {
+	reverse_proxy dualplate-web:80
+}

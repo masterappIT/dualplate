@@ -1,25 +1,30 @@
+# 伺服器上的位置：/srv/dualplate/compose.yaml（HostKVM 共用伺服器）。
+# web 加入共用 Caddy 的 edge 網絡；api 只在本產品的 internal 網絡。用容器名稱互連，避免和其他產品的服務名稱相撞。
+name: dualplate
 services:
   api:
     image: ${API_IMAGE:?API_IMAGE required}
+    container_name: dualplate-api
     restart: unless-stopped
     env_file: /srv/dualplate/app.env
     volumes:
       - /srv/dualplate/data:/srv/dualplate/data
       - /srv/dualplate/backups:/srv/dualplate/backups
       - /srv/dualplate/logs:/srv/dualplate/logs
-    networks: [app]
+    networks: [internal]
+    # 平時約 100MB；批文卡 OCR 時會短暫升高
+    mem_limit: 768m
   web:
     image: ${WEB_IMAGE:?WEB_IMAGE required}
+    container_name: dualplate-web
     restart: unless-stopped
     depends_on: [api]
     environment:
       ADMIN_DOMAIN: ${ADMIN_DOMAIN:-dualplateadmin.masterappinc.com}
       MOBILE_DOMAIN: ${MOBILE_DOMAIN:-dualplate.masterappinc.com}
-      CADDY_EMAIL: ${CADDY_EMAIL:?CADDY_EMAIL required}
-    ports: ["80:80", "443:443"]
-    volumes:
-      - /srv/dualplate/caddy/data:/data
-      - /srv/dualplate/caddy/config:/config
-    networks: [app]
+    networks: [edge, internal]
+    mem_limit: 64m
 networks:
-  app:
+  internal: {}
+  edge:
+    external: true

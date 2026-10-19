@@ -1,8 +1,14 @@
+# 正式環境在 HostKVM 共用伺服器（2026-10-19 起）：80/443 和 HTTPS 證書由伺服器的共用 Caddy 負責，
+# 它把兩個網域轉到這個容器（dualplate-web:80）。這裏只用內部 HTTP，網頁規則和以前一樣。
 {
-    email {$CADDY_EMAIL}
+    auto_https off
+    servers {
+        # 共用 Caddy 已把 X-Forwarded-For 設為用戶 IP；只信任內部網絡傳來的值，API 才記錄到用戶 IP
+        trusted_proxies static private_ranges
+    }
 }
 
-{$ADMIN_DOMAIN} {
+http://{$ADMIN_DOMAIN}:80 {
     encode zstd gzip
     header X-Robots-Tag "noindex, nofollow"
     header Content-Security-Policy "frame-ancestors 'none'"
@@ -10,8 +16,9 @@
     request_body {
         max_size 15MB
     }
+    # 用容器名稱：共用的 edge 網絡上有其他產品也叫 api 的服務
     handle /api/* {
-        reverse_proxy api:4100
+        reverse_proxy dualplate-api:4100
     }
     handle /assets/* {
         root * /srv/admin
@@ -26,17 +33,17 @@
     }
 }
 
-{$MOBILE_DOMAIN} {
+http://{$MOBILE_DOMAIN}:80 {
     encode zstd gzip
     header /api/* Cache-Control "no-store"
     request_body {
         max_size 15MB
     }
     handle /api/* {
-        reverse_proxy api:4100
+        reverse_proxy dualplate-api:4100
     }
     handle /r/* {
-        reverse_proxy api:4100
+        reverse_proxy dualplate-api:4100
     }
     handle /assets/* {
         root * /srv/mobile

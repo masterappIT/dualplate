@@ -1,45 +1,57 @@
 #!/usr/bin/env bash
+# HostKVM 共用伺服器首次安裝（root 執行，可重複執行）。Docker、rclone、共用 Caddy 已由伺服器初始化安裝。
+# 用法：APP_ENV_FILE=<app.env> DEPLOY_PUBKEY=<部署公鑰> bootstrap.sh
+# - 先把 deploy/ 送到 /tmp/dualplate-deploy
+# - APP_ENV_FILE：從 Secret Manager dualplate-app-env 原樣抄出的檔案；只在伺服器還沒有 app.env 時放入，用完即刪除
+# - DEPLOY_PUBKEY：GitHub Actions 部署用的 ed25519 公鑰；deploy-dualplate 帳號登入後只能執行 deploy.sh
+# 共用 Caddy 的網域設定 dualplate.caddy 不在這裏安裝：要等 DNS 指向本伺服器後才放入（見 docs/deploy.md）。
 set -euo pipefail
 [[ "${EUID}" -eq 0 ]] || { printf 'Run as root.\n' >&2; exit 2; }
 ROOT=/srv/dualplate
-DEVICE="${DATA_DEVICE:?Set DATA_DEVICE to the attached persistent disk /dev/disk/by-id path}"
-PROJECT="${GCP_PROJECT_ID:?GCP_PROJECT_ID required}"
-SECRET="${GCP_APP_ENV_SECRET:-dualplate-app-env}"
-[[ -b "$DEVICE" ]] || { printf 'Data disk is not a block device.\n' >&2; exit 2; }
-apt-get update
-apt-get install -y ca-certificates curl gnupg cron
-mkdir -p /usr/share/keyrings
-curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
-printf "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main\n" > /etc/apt/sources.list.d/google-cloud-sdk.list
-install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-chmod a+r /etc/apt/keyrings/docker.gpg
-printf 'deb [arch=%s signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian %s stable\n' "$(dpkg --print-architecture)" "$(. /etc/os-release && echo "$VERSION_CODENAME")" > /etc/apt/sources.list.d/docker.list
-apt-get update
-apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin google-cloud-cli
-gcloud auth configure-docker asia-east2-docker.pkg.dev --quiet
-systemctl enable --now docker cron
-timedatectl set-timezone Etc/UTC
-systemctl restart cron
-if ! blkid "$DEVICE" >/dev/null 2>&1; then
-  [[ "${FORMAT_EMPTY_DISK:-}" == 'yes' ]] || { printf 'Disk has no filesystem. Set FORMAT_EMPTY_DISK=yes only after checking it is empty.\n' >&2; exit 3; }
-  mkfs.ext4 -F "$DEVICE"
+SRC=/tmp/dualplate-deploy
+USER_NAME=deploy-dualplate
+PUB="${DEPLOY_PUBKEY:?DEPLOY_PUBKEY required}"
+[[ -f "$SRC/compose.yaml" ]] || { printf 'deploy/ not found at %s.\n' "$SRC" >&2; exit 2; }
+grep -qE '^ssh-ed25519 [A-Za-z0-9+/=]+( |$)' "$PUB" || { printf 'Expected one ed25519 public key.\n' >&2; exit 3; }
+docker network inspect edge >/dev/null 2>&1 || { printf 'Shared edge network missing.\n' >&2; exit 3; }
+command -v rclone >/dev/null || { printf 'rclone missing.\n' >&2; exit 3; }
+
+install -d -m 755 -o root -g root "$ROOT"
+install -d -m 700 -o 10001 -g 10001 "$ROOT/data" "$ROOT/backups" "$ROOT/logs"
+if [[ ! -f "$ROOT/app.env" ]]; then
+  [[ -s "${APP_ENV_FILE:-}" ]] || { printf 'APP_ENV_FILE required for the first install.\n' >&2; exit 3; }
+  install -m 600 -o root -g root "$APP_ENV_FILE" "$ROOT/app.env"
+  # 伺服器硬碟和其他產品共用：本機備份只留 7 天，異地備份在 GCS 留 35 天
+  sed -i 's/^BACKUP_KEEP_DAYS=.*/BACKUP_KEEP_DAYS=7/' "$ROOT/app.env"
+  printf 'Installed %s/app.env\n' "$ROOT"
 fi
-fstype="$(blkid -s TYPE -o value "$DEVICE")"
-[[ "$fstype" == ext4 ]] || { printf 'Expected ext4 data disk; found %s.\n' "$fstype" >&2; exit 3; }
-mkdir -p "$ROOT"
-uuid="$(blkid -s UUID -o value "$DEVICE")"
-if ! grep -q "UUID=$uuid " /etc/fstab; then printf 'UUID=%s %s ext4 defaults,nofail 0 2\n' "$uuid" "$ROOT" >> /etc/fstab; fi
-mountpoint -q "$ROOT" || mount "$ROOT"
-mkdir -p "$ROOT"/{data,backups,logs,caddy/data,caddy/config}
-chown -R 10001:10001 "$ROOT/data" "$ROOT/backups" "$ROOT/logs"
-chmod 700 "$ROOT/data" "$ROOT/backups" "$ROOT/logs"
-gcloud secrets versions access latest --secret="$SECRET" --project="$PROJECT" > "$ROOT/app.env"
-chmod 600 "$ROOT/app.env"
-install -m 0644 /tmp/dualplate-deploy/compose.yaml "$ROOT/compose.yaml"
-install -m 0755 /tmp/dualplate-deploy/vm/deploy.sh "$ROOT/deploy.sh"
-install -m 0755 /tmp/dualplate-deploy/vm/rollback.sh "$ROOT/rollback.sh"
-install -m 0755 /tmp/dualplate-deploy/vm/backup-to-gcs.sh "$ROOT/backup-to-gcs.sh"
-install -m 0755 /tmp/dualplate-deploy/vm/refresh-env.sh "$ROOT/refresh-env.sh"
-install -m 0644 /tmp/dualplate-deploy/vm/backup.cron /etc/cron.d/dualplate-backup
+[[ -n "${APP_ENV_FILE:-}" && -f "$APP_ENV_FILE" ]] && shred -u "$APP_ENV_FILE"
+
+install -m 0644 -o root -g root "$SRC/compose.yaml" "$ROOT/compose.yaml"
+for script in deploy rollback backup-to-gcs refresh-env; do
+  install -m 0755 -o root -g root "$SRC/vm/$script.sh" "$ROOT/$script.sh"
+done
+install -m 0644 -o root -g root "$SRC/vm/dualplate.caddy" "$ROOT/dualplate.caddy"
+install -m 0644 "$SRC/vm/backup.cron" /etc/cron.d/dualplate-backup
+
+# 部署帳號：只能用金鑰登入，登入後只會執行 deploy.sh；不能開 shell、不能轉發連線，不在 docker 群組
+install -m 0755 -o root -g root "$SRC/vm/deploy-ssh.sh" /usr/local/bin/dualplate-deploy-ssh
+id "$USER_NAME" >/dev/null 2>&1 || useradd -m -s /bin/sh "$USER_NAME"
+passwd -l "$USER_NAME" >/dev/null
+home="$(getent passwd "$USER_NAME" | cut -d: -f6)"
+install -d -m 755 -o root -g root "$home/.ssh"
+printf 'restrict,command="/usr/local/bin/dualplate-deploy-ssh" %s\n' "$(head -1 "$PUB")" > "$home/.ssh/authorized_keys"
+chown root:root "$home/.ssh/authorized_keys"
+chmod 644 "$home/.ssh/authorized_keys"
+tmp="$(mktemp)"
+printf '%s ALL=(root) NOPASSWD: %s/deploy.sh\n' "$USER_NAME" "$ROOT" > "$tmp"
+visudo -cqf "$tmp"
+install -m 440 -o root -g root "$tmp" /etc/sudoers.d/dualplate-deploy
+rm -f "$tmp"
+conf=/etc/ssh/sshd_config.d/10-masterapp.conf
+if ! grep -qE "^AllowUsers .*\b$USER_NAME\b" "$conf"; then
+  sed -i -E "s/^AllowUsers (.*)$/AllowUsers \1 $USER_NAME/" "$conf"
+  sshd -t
+  systemctl reload ssh
+fi
 printf 'Bootstrap complete.\n'

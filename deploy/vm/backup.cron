@@ -1,2 +1,2 @@
-# Compute Engine 預設 UTC；19:15 UTC = 香港次日 03:15。
-15 19 * * * root GCP_BACKUP_BUCKET=dualplate-511819-backups /srv/dualplate/backup-to-gcs.sh >>/srv/dualplate/logs/backup-cron.log 2>&1
+# 伺服器時區是 UTC；19:15 UTC = 香港次日 03:15。
+15 19 * * * root /srv/dualplate/backup-to-gcs.sh >>/srv/dualplate/logs/backup-cron.log 2>&1

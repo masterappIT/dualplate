@@ -63,14 +63,19 @@ jobs:
         run: |
           remote_sha="$(git ls-remote origin refs/heads/main | cut -f1)"
           test "$remote_sha" = "$GITHUB_SHA" || { echo 'Stale commit; stopping.' >&2; exit 1; }
-      - name: Release through IAP SSH
+      # 2026-10-19 起正式環境在 HostKVM 共用伺服器；deploy-dualplate 帳號登入後只能執行 /srv/dualplate/deploy.sh
+      - name: Release over SSH
         env:
           API_IMAGE: ${{ steps.images.outputs.api }}
           WEB_IMAGE: ${{ steps.images.outputs.web }}
-          PROJECT: ${{ vars.GCP_PROJECT_ID }}
-          ZONE: ${{ vars.GCP_ZONE }}
-          VM: ${{ vars.GCP_VM_NAME }}
+          SSH_KEY: ${{ secrets.HOSTKVM_DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: 45.134.82.239
+          DEPLOY_HOST_KEY: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIfLOO+u+1eL4NfB87NjjvQm6GWt7b4ZKianVO7bGRGD
         run: |
           set -euo pipefail
-          gcloud compute ssh "$VM" --project "$PROJECT" --zone "$ZONE" --tunnel-through-iap --quiet \
-            --command="sudo GCP_BACKUP_BUCKET='${{ vars.GCP_BACKUP_BUCKET }}' ADMIN_DOMAIN=dualplateadmin.masterappinc.com MOBILE_DOMAIN=dualplate.masterappinc.com CADDY_EMAIL=info@masterappinc.com /srv/dualplate/deploy.sh '$API_IMAGE' '$WEB_IMAGE'"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s %s\n' "$DEPLOY_HOST" "$DEPLOY_HOST_KEY" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o BatchMode=yes \
+            "deploy-dualplate@${DEPLOY_HOST}" "$API_IMAGE $WEB_IMAGE"
