@@ -1,19 +1,26 @@
-# Google Cloud 正式部署
+# 正式部署（HostKVM 共用伺服器）
 
-正式專案 `dualplate-511819`，香港 `asia-east2-a`。API 與 SQLite 在 Compute Engine `dualplate-app`；資料庫只在獨立的 `dualplate-data` 持久磁碟。管理端與客戶端 H5 由同一個 Caddy 映像提供，`/api` 同站轉發，客戶端 `/r/` 轉發至 API。映像放 Artifact Registry，秘密放 Secret Manager，備份傳至私有 Cloud Storage。
+2026-10-19 起，正式環境由 Google Compute Engine 搬到 MasterApp 的 HostKVM 共用伺服器 `45.134.82.239`（香港）。部署方式沿用 Google VM 時的做法：同一套 Docker Compose、`deploy.sh` 和備份。只改了以下幾項：
+
+- 80/443 和 HTTPS 證書由伺服器的共用 Caddy 負責
+- 發布改用普通 SSH
+- `app.env` 放在伺服器上
+- 備份上傳到共用 bucket
+
+搬遷過程見 `docs/tasks/hostkvm-migration.md`。
 
 ```mermaid
 flowchart LR
-  Users[瀏覽器] -->|HTTPS| Caddy[Caddy: VM 80/443]
-  Caddy --> Admin[管理端靜態檔]
-  Caddy --> Mobile[客戶端 H5 靜態檔]
-  Caddy -->|/api, /r| API[Node 24 API]
-  API --> Disk[獨立持久磁碟 SQLite]
-  Disk --> Backup[每日備份 + 發布前備份]
-  Backup --> GCS[私有 Cloud Storage 90 天]
-  Disk --> Snap[每日快照 14 天]
+  Users[瀏覽器] -->|HTTPS| Shared[共用 Caddy: 80/443]
+  Shared -->|兩個網域| Web[dualplate-web: 內部 HTTP]
+  Web --> Admin[管理端靜態檔]
+  Web --> Mobile[客戶端 H5 靜態檔]
+  Web -->|/api, /r| API[dualplate-api: Node 24]
+  API --> DB[/srv/dualplate/data/app.sqlite]
+  DB --> Backup[每日備份 + 發布前備份]
+  Backup --> GCS[gs://masterapp-prod-backups/dualplate 35 天]
   GitHub[GitHub Actions 建置] --> Registry[Artifact Registry 摘要映像]
-  Registry --> Caddy
+  Registry --> Web
   Registry --> API
 ```
 
@@ -24,133 +31,114 @@ flowchart LR
 - 健康：兩個網域的 `/api/health` 應回 `{"ok":true,"database":"ok"}`。首頁應回 200，`index.html` 是 `no-store`，`/assets/` 可永久快取。
 - 承租方專屬連結：客戶端網域的 `/r/<令牌>`。
 
+## 伺服器上的檔案
+
+全部在 `/srv/dualplate/`，由 `deploy/vm/bootstrap.sh` 安裝：
+
+| 檔案 | 內容 |
+|---|---|
+| `compose.yaml` | 來自 `deploy/compose.yaml`：`dualplate-api` 只接本產品的內部網絡；`dualplate-web` 另接共用 Caddy 的 `edge` 網絡。記憶體上限 api 768MB、web 64MB |
+| `deploy.env` | 現行映像摘要和兩個網域，由 `deploy.sh` 寫入 |
+| `app.env` | API 環境設定，權限 600，只在伺服器上；副本在 Secret Manager `dualplate-app-env` |
+| `data/`、`backups/`、`logs/` | SQLite、本機備份（保留 7 天）、錯誤記錄；擁有者 10001，權限 700 |
+| `deploy.sh`、`rollback.sh`、`backup-to-gcs.sh`、`refresh-env.sh` | 來自 `deploy/vm/`，root 擁有 |
+| `dualplate.caddy` | 共用 Caddy 的網域設定，已安裝到 `/srv/infra/sites/dualplate.caddy` |
+
+- web 容器的 `deploy/web/Caddyfile` 只用內部 HTTP，按網域分管理端和客戶端，並保留以前的規則：15MB 上傳上限、`noindex`、CSP、快取標頭、`/r/` 轉發。
+- `trusted_proxies` 只信任內部網絡傳來的 `X-Forwarded-For`，所以 API 記錄到的是用戶 IP；共用 Caddy 不信任外面傳入的值，用戶不能偽造。
+- 容器之間用容器名稱 `dualplate-api` 互連，因為共用的 `edge` 網絡上有其他產品也叫 `api` 的服務。
+
 ## 發布與回滾
 
-推送 `main` 後，`.github/workflows/deploy-production.yml` 先執行 API 測試、管理端 check/build、客戶端 H5 build 和腳本語法檢查。`DEPLOY_ENABLED=true` 才在 GitHub 機器上以 `docker buildx` 建置兩個映像並推送到 Artifact Registry（同 MasterDriver）。`.dockerignore` 排除本機資料、SQLite、測試樣本與秘密。發布前再檢查 commit 仍是 `main` 最新，通過後經 IAP SSH 呼叫 VM 的 `/srv/dualplate/deploy.sh <API@sha256> <web@sha256>`。腳本先備份 SQLite 並上傳 GCS；新容器健康檢查失敗，便切回舊摘要。首次沒有資料庫時跳過發布前備份，API 首次啟動建立空資料庫。
+推送 `main` 後，`.github/workflows/deploy-production.yml` 依次執行：
 
-手動回滾：
+1. 品質檢查：API 測試、管理端 check/build、客戶端 H5 build、腳本語法檢查。
+2. `DEPLOY_ENABLED=true` 時，用 Workload Identity 登入 GCP，以 `docker buildx` 建置兩個映像並推送到 Artifact Registry。
+3. 再次檢查 commit 仍是 `main` 最新。
+4. 以 `deploy-dualplate@45.134.82.239` 經 SSH 傳兩個映像摘要。workflow 固定了伺服器的 host key，私鑰是 `production` environment 的 secret `HOSTKVM_DEPLOY_SSH_KEY`。
+
+`deploy-dualplate` 帳號的限制：
+- 只能用金鑰登入
+- `authorized_keys` 的 forced command 只會執行 `sudo /srv/dualplate/deploy.sh <API> <web>`
+- 不能開 shell、不在 docker 群組
+- `deploy.sh` 只接受 `asia-east2-docker.pkg.dev/dualplate-511819/dualplate/{api,web}@sha256:…`
+
+`deploy.sh` 的流程：
+1. 拉映像
+2. 先備份 SQLite 並上傳 GCS
+3. 更新容器
+4. 健康檢查兩次：先在 api 容器內檢查，再經 web 容器帶網域檢查 `/api/health`
+5. 60 秒內不健康就切回舊摘要
+
+首次沒有資料庫時跳過發布前備份，API 首次啟動時會建立空資料庫。
+
+伺服器拉映像用共用的 `masterapp-prod-vm` 服務帳號，它只有 `dualplate` 倉庫的只讀權限。
+
+手動回滾（以管理帳號 SSH 登入伺服器）：
 
 ```bash
-gcloud compute ssh dualplate-app --project=dualplate-511819 --zone=asia-east2-a --tunnel-through-iap --command='sudo /srv/dualplate/rollback.sh <舊API映像@sha256> <舊web映像@sha256>'
+ssh masterapp-prod 'sudo /srv/dualplate/rollback.sh <舊API映像@sha256> <舊web映像@sha256>'
 ```
 
 摘要可從 Artifact Registry 或之前的 GitHub Actions 日誌取得。回滾程式不會回滾 SQLite 結構；如需還原資料，先停止容器並由負責人核對備份。
 
-`deploy.sh` 結束碼：`0` 新版健康；`1` 缺少必要參數／環境變數或其他命令錯誤；`2` 摘要格式錯；`3` 另一次發布佔用鎖；`4` 發布前備份失敗或既有版本缺資料庫；`5` 新版容器啟動失敗、舊版已恢復健康；`6` 新版健康檢查失敗、舊版已恢復健康；`7` 新版失敗且舊版恢復後仍不健康；`8` 首次發布失敗、沒有舊版可切回；`9` 無法拉取映像。腳本會明確記錄 `Rollback healthy` 或 `Rollback unhealthy`。
+`deploy.sh` 結束碼：
 
-## 一次性設定（新專案重建時逐條執行）
+| 碼 | 意思 |
+|---|---|
+| `0` | 新版健康 |
+| `1` | 缺少必要參數或其他命令錯誤 |
+| `2` | 摘要格式錯或不是本產品的映像 |
+| `3` | 另一次發布佔用鎖 |
+| `4` | 發布前備份失敗，或既有版本缺資料庫 |
+| `5` | 新版容器啟動失敗、舊版已恢復健康 |
+| `6` | 新版健康檢查失敗、舊版已恢復健康 |
+| `7` | 新版失敗，舊版恢復後仍不健康 |
+| `8` | 首次發布失敗、沒有舊版可切回 |
+| `9` | 無法拉取映像 |
 
-以下命令不含秘密內容。正式專案目前已建立這些資源；重建時先確認沒有同名資源。使用有專案管理權限的 Google 帳號登入 `gcloud`。
+腳本會明確記錄 `Rollback healthy` 或 `Rollback unhealthy`。
 
-```bash
-export PROJECT_ID=dualplate-511819
-export REGION=asia-east2
-export ZONE=asia-east2-a
-gcloud config set project "$PROJECT_ID"
-gcloud services enable compute.googleapis.com artifactregistry.googleapis.com logging.googleapis.com secretmanager.googleapis.com iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com storage.googleapis.com
-gcloud artifacts repositories create dualplate --location="$REGION" --repository-format=docker
-gcloud storage buckets create "gs://${PROJECT_ID}-backups" --location="$REGION" --uniform-bucket-level-access --public-access-prevention
-printf '%s\n' '{"rule":[{"action":{"type":"Delete"},"condition":{"age":90}}]}' > /tmp/dualplate-lifecycle.json
-gcloud storage buckets update "gs://${PROJECT_ID}-backups" --lifecycle-file=/tmp/dualplate-lifecycle.json
-gcloud compute addresses create dualplate-public-ip --region="$REGION"
-gcloud compute disks create dualplate-data --zone="$ZONE" --size=20GB --type=pd-balanced
-gcloud compute resource-policies create snapshot-schedule dualplate-data-daily --region="$REGION" --start-time=19:00 --daily-schedule --max-retention-days=14 --on-source-disk-delete=keep-auto-snapshots
-gcloud compute disks add-resource-policies dualplate-data --zone="$ZONE" --resource-policies=dualplate-data-daily
-gcloud iam service-accounts create dualplate-vm
-gcloud iam service-accounts create dualplate-deploy
-```
+## 備份
 
-19:00 UTC 是香港次日 03:00。Debian 12 `cron` 不支援 `CRON_TZ`，所以 `bootstrap.sh` 把主機時區設為 UTC，`deploy/vm/backup.cron` 使用 19:15，對應香港次日 03:15，執行 SQLite 線上備份與 GCS 上傳。授權：VM 帳戶只需讀映像、讀 `dualplate-app-env` Secret、對備份 bucket 使用 `roles/storage.objectUser`（上傳後核對物件需要讀取）；部署帳戶在 GitHub 機器上推送映像（Artifact Registry 寫入）、經 IAP SSH 登入 VM，不讀 Secret 內容。以下指令逐條設定：
+- 每日香港 03:15（伺服器 UTC 19:15，`/etc/cron.d/dualplate-backup`），每次發布前也會執行 `backup-to-gcs.sh`：
+  1. 在 api 映像內執行 `npm run backup`：SQLite 線上備份，附完整性檢查
+  2. 用 rclone 和 `/srv/infra/secrets/gcs-backup-sa.json` 上傳到 `gs://masterapp-prod-backups/dualplate/<年>/<月>/<日>/`
+- bucket 35 天後自動刪除；這個服務帳號只能新增和讀取，不能覆寫或刪除。
+- 記錄在 `/srv/dualplate/logs/backup-cron.log`。
+- HostKVM 不提供磁碟快照，所以異地備份是唯一的機外副本。
 
-```bash
-VM_SA="dualplate-vm@${PROJECT_ID}.iam.gserviceaccount.com"
-DEPLOY_SA="dualplate-deploy@${PROJECT_ID}.iam.gserviceaccount.com"
-gcloud artifacts repositories add-iam-policy-binding dualplate --location="$REGION" --member="serviceAccount:${VM_SA}" --role=roles/artifactregistry.reader
-gcloud artifacts repositories add-iam-policy-binding dualplate --location="$REGION" --member="serviceAccount:${DEPLOY_SA}" --role=roles/artifactregistry.writer
-gcloud storage buckets add-iam-policy-binding "gs://${PROJECT_ID}-backups" --member="serviceAccount:${VM_SA}" --role=roles/storage.objectUser
-gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:${DEPLOY_SA}" --role=roles/compute.osAdminLogin --condition=None
-gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:${DEPLOY_SA}" --role=roles/iap.tunnelResourceAccessor --condition=None
-gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:${DEPLOY_SA}" --role=roles/compute.viewer --condition=None
-gcloud iam service-accounts add-iam-policy-binding "$VM_SA" --member="serviceAccount:${DEPLOY_SA}" --role=roles/iam.serviceAccountUser
-```
+## 首次安裝（重建伺服器時）
 
-`dualplate-app-env` 的內容由負責人在本機建立暫存檔。以下範本沒有秘密值；若要啟用微信登入，須在本機編輯檔案填入由管理者保管的值。不要在終端機日誌、GitHub 或文件貼出秘密。完成後建立 Secret、授予 VM 存取權並刪除暫存檔：
+前提：伺服器已由 MasterApp-infra 初始化，Docker、rclone、共用 Caddy、`edge` 網絡、Artifact Registry 登入都已就緒。以下在持有 repo 的本機執行，不印出秘密：
 
 ```bash
-umask 077
-APP_ENV_FILE="$(mktemp "${TMPDIR:-/tmp}/dualplate-app-env.XXXXXX")"
-cat > "$APP_ENV_FILE" <<'ENV'
-PORT=4100
-DB_PATH=/srv/dualplate/data/app.sqlite
-CORS_ORIGINS=
-BACKUP_DIR=/srv/dualplate/backups
-BACKUP_KEEP_DAYS=90
-LOG_DIR=/srv/dualplate/logs
-PUBLIC_BASE_URL=https://dualplate.masterappinc.com
-BUSINESS_TZ=Asia/Hong_Kong
-WECHAT_APPID=
-WECHAT_SECRET=
-DEMO_SEED=0
-ENV
-chmod 600 "$APP_ENV_FILE"
-${EDITOR:-vi} "$APP_ENV_FILE"
-gcloud secrets create dualplate-app-env --replication-policy=automatic --data-file="$APP_ENV_FILE" --project="$PROJECT_ID"
-gcloud secrets add-iam-policy-binding dualplate-app-env --project="$PROJECT_ID" --member="serviceAccount:${VM_SA}" --role=roles/secretmanager.secretAccessor
-rm -f "$APP_ENV_FILE"
-unset APP_ENV_FILE
+ssh-keygen -t ed25519 -N '' -C deploy-dualplate -f deploy_key
+ssh masterapp-prod 'rm -rf /tmp/dualplate-deploy && mkdir -p /tmp/dualplate-deploy'
+rsync -az deploy/ masterapp-prod:/tmp/dualplate-deploy/
+scp deploy_key.pub masterapp-prod:/tmp/dualplate-deploy.pub
+gcloud secrets versions access latest --secret=dualplate-app-env --project=dualplate-511819 | ssh masterapp-prod 'umask 077; cat > /tmp/dualplate-app.env'
+ssh masterapp-prod 'sudo APP_ENV_FILE=/tmp/dualplate-app.env DEPLOY_PUBKEY=/tmp/dualplate-deploy.pub bash /tmp/dualplate-deploy/vm/bootstrap.sh'
+gh secret set HOSTKVM_DEPLOY_SSH_KEY --env production --repo masterappIT/dualplate < deploy_key
+rm -P deploy_key deploy_key.pub
 ```
+
+`bootstrap.sh` 只在伺服器沒有 `app.env` 時放入抄過來的檔案，並把 `BACKUP_KEEP_DAYS` 改為 7；放入後刪除暫存檔。之後手動執行 workflow 部署一次。
+
+**兩個網域的 DNS 指向本伺服器後**才安裝共用 Caddy 的網域設定，否則 Caddy 會不斷申請證書失敗：
 
 ```bash
-gcloud compute firewall-rules create dualplate-web --network=default --allow=tcp:80,tcp:443 --target-tags=dualplate-web --source-ranges=0.0.0.0/0
-gcloud compute firewall-rules create dualplate-iap-ssh --network=default --allow=tcp:22 --target-tags=dualplate-web --source-ranges=35.235.240.0/20
-gcloud compute instances create dualplate-app --zone="$ZONE" --machine-type=e2-small --image-family=debian-12 --image-project=debian-cloud --boot-disk-size=20GB --disk=name=dualplate-data,device-name=dualplate-data,mode=rw,boot=no,auto-delete=no --address=dualplate-public-ip --service-account="$VM_SA" --scopes=https://www.googleapis.com/auth/cloud-platform --tags=dualplate-web --metadata=enable-oslogin=TRUE
+ssh masterapp-prod 'sudo install -m 644 /srv/dualplate/dualplate.caddy /srv/infra/sites/dualplate.caddy && cd /srv/infra && sudo docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile'
 ```
 
-把 `deploy/` 送至 VM 的 `/tmp/dualplate-deploy`，然後初始化。**只在確認新磁碟沒有檔案系統時**設定 `FORMAT_EMPTY_DISK=yes`；腳本遇到已有檔案系統絕不格式化。腳本安裝 Docker/Caddy 所需環境、掛載磁碟、讀 Secret 到權限 600 的 `app.env`，安裝備份 cron 和 `refresh-env.sh`。以下命令在持有 `deploy/` 的本機執行：
-
-```bash
-gcloud compute ssh dualplate-app --project="$PROJECT_ID" --zone="$ZONE" --tunnel-through-iap --command='mkdir -p /tmp/dualplate-deploy'
-gcloud compute scp --recurse ./deploy/. "dualplate-app:/tmp/dualplate-deploy" --project="$PROJECT_ID" --zone="$ZONE" --tunnel-through-iap
-gcloud compute ssh dualplate-app --project="$PROJECT_ID" --zone="$ZONE" --tunnel-through-iap --command='sudo blkid /dev/disk/by-id/google-dualplate-data || true'
-gcloud compute ssh dualplate-app --project="$PROJECT_ID" --zone="$ZONE" --tunnel-through-iap --command="sudo DATA_DEVICE=/dev/disk/by-id/google-dualplate-data GCP_PROJECT_ID='$PROJECT_ID' FORMAT_EMPTY_DISK=yes /tmp/dualplate-deploy/vm/bootstrap.sh"
-```
-
-若 `blkid` 顯示已有檔案系統，停下核對資料，不設定 `FORMAT_EMPTY_DISK=yes`；已初始化的主機不需重新跑 `bootstrap.sh`。現有正式 VM 要套用本輪的部署腳本、`refresh-env.sh` 和修正後的備份排程，用上面的 `scp` 更新後執行：
-
-```bash
-gcloud compute ssh dualplate-app --project="$PROJECT_ID" --zone="$ZONE" --tunnel-through-iap --command='sudo install -m 0755 /tmp/dualplate-deploy/vm/refresh-env.sh /srv/dualplate/refresh-env.sh'
-gcloud compute ssh dualplate-app --project="$PROJECT_ID" --zone="$ZONE" --tunnel-through-iap --command='sudo install -m 0755 /tmp/dualplate-deploy/vm/deploy.sh /srv/dualplate/deploy.sh'
-gcloud compute ssh dualplate-app --project="$PROJECT_ID" --zone="$ZONE" --tunnel-through-iap --command='sudo timedatectl set-timezone Etc/UTC'
-gcloud compute ssh dualplate-app --project="$PROJECT_ID" --zone="$ZONE" --tunnel-through-iap --command='sudo install -m 0644 /tmp/dualplate-deploy/vm/backup.cron /etc/cron.d/dualplate-backup && sudo systemctl restart cron'
-gcloud compute ssh dualplate-app --project="$PROJECT_ID" --zone="$ZONE" --tunnel-through-iap --command='timedatectl; sudo test -f /srv/dualplate/logs/backup-cron.log && sudo tail -n 20 /srv/dualplate/logs/backup-cron.log || printf "尚無 backup-cron.log\n"'
-```
-
-Workload Identity Federation：
-
-```bash
-gcloud iam workload-identity-pools create github --location=global
-gcloud iam workload-identity-pools providers create-oidc github --location=global --workload-identity-pool=github --issuer-uri=https://token.actions.githubusercontent.com --attribute-mapping='google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.environment=assertion.environment,attribute.ref=assertion.ref' --attribute-condition="assertion.repository=='masterappIT/dualplate' && assertion.environment=='production' && assertion.ref=='refs/heads/main'"
-PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
-gcloud iam service-accounts add-iam-policy-binding "$DEPLOY_SA" --role=roles/iam.workloadIdentityUser --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/attribute.repository/masterappIT/dualplate"
-```
-
-在 GitHub 倉庫建立 `production` 環境，只准 `main`，並設環境變數 `GCP_PROJECT_ID`、`GCP_REGION`、`GCP_ZONE`、`GCP_ARTIFACT_REPOSITORY`、`GCP_WORKLOAD_IDENTITY_PROVIDER`、`GCP_DEPLOY_SERVICE_ACCOUNT`、`GCP_VM_NAME`、`GCP_BACKUP_BUCKET`。準備好後才在倉庫層級設 `DEPLOY_ENABLED=true`。Squarespace DNS 新增兩筆 A：`dualplate`、`dualplateadmin` 指向固定 IP；不改其他紀錄。等 DNS 生效後核對兩筆都回固定 IP：
-
-```bash
-PUBLIC_IP="$(gcloud compute addresses describe dualplate-public-ip --region="$REGION" --project="$PROJECT_ID" --format='value(address)')"
-printf '固定 IP：%s\n' "$PUBLIC_IP"
-dig +short dualplate.masterappinc.com
-dig +short dualplateadmin.masterappinc.com
-```
-
-兩個 `dig` 結果都應包含 `$PUBLIC_IP`，再檢查兩站 HTTPS 和 `/api/health`。
+DNS 在 Squarespace 管理：`dualplate`、`dualplateadmin` 兩筆 A 記錄指向 `45.134.82.239`，不改其他紀錄。
 
 ## 第一個管理員與還原演練
 
-首次發布成功後，管理者在安全終端機輸入管理員名稱與密碼，不把密碼寫在命令列歷史、腳本或日誌：
+管理者在安全終端機輸入管理員名稱與密碼，不把密碼寫在命令列歷史、腳本或日誌：
 
 ```bash
-gcloud compute ssh dualplate-app --project=dualplate-511819 --zone=asia-east2-a --tunnel-through-iap
+ssh masterapp-prod
 read -r -p "管理員帳號：" admin_user
 read -r -p "顯示名稱：" admin_name
 read -r -s -p "初始密碼（至少 10 字元）：" admin_password; echo
@@ -159,16 +147,16 @@ sudo docker compose --env-file /srv/dualplate/deploy.env -f /srv/dualplate/compo
 unset admin_password
 ```
 
-建立管理員時使用互動輸入，避免把密碼放在 shell history。還原演練：將 GCS 的一份備份下載到隔離測試主機，對副本執行 `PRAGMA integrity_check`，啟動測試 API 並核對筆數；正式資料庫不作演練覆蓋。
+還原演練：從 GCS 取一份備份到隔離的位置，對副本執行 `PRAGMA integrity_check`，啟動測試 API 並核對筆數。正式資料庫不作演練覆蓋。
 
 ### 事故還原
 
-先核對備份日期及事故時段的操作記錄。以下命令在正式 VM 的 shell 內由負責人執行；`BACKUP_OBJECT` 填已核對的 GCS 物件名稱，不填秘密。若有現存資料庫，先保留故障檔，絕不直接覆蓋。`sqlite3` 只用於檢查下載副本。
+先核對備份日期及事故時段的操作記錄。以下在伺服器的 shell 內由負責人執行；`BACKUP_OBJECT` 填已核對的 GCS 物件路徑（`dualplate/<年>/<月>/<日>/app-….sqlite`）。若有現存資料庫，先保留故障檔，絕不直接覆蓋。
 
 ```bash
 ROOT=/srv/dualplate
-BACKUP_BUCKET=dualplate-511819-backups
-BACKUP_OBJECT='<已核對的備份檔名>'
+KEY=/srv/infra/secrets/gcs-backup-sa.json
+BACKUP_OBJECT='<已核對的備份物件路徑>'
 sudo docker compose --env-file "$ROOT/deploy.env" -f "$ROOT/compose.yaml" stop api
 sudo install -d -m 0700 "$ROOT/incident"
 INCIDENT_TIME="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -177,10 +165,10 @@ for suffix in '' '-wal' '-shm'; do
     sudo cp -a "$ROOT/data/app.sqlite${suffix}" "$ROOT/incident/app.sqlite.${INCIDENT_TIME}${suffix}"
   fi
 done
-sudo gcloud storage cp --quiet "gs://${BACKUP_BUCKET}/${BACKUP_OBJECT}" "$ROOT/incident/restore.sqlite"
-sudo apt-get update
-sudo apt-get install -y sqlite3
-sudo sqlite3 "$ROOT/incident/restore.sqlite" 'PRAGMA integrity_check;'
+sudo rclone copyto ":gcs:masterapp-prod-backups/${BACKUP_OBJECT}" "$ROOT/incident/restore.sqlite" --gcs-service-account-file "$KEY" --gcs-bucket-policy-only
+sudo chown 10001:10001 "$ROOT/incident/restore.sqlite"
+sudo docker compose --env-file "$ROOT/deploy.env" -f "$ROOT/compose.yaml" run --rm --no-deps -v "$ROOT/incident:/incident" api \
+  node -e "const {DatabaseSync}=require('node:sqlite');console.log(new DatabaseSync('/incident/restore.sqlite',{readOnly:true}).prepare('PRAGMA integrity_check').get().integrity_check)"
 ```
 
 只有 `integrity_check` 輸出 `ok` 時才繼續；否則換另一份備份。確認事故現況已保存後執行。舊的 WAL／SHM 不能和還原的資料庫混用，須在 API 已停止、舊檔已保存後移開：
@@ -188,7 +176,6 @@ sudo sqlite3 "$ROOT/incident/restore.sqlite" 'PRAGMA integrity_check;'
 ```bash
 sudo rm -f "$ROOT/data/app.sqlite-wal" "$ROOT/data/app.sqlite-shm"
 sudo install -o 10001 -g 10001 -m 0600 "$ROOT/incident/restore.sqlite" "$ROOT/data/app.sqlite"
-sudo chown 10001:10001 "$ROOT/data/app.sqlite"
 sudo docker compose --env-file "$ROOT/deploy.env" -f "$ROOT/compose.yaml" up -d api
 curl --fail --silent --show-error https://dualplate.masterappinc.com/api/health
 curl --fail --silent --show-error https://dualplateadmin.masterappinc.com/api/health
@@ -198,21 +185,30 @@ curl --fail --silent --show-error https://dualplateadmin.masterappinc.com/api/he
 
 ### 改設定與微信小程序
 
-`bootstrap.sh` 只在首次讀取 Secret。之後新增微信 `WECHAT_APPID`／`WECHAT_SECRET` 或更換任何 API 環境設定時，先在本機修改權限 600 的暫存檔，再建立 `dualplate-app-env` 新版本；`refresh-env.sh` 會讀最新版本、以權限 600 原子替換 `/srv/dualplate/app.env`、只重建 `api` 容器並檢查健康。失敗時會還原舊檔案並嘗試重新啟動 API。不要把秘密直接放在命令列或日誌。
+新增微信 `WECHAT_APPID`／`WECHAT_SECRET` 或更換任何 API 環境設定的步驟如下，不要把秘密放在命令列或日誌：
+
+1. 在本機修改權限 600 的暫存檔。
+2. 同步成 Secret Manager 的新版本，作為副本。
+3. 交給伺服器的 `refresh-env.sh`：它以權限 600 原子替換 `/srv/dualplate/app.env`，只重建 `api` 並檢查健康，失敗時還原舊檔。
+4. 刪除暫存檔。
 
 ```bash
 umask 077
 APP_ENV_FILE="$(mktemp "${TMPDIR:-/tmp}/dualplate-app-env.XXXXXX")"
-gcloud secrets versions access latest --secret=dualplate-app-env --project=dualplate-511819 > "$APP_ENV_FILE"
-chmod 600 "$APP_ENV_FILE"
+ssh masterapp-prod 'sudo cat /srv/dualplate/app.env' > "$APP_ENV_FILE"
 ${EDITOR:-vi} "$APP_ENV_FILE"
 gcloud secrets versions add dualplate-app-env --data-file="$APP_ENV_FILE" --project=dualplate-511819
-rm -f "$APP_ENV_FILE"
+ssh masterapp-prod 'umask 077; cat > /tmp/dualplate-app.env.new' < "$APP_ENV_FILE"
+ssh masterapp-prod 'sudo /srv/dualplate/refresh-env.sh /tmp/dualplate-app.env.new'
+rm -P "$APP_ENV_FILE"
 unset APP_ENV_FILE
-gcloud compute ssh dualplate-app --project=dualplate-511819 --zone=asia-east2-a --tunnel-through-iap --command='sudo GCP_PROJECT_ID=dualplate-511819 /srv/dualplate/refresh-env.sh'
 curl --fail --silent --show-error https://dualplate.masterappinc.com/api/health
 ```
 
-微信小程序的 request 合法網域須符合備案要求。`masterappinc.com` 的主機在香港、未備案；要上小程序須另備已備案網域，並完成微信平台的合法網域設定與審核。這是後續上架工作，本輪僅保留設定方法；現有兩個 H5 網址不代表小程序可直接上架。
+微信小程序的 request 合法網域須符合備案要求。`masterappinc.com` 的主機在香港、未備案；要上小程序須另備已備案網域，並完成微信平台的合法網域設定與審核。這是後續上架工作；現有兩個 H5 網址不代表小程序可直接上架。
 
-有了已備案網域後：`cd mobile && VITE_API_BASE_URL=https://<已備案網域> npm run build:mp-weixin`，用微信開發者工具匯入 `mobile/dist/build/mp-weixin`，上傳並提交審核。客戶第一次用微信登入時，輸入顧問在管理端「客戶帳號 → 產生微信綁定碼」給的 6 位數字。
+有了已備案網域後：
+1. `cd mobile && VITE_API_BASE_URL=https://<已備案網域> npm run build:mp-weixin`
+2. 用微信開發者工具匯入 `mobile/dist/build/mp-weixin`，上傳並提交審核。
+
+客戶第一次用微信登入時，輸入顧問在管理端「客戶帳號 → 產生微信綁定碼」給的 6 位數字。
