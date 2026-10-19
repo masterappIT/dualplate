@@ -1,5 +1,7 @@
 # 任務：正式環境部署到 Google Cloud（負責人 2026-10-17）
 
+> **已過時（2026-10-19）**：正式環境已搬到 HostKVM 共用伺服器，本文件的 Compute Engine、IAP、磁碟快照做法不再使用，舊 VM 已刪除。現況見 `docs/deploy.md`。本文件只作歷史記錄。
+
 開始前先讀 `AGENTS.md`，再讀本文件。參考做法是 MasterDriver 的 `/Users/vincentw/development/MasterDriver/docs/PRODUCTION-DEPLOYMENT.md` 和 `deploy/`、`.github/workflows/deploy-production.yml`（**只可讀取，不可修改那個倉庫**）。
 
 ## 一、負責人的決定與理由

@@ -69,11 +69,32 @@
 
 - 管理端和客戶端的真實登入、批文卡上傳 OCR、真實 `/r/` 連結：我沒有正式帳號密碼，未測試。請負責人實際使用一次。
 - 經共用 Caddy 的用戶 IP：只在本機用相同的 Caddy 設定模擬驗證過（API 收到用戶 IP，偽造的 `X-Forwarded-For` 被丟棄），正式路徑沒有另外查看。
-- 舊 VM 保留不動（web 仍在運行、api 已停），作為回退。穩定 2 週後清理 GCP 上 Dualplate 舊 VM 相關的資源，每項先問負責人；`masterapp-prod-vm` 帳號和 `dualplate` 映像倉庫仍在使用，不能刪。
+- ~~舊 VM 保留不動（web 仍在運行、api 已停），作為回退。穩定 2 週後清理 GCP 上 Dualplate 舊 VM 相關的資源~~：管理者決定提前，**2026-10-19 已刪除**舊 VM `dualplate-app`、它的磁碟、快照、固定 IP `34.92.107.172` 和防火牆規則（見下面「GCP 清理」）。
 - 每日備份第一次自動執行：今晚香港 03:15，明天檢查 `/srv/dualplate/logs/backup-cron.log` 和 GCS。
+
+## GCP 清理（2026-10-19）
+
+已刪除：舊 VM、磁碟、快照、固定 IP、防火牆規則。
+
+仍保留（仍在使用，不能刪）：
+
+| 資源 | 用途 |
+|---|---|
+| Artifact Registry `dualplate` | workflow 推送映像；伺服器以 `masterapp-prod-vm` 拉取。改用 GHCR 的方案見 `docs/ghcr-migration.md` |
+| 服務帳號 `dualplate-deploy` 和 WIF pool `github` | workflow 推送映像用 |
+| 服務帳號 `masterapp-prod-vm` | 所有產品共用：拉映像、上傳備份 |
+| bucket `masterapp-prod-backups` | 所有產品共用的每日備份 |
+| bucket `dualplate-511819-backups` | 搬遷前的舊備份，包括切換時最後一份 `app-2026-10-19T02-04-01-105Z.sqlite` |
+| Secret Manager `dualplate-app-env` | `app.env` 的副本（`docs/deploy.md`「改設定」仍會寫入新版本） |
+
+所以 `dualplate-511819` 專案不能關閉。
+
+GitHub `production` 環境的 `GCP_VM_NAME`、`GCP_ZONE`、`GCP_BACKUP_BUCKET` 三個變數已沒有 workflow 使用，可以刪除（尚未刪）。
 
 ## 回退
 
-1. 新伺服器：`docker compose stop api`，把 `data/app.sqlite` 用 `npm run backup` 備份後串流回舊 VM 的 `/srv/dualplate/data/app.sqlite`（擁有者 10001），刪除舊的 WAL／SHM。
-2. 舊 VM：`docker compose up -d api`。
-3. Squarespace 兩筆 A 記錄改回 `34.92.107.172`。
+**2026-10-19 起已失效**：舊 VM 和它的 IP 已刪除，不能再退回 Google。要用舊資料，只能從 `dualplate-511819-backups` 或 `masterapp-prod-backups` 的備份按 `docs/deploy.md`「事故還原」恢復到本伺服器。
+
+1. ~~新伺服器：`docker compose stop api`，把 `data/app.sqlite` 用 `npm run backup` 備份後串流回舊 VM 的 `/srv/dualplate/data/app.sqlite`（擁有者 10001），刪除舊的 WAL／SHM。~~
+2. ~~舊 VM：`docker compose up -d api`。~~
+3. ~~Squarespace 兩筆 A 記錄改回 `34.92.107.172`。~~

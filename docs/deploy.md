@@ -7,6 +7,8 @@
 - `app.env` 放在伺服器上
 - 備份上傳到共用 bucket
 
+舊的 Google VM（`dualplate-app`）、磁碟、快照、IP 已在 2026-10-19 刪除，不能再退回。Google Cloud 上仍在用的只有：Artifact Registry `dualplate`（映像）、Workload Identity 和部署帳號 `dualplate-deploy`（workflow 推送映像）、Secret Manager `dualplate-app-env`（`app.env` 副本）、共用的 `masterapp-prod-vm` 帳號和 `masterapp-prod-backups` bucket，以及存放舊備份的 `dualplate-511819-backups`。所以 `dualplate-511819` 專案不能關閉。映像改放 GHCR 的方案見 `docs/ghcr-migration.md`（未實施）。
+
 搬遷過程見 `docs/tasks/hostkvm-migration.md`。
 
 ```mermaid
@@ -42,7 +44,7 @@ flowchart LR
 | `app.env` | API 環境設定，權限 600，只在伺服器上；副本在 Secret Manager `dualplate-app-env` |
 | `data/`、`backups/`、`logs/` | SQLite、本機備份（保留 7 天）、錯誤記錄；擁有者 10001，權限 700 |
 | `deploy.sh`、`rollback.sh`、`backup-to-gcs.sh`、`refresh-env.sh` | 來自 `deploy/vm/`，root 擁有 |
-| `dualplate.caddy` | 共用 Caddy 的網域設定，已安裝到 `/srv/infra/sites/dualplate.caddy` |
+| `dualplate.caddy` | 共用 Caddy 的網域設定，來源是本 repo 的 `deploy/vm/dualplate.caddy`；`bootstrap.sh` 只放到這裏，要按下面「首次安裝」的指令手動裝到 `/srv/infra/sites/dualplate.caddy`。用 `import access_log` 把請求記錄寫到共用 Caddy 的 `/data/access.log`；共用 Caddyfile 會把 `/r/<令牌>` 和 `?k=` 的值遮蔽成 `REDACTED` |
 
 - web 容器的 `deploy/web/Caddyfile` 只用內部 HTTP，按網域分管理端和客戶端，並保留以前的規則：15MB 上傳上限、`noindex`、CSP、快取標頭、`/r/` 轉發。
 - `trusted_proxies` 只信任內部網絡傳來的 `X-Forwarded-For`，所以 API 記錄到的是用戶 IP；共用 Caddy 不信任外面傳入的值，用戶不能偽造。
@@ -50,7 +52,7 @@ flowchart LR
 
 ## 發布與回滾
 
-推送 `main` 後，`.github/workflows/deploy-production.yml` 依次執行：
+推送 `main` 後，`.github/workflows/deploy-production.yml`（唯一的 workflow；搬遷時直接改了這個檔案，沒有另建 `deploy-hostkvm.yml`）依次執行：
 
 1. 品質檢查：API 測試、管理端 check/build、客戶端 H5 build、腳本語法檢查。
 2. `DEPLOY_ENABLED=true` 時，用 Workload Identity 登入 GCP，以 `docker buildx` 建置兩個映像並推送到 Artifact Registry。
