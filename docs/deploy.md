@@ -106,7 +106,7 @@ ssh masterapp-prod 'sudo /srv/dualplate/rollback.sh <舊API映像@sha256> <舊we
 - 每日香港 03:15（伺服器 UTC 19:15，`/etc/cron.d/dualplate-backup`），每次發布前也會執行 `backup-to-gcs.sh`：
   1. 在 api 映像內執行 `npm run backup`：SQLite 線上備份，附完整性檢查
   2. 用 rclone 和 `/srv/infra/secrets/gcs-backup-sa.json` 上傳到 `gs://dualplate-511819-backups/dualplate/<年>/<月>/<日>/`
-- 2026-10-21 起每個產品的備份放在自己的 GCP 專案（見 MasterApp-infra `docs/operations.md`）。之前的備份在 `gs://masterapp-prod-backups/dualplate/`，按 35 天規則自然刪除。
+- 2026-10-21 起每個產品的備份放在自己的 GCP 專案（見 MasterApp-infra `docs/operations.md`）。之前放在共用 `gs://masterapp-prod-backups/dualplate/` 的 4 份（2026-10-19）已原樣複製到 `gs://dualplate-511819-backups/dualplate/2026/10/19/`，共用 bucket 已刪除。
 - 備份 35 天後自動刪除（只限 `dualplate/` 和根目錄的 `app-*` 舊備份；`gcp-config-before-delete-20261019/` 封存不刪）；刪除後 7 天內可救回。這個服務帳號只能新增和讀取，不能覆寫或刪除。
 - 記錄在 `/srv/dualplate/logs/backup-cron.log`。
 - HostKVM 不提供磁碟快照，所以異地備份是唯一的機外副本。
@@ -154,7 +154,7 @@ unset admin_password
 
 ### 事故還原
 
-先核對備份日期及事故時段的操作記錄。以下在伺服器的 shell 內由負責人執行；`BACKUP_OBJECT` 填已核對的 GCS 物件路徑（`dualplate/<年>/<月>/<日>/app-….sqlite`）。2026-10-21 之前的備份在 `masterapp-prod-backups`，要用時把下面指令的 bucket 換成它。若有現存資料庫，先保留故障檔，絕不直接覆蓋。
+先核對備份日期及事故時段的操作記錄。以下在伺服器的 shell 內由負責人執行；`BACKUP_OBJECT` 填已核對的 GCS 物件路徑（`dualplate/<年>/<月>/<日>/app-….sqlite`）。若有現存資料庫，先保留故障檔，絕不直接覆蓋。
 
 ```bash
 ROOT=/srv/dualplate
