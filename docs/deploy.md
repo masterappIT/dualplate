@@ -7,7 +7,7 @@
 - `app.env` 放在伺服器上
 - 備份上傳到共用 bucket
 
-舊的 Google VM（`dualplate-app`）、磁碟、快照、IP 已在 2026-10-19 刪除，不能再退回。Google Cloud 上仍在用的只有：Artifact Registry `dualplate`（映像）、Workload Identity 和部署帳號 `dualplate-deploy`（workflow 推送映像）、Secret Manager `dualplate-app-env`（`app.env` 副本）、共用的 `masterapp-prod-vm` 帳號（上傳備份），以及備份 bucket `dualplate-511819-backups`。所以 `dualplate-511819` 專案不能關閉。映像改放 GHCR 的方案見 `docs/ghcr-migration.md`（未實施）。
+舊的 Google VM（`dualplate-app`）、磁碟、快照、IP 已在 2026-10-19 刪除，不能再退回。Google Cloud 上仍在用的只有：Artifact Registry `dualplate`（映像）、Workload Identity 和部署帳號 `dualplate-deploy`（workflow 推送映像）、Secret Manager `dualplate-app-env`（`app.env` 副本）、備份 bucket `dualplate-511819-backups`。伺服器上傳備份和拉映像用的帳號是共用的 `masterapp-backup@masterapp-infra`（2026-10-21 起，取代本專案的 `masterapp-prod-vm`），不在本專案。所以 `dualplate-511819` 專案不能關閉。映像改放 GHCR 的方案見 `docs/ghcr-migration.md`（未實施）。
 
 搬遷過程見 `docs/tasks/hostkvm-migration.md`。
 
@@ -74,7 +74,7 @@ flowchart LR
 
 首次沒有資料庫時跳過發布前備份，API 首次啟動時會建立空資料庫。
 
-伺服器拉映像用共用的 `masterapp-prod-vm` 服務帳號，它只有 `dualplate` 倉庫的只讀權限。
+伺服器拉映像用共用的 `masterapp-backup@masterapp-infra` 服務帳號（2026-10-21 起），它在 `dualplate` 倉庫只有只讀權限。
 
 手動回滾（以管理帳號 SSH 登入伺服器）：
 
