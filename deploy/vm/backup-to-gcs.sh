@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# SQLite 線上備份並上傳到共用的備份 bucket（gs://masterapp-prod-backups/dualplate/，35 天後自動刪除）。
+# SQLite 線上備份並上傳到 Dualplate 自己專案的備份 bucket（gs://dualplate-511819-backups/dualplate/，35 天後自動刪除）。
 # 用伺服器已有的 rclone 和 gcs-backup-sa.json；這個服務帳號只能新增和讀取，不能覆寫或刪除備份。
 set -euo pipefail
 ROOT=/srv/dualplate
-BUCKET="${BACKUP_BUCKET:-masterapp-prod-backups}"
+BUCKET="${BACKUP_BUCKET:-dualplate-511819-backups}"
 KEY="${GCS_KEY_FILE:-/srv/infra/secrets/gcs-backup-sa.json}"
 if [[ ! -f "$ROOT/data/app.sqlite" ]]; then
   printf 'No database exists; backup cannot run.\n' >&2

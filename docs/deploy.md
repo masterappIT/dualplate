@@ -7,7 +7,7 @@
 - `app.env` 放在伺服器上
 - 備份上傳到共用 bucket
 
-舊的 Google VM（`dualplate-app`）、磁碟、快照、IP 已在 2026-10-19 刪除，不能再退回。Google Cloud 上仍在用的只有：Artifact Registry `dualplate`（映像）、Workload Identity 和部署帳號 `dualplate-deploy`（workflow 推送映像）、Secret Manager `dualplate-app-env`（`app.env` 副本）、共用的 `masterapp-prod-vm` 帳號和 `masterapp-prod-backups` bucket，以及存放舊備份的 `dualplate-511819-backups`。所以 `dualplate-511819` 專案不能關閉。映像改放 GHCR 的方案見 `docs/ghcr-migration.md`（未實施）。
+舊的 Google VM（`dualplate-app`）、磁碟、快照、IP 已在 2026-10-19 刪除，不能再退回。Google Cloud 上仍在用的只有：Artifact Registry `dualplate`（映像）、Workload Identity 和部署帳號 `dualplate-deploy`（workflow 推送映像）、Secret Manager `dualplate-app-env`（`app.env` 副本）、共用的 `masterapp-prod-vm` 帳號（上傳備份），以及備份 bucket `dualplate-511819-backups`。所以 `dualplate-511819` 專案不能關閉。映像改放 GHCR 的方案見 `docs/ghcr-migration.md`（未實施）。
 
 搬遷過程見 `docs/tasks/hostkvm-migration.md`。
 
@@ -20,7 +20,7 @@ flowchart LR
   Web -->|/api, /r| API[dualplate-api: Node 24]
   API --> DB[/srv/dualplate/data/app.sqlite]
   DB --> Backup[每日備份 + 發布前備份]
-  Backup --> GCS[gs://masterapp-prod-backups/dualplate 35 天]
+  Backup --> GCS[gs://dualplate-511819-backups/dualplate 35 天]
   GitHub[GitHub Actions 建置] --> Registry[Artifact Registry 摘要映像]
   Registry --> Web
   Registry --> API
@@ -105,8 +105,9 @@ ssh masterapp-prod 'sudo /srv/dualplate/rollback.sh <舊API映像@sha256> <舊we
 
 - 每日香港 03:15（伺服器 UTC 19:15，`/etc/cron.d/dualplate-backup`），每次發布前也會執行 `backup-to-gcs.sh`：
   1. 在 api 映像內執行 `npm run backup`：SQLite 線上備份，附完整性檢查
-  2. 用 rclone 和 `/srv/infra/secrets/gcs-backup-sa.json` 上傳到 `gs://masterapp-prod-backups/dualplate/<年>/<月>/<日>/`
-- bucket 35 天後自動刪除；這個服務帳號只能新增和讀取，不能覆寫或刪除。
+  2. 用 rclone 和 `/srv/infra/secrets/gcs-backup-sa.json` 上傳到 `gs://dualplate-511819-backups/dualplate/<年>/<月>/<日>/`
+- 2026-10-21 起每個產品的備份放在自己的 GCP 專案（見 MasterApp-infra `docs/operations.md`）。之前的備份在 `gs://masterapp-prod-backups/dualplate/`，按 35 天規則自然刪除。
+- 備份 35 天後自動刪除（只限 `dualplate/` 和根目錄的 `app-*` 舊備份；`gcp-config-before-delete-20261019/` 封存不刪）；刪除後 7 天內可救回。這個服務帳號只能新增和讀取，不能覆寫或刪除。
 - 記錄在 `/srv/dualplate/logs/backup-cron.log`。
 - HostKVM 不提供磁碟快照，所以異地備份是唯一的機外副本。
 
@@ -153,7 +154,7 @@ unset admin_password
 
 ### 事故還原
 
-先核對備份日期及事故時段的操作記錄。以下在伺服器的 shell 內由負責人執行；`BACKUP_OBJECT` 填已核對的 GCS 物件路徑（`dualplate/<年>/<月>/<日>/app-….sqlite`）。若有現存資料庫，先保留故障檔，絕不直接覆蓋。
+先核對備份日期及事故時段的操作記錄。以下在伺服器的 shell 內由負責人執行；`BACKUP_OBJECT` 填已核對的 GCS 物件路徑（`dualplate/<年>/<月>/<日>/app-….sqlite`）。2026-10-21 之前的備份在 `masterapp-prod-backups`，要用時把下面指令的 bucket 換成它。若有現存資料庫，先保留故障檔，絕不直接覆蓋。
 
 ```bash
 ROOT=/srv/dualplate
@@ -167,7 +168,7 @@ for suffix in '' '-wal' '-shm'; do
     sudo cp -a "$ROOT/data/app.sqlite${suffix}" "$ROOT/incident/app.sqlite.${INCIDENT_TIME}${suffix}"
   fi
 done
-sudo rclone copyto ":gcs:masterapp-prod-backups/${BACKUP_OBJECT}" "$ROOT/incident/restore.sqlite" --gcs-service-account-file "$KEY" --gcs-bucket-policy-only
+sudo rclone copyto ":gcs:dualplate-511819-backups/${BACKUP_OBJECT}" "$ROOT/incident/restore.sqlite" --gcs-service-account-file "$KEY" --gcs-bucket-policy-only
 sudo chown 10001:10001 "$ROOT/incident/restore.sqlite"
 sudo docker compose --env-file "$ROOT/deploy.env" -f "$ROOT/compose.yaml" run --rm --no-deps -v "$ROOT/incident:/incident" api \
   node -e "const {DatabaseSync}=require('node:sqlite');console.log(new DatabaseSync('/incident/restore.sqlite',{readOnly:true}).prepare('PRAGMA integrity_check').get().integrity_check)"
