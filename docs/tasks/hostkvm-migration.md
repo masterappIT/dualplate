@@ -68,9 +68,9 @@
 ## 未做／待辦
 
 - 管理端和客戶端的真實登入、批文卡上傳 OCR、真實 `/r/` 連結：我沒有正式帳號密碼，未測試。請負責人實際使用一次。
-- 經共用 Caddy 的用戶 IP：只在本機用相同的 Caddy 設定模擬驗證過（API 收到用戶 IP，偽造的 `X-Forwarded-For` 被丟棄），正式路徑沒有另外查看。
+- 經共用 Caddy 的用戶 IP：只在本機用相同的 Caddy 設定模擬驗證過（API 收到用戶 IP，偽造的 `X-Forwarded-For` 被丟棄），正式路徑沒有另外查看。 2026-11-02 補查：帶偽造標頭請求 `/api/health`，共用 Caddy 記錄的 `client_ip` 是實際來源 IP；API 本身沒有請求記錄，API 收到的值仍只能由設定推斷。
 - ~~舊 VM 保留不動（web 仍在運行、api 已停），作為回退。穩定 2 週後清理 GCP 上 Dualplate 舊 VM 相關的資源~~：管理者決定提前，**2026-10-19 已刪除**舊 VM `dualplate-app`、它的磁碟、快照、固定 IP `34.92.107.172` 和防火牆規則（見下面「GCP 清理」）。
-- 每日備份第一次自動執行：今晚香港 03:15，明天檢查 `/srv/dualplate/logs/backup-cron.log` 和 GCS。
+- ~~每日備份第一次自動執行~~：2026-11-02 已查，`backup-cron.log` 沒有錯誤，最新一份 `dualplate/2026/11/01/app-2026-11-01T19-15-04-044Z.sqlite` 已在 `gs://dualplate-511819-backups/`。未做還原演練。
 
 ## GCP 清理（2026-10-19）
 
@@ -89,7 +89,7 @@
 
 所以 `dualplate-511819` 專案不能關閉。
 
-GitHub `production` 環境的 `GCP_VM_NAME`、`GCP_ZONE`、`GCP_BACKUP_BUCKET` 三個變數已沒有 workflow 使用，可以刪除（尚未刪）。
+GitHub `production` 環境的 `GCP_VM_NAME`、`GCP_ZONE`、`GCP_BACKUP_BUCKET` 三個變數沒有 workflow 使用，2026-11-02 已刪除。
 
 ## 回退
 

@@ -210,7 +210,7 @@ Dualplate 的伺服器腳本在本 repo，不在 MasterApp-infra（和 Master Tr
 | 預設 compute 帳號 `763886931438-compute@…` | 專案層級 `roles/editor` | **現在就移除 `roles/editor`**：專案裏已沒有 VM，這和 Master Travel 事件裏被移除的是同一類權限 |
 | Cloud Build 帳號的 `cloudbuild.builds.builder` | 2026-10-17 起已改在 GitHub 建置（`df770c1`） | 可移除權限並停用 Cloud Build API |
 | Secret `dualplate-initial-admin-password` | 首次安裝時的管理員初始密碼 | 確認管理員已改密碼後刪除 |
-| GitHub `production` 環境 8 個 `GCP_*` 變數 | `GCP_VM_NAME`、`GCP_ZONE`、`GCP_BACKUP_BUCKET` **現在就沒有使用**；其餘 5 個改完後不再使用 | 刪除，只留 repo 變數 `DEPLOY_ENABLED` |
+| GitHub `production` 環境 8 個 `GCP_*` 變數 | `GCP_VM_NAME`、`GCP_ZONE`、`GCP_BACKUP_BUCKET` 已在 2026-11-02 刪除；其餘 5 個改完後不再使用 | 刪除，只留 repo 變數 `DEPLOY_ENABLED` |
 
 **不能刪**：
 
