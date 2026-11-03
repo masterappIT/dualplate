@@ -31,9 +31,11 @@
 .segmented button.is-active { color: var(--primary); font-weight: 700; }
 .seg-thumb { position: absolute; left: 0; top: 0; height: 0; border-radius: var(--r-control); pointer-events: none; }
 .plate-chip { display: inline-flex; align-items: center; padding: 2px 7px; border: 1px solid var(--border); border-radius: var(--r-control); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: .04em; white-space: nowrap; }
-.plate-chip-mainland { background: var(--plate-black); color: var(--surface); border-color: var(--plate-black); }
+.plate-chip { font-family: Arial, 'Helvetica Neue', var(--font-body); }
+/* 內地黑底白字加白色內框；澳門實物同樣黑底白字，但沒有內框，靠這一點區分 */
+.plate-chip-mainland { background: var(--plate-black); color: var(--surface); border-color: var(--plate-black); box-shadow: inset 0 0 0 1px var(--surface); }
 .plate-chip-hongkong { background: var(--plate-yellow); color: var(--plate-black); border-color: var(--plate-yellow-border); }
-.plate-chip-macau { background: var(--surface); color: var(--plate-black); border-color: var(--plate-black); }
+.plate-chip-macau { background: var(--plate-black); color: var(--surface); border-color: var(--plate-black); }
 .plate-chip-unknown { background: var(--canvas); color: var(--ink-muted); }
 .avatar { display: inline-grid; place-items: center; flex: none; border: 2px double var(--border); border-radius: 50%; background: var(--jade-soft); color: var(--jade-deep); font-weight: 700; font-size: 12px; }
 .hovercard { position: fixed; z-index: 190; max-width: calc(100vw - 24px); padding: 12px; border-radius: var(--r-card); color: var(--ink); }.hovercard p { margin: 4px 0 0; color: var(--ink-muted); }

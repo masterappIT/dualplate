@@ -12,7 +12,7 @@
       <view class="hero-text" :style="{ paddingTop: top + 'px' }">
         <view class="brand"><view class="seal"><text>牌</text></view><text class="brand-name">車牌管家</text></view>
         <text class="hero-title">兩地牌、公司與到期事項</text><text class="hero-title second">一處管好。</text>
-        <view class="hero-plates"><PlateChip plate="粵Z·A1234港" size="sm" /><PlateChip plate="AB 1234" size="sm" /></view>
+        <view class="hero-plates"><PlateChip plate="粵Z·A1234港" size="sm" /><PlateChip plate="AB 1234" size="sm" /><PlateChip plate="MA-12-34" size="sm" /></view>
       </view>
     </view>
 
@@ -176,7 +176,7 @@ export default {
 .seal text{color:var(--plate-yellow);font-size:var(--fs-h);font-weight:900}
 .brand-name{font-size:var(--fs-h);font-weight:800;letter-spacing:2px;color:#fff}
 .hero-title{display:block;margin-top:20px;font-size:var(--fs-title);font-weight:800;line-height:1.4;color:#fff}.hero-title.second{margin-top:0}
-.hero-plates{display:flex;gap:8px;margin-top:16px}
+.hero-plates{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
 .sheet{position:relative;margin:-48px 16px 24px;background:var(--card);border-radius:var(--r-panel);border:1px solid var(--rule);box-shadow:var(--float);padding:20px 16px 24px}
 .sheet-title{display:block;font-size:var(--fs-title);font-weight:800;color:var(--jade-deep)}
 .sheet-sub{display:block;margin-top:4px;font-size:var(--fs-body);color:var(--ink-2)}
