@@ -12,8 +12,8 @@
       <view class="hero-text" :style="{ paddingTop: top + 'px' }">
         <view class="brand"><view class="seal"><text>牌</text></view><text class="brand-name">車牌管家</text></view>
         <text class="hero-title">兩地牌、公司與到期事項</text><text class="hero-title second">一處管好。</text>
-        <!-- 車牌示例：上行粵港、下行粵澳 -->
-        <view class="hero-plates"><view class="plate-pair"><PlateChip plate="粵Z·A1234港" size="sm" /><PlateChip plate="AB 1234" size="sm" /></view><view class="plate-pair"><PlateChip plate="粵Z·A1234澳" size="sm" /><PlateChip plate="MA-12-34" size="sm" /></view></view>
+        <!-- 車牌示例：上行粵港、下行粵澳；三種都用仿真車牌（牌照詳情同一套組件），加上立體壓印效果，同一高度 -->
+        <view class="hero-plates"><view class="plate-pair"><MainlandPlate plate="粵Z·A123港" :width="mainlandWidth" :text-scale="0.8" relief /><HongKongPlate plate="HK 1234" :width="localWidth" :text-scale="0.8" relief /></view><view class="plate-pair"><MainlandPlate plate="粵Z·A123澳" :width="mainlandWidth" :text-scale="0.8" relief /><MacauPlate plate="MA-12-34" :width="localWidth" :text-scale="0.7" relief /></view></view>
       </view>
     </view>
 
@@ -68,13 +68,17 @@ import { ref, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
 import { api, saveSession } from '../../lib/api'
 function openTerms(tab){uni.navigateTo({url:'/pages/terms/terms?tab='+tab})}
 function goSignup(){uni.navigateTo({url:'/pages/signup/signup'})}
-import PlateChip from '../../components/PlateChip.vue'
+import MainlandPlate from '../../components/MainlandPlate.vue'
+import HongKongPlate from '../../components/HongKongPlate.vue'
+import MacauPlate from '../../components/MacauPlate.vue'
 import ContactCard from '../../components/ContactCard.vue'
 import StampMark from '../../components/StampMark.vue'
 import { startPorts } from '../../lib/ports-canvas'
 
 const email = ref(''), phone = ref(''), mode = ref('phone'), password = ref(''), binding = ref(false), bindCode = ref(''), loading = ref(false), error = ref(''), shake = ref(false), done = ref(false), application = ref(null)
 const top = (uni.getSystemInfoSync().statusBarHeight || 20) + 28
+// 仿真車牌以 rpx 定寬，寬螢幕會跟着放大；換算成固定像素，任何寬度都一樣大。高度都約 34px：內地 440×140 → 107px 寬，港澳 → 159px 寬
+const toRpx = value => value * 10000 / uni.upx2px(10000), mainlandWidth = toRpx(107), localWidth = toRpx(159)
 const instance = getCurrentInstance()
 
 // 手機登入要選區號：香港、澳門 8 位，內地 1 字頭 11 位；記住上次選的區號
@@ -177,7 +181,7 @@ export default {
 .seal text{color:var(--plate-yellow);font-size:var(--fs-h);font-weight:900}
 .brand-name{font-size:var(--fs-h);font-weight:800;letter-spacing:2px;color:#fff}
 .hero-title{display:block;margin-top:20px;font-size:var(--fs-title);font-weight:800;line-height:1.4;color:#fff}.hero-title.second{margin-top:0}
-.hero-plates{display:flex;flex-direction:column;gap:8px;margin-top:16px}.plate-pair{display:flex;align-items:center;gap:8px}
+.hero-plates{display:flex;flex-direction:column;gap:8px;margin-top:16px}.plate-pair{display:flex;align-items:center;gap:8px}.plate-pair .mainland-plate,.plate-pair .hk-plate,.plate-pair .mo-plate{flex:none;margin:0}
 .sheet{position:relative;margin:-48px 16px 24px;background:var(--card);border-radius:var(--r-panel);border:1px solid var(--rule);box-shadow:var(--float);padding:20px 16px 24px}
 .sheet-title{display:block;font-size:var(--fs-title);font-weight:800;color:var(--jade-deep)}
 .sheet-sub{display:block;margin-top:4px;font-size:var(--fs-body);color:var(--ink-2)}
