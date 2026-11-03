@@ -1,0 +1,10 @@
+# pod install 產生
+Pods/
+Podfile.lock
+# 由 ios/sync-www.sh 從 mobile 編譯結果複製
+HBuilder-Hello/Pandora/apps/
+# DCloud 離線打包 key（本機自建，CI 用 GitHub secret）
+Config/Secrets.xcconfig
+xcuserdata/
+build/
+UTSPlugins/.generated/

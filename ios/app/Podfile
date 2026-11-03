@@ -1,0 +1,53 @@
+# 跨境車牌管家 iOS 離線打包（DCloud uni-app SDK 5.34）
+# SDK 不入庫：從 DCloud 官方網盤下載 SDK.zip，解壓到 ios/dcloud-sdk-5.34/（見 ios/README.md）
+platform :ios, '15.0'
+
+project 'HBuilder-Hello.xcodeproj'
+use_frameworks! :linkage => :static
+
+SDK_DIR = File.expand_path('../dcloud-sdk-5.34', __dir__)
+
+require_relative 'scripts/uniapp_module_config'
+require_relative 'scripts/uniapp_uts_plugins'
+require_relative 'uniapp_config' if File.exist?(File.join(__dir__, 'uniapp_config.rb'))
+
+# 只開本 App 用到的模組：拍批文卡和選相片（CameraGallery）、讀相片檔（File）
+uniapp_subspecs = [
+  'Core',
+  'CameraGallery',
+  'File',
+]
+
+uniapp_plist_values = defined?(UNIAPP_PLIST_VALUES) ? UNIAPP_PLIST_VALUES : {}
+uts_plugin_values = defined?(UNIAPP_UTS_PLUGIN_VALUES) ? UNIAPP_UTS_PLUGIN_VALUES : {}
+# 本 App 沒有 UTS 插件；沒有插件時不跑處理腳本（它要 Ruby 2.7+，macOS 自帶的是 2.6）
+uts_plugin_dirs = Dir.children(File.join(__dir__, 'UTSPlugins')).reject { |name| name.start_with?('.') || name == 'README.md' }
+uts_plugins = uts_plugin_dirs.empty? ? [] : UniAppUTSPlugins.prepare!(
+  File.join(__dir__, 'UTSPlugins'),
+  sdk_path: SDK_DIR,
+  values: uts_plugin_values
+)
+
+target 'HBuilder' do
+  pod 'uniapp', :path => SDK_DIR, :subspecs => uniapp_subspecs
+  uts_plugins.each do |plugin|
+    pod plugin[:pod_name], :path => plugin[:pod_path]
+  end
+end
+
+post_install do |installer|
+  UniAppModuleConfig.apply(
+    uniapp_subspecs,
+    # 範例假設工程放在 SDK 目錄內；本項目的 SDK 在旁邊，要指明位置
+    feature_plist: File.join(SDK_DIR, 'SDK', 'Bundles', 'PandoraApi.bundle', 'feature.plist'),
+    # 相機模組要求的權限說明；Info.plist 已寫的不會被覆蓋，這裏只是後備
+    permission_text: {
+      'NSCameraUsageDescription' => '用於拍攝批文卡等證件，讀取和保存你的牌照資料。',
+      'NSPhotoLibraryUsageDescription' => '用於從相冊選取批文卡等證件相片，讀取和保存你的牌照資料。',
+      'NSPhotoLibraryAddUsageDescription' => '只在你選擇保存相片時，才會把相片存入相冊。',
+      'NSMicrophoneUsageDescription' => '本 App 不錄音；系統相機的錄影功能需要此權限，拍批文卡不會使用。'
+    },
+    plist_values: uniapp_plist_values,
+    uts_plugins: uts_plugins
+  )
+end

@@ -1,5 +1,18 @@
 {
   "pages": [
+    // #ifdef APP-PLUS
+    // App 版第一頁：接上原生啟動畫面，先取好首頁資料再轉首頁或登入頁（pages/launch/launch.vue）
+    {
+      "path": "pages/launch/launch",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#0B3B30",
+        "disableScroll": true,
+        "app-plus": { "bounce": "none", "popGesture": "none" }
+      }
+    },
+    // #endif
     {
       "path": "pages/index/index",
       "style": {
@@ -42,6 +55,18 @@
         "navigationBarTitleText": "新增牌照"
       }
     },
+    // #ifdef APP-PLUS
+    {
+      "path": "pages/card-capture/card-capture",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#000000",
+        "disableScroll": true,
+        "app-plus": { "bounce": "none" }
+      }
+    },
+    // #endif
     {
       "path": "pages/self-change/self-change",
       "style": {
@@ -82,6 +107,7 @@
       "path": "pages/login/login",
       "style": {
         "navigationStyle": "custom",
+        "navigationBarTextStyle": "white",
         "navigationBarTitleText": "登入"
       }
     },

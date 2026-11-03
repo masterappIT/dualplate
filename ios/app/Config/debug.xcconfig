@@ -1,0 +1,3 @@
+// CocoaPods 設定，加上本機的 DCloud 離線打包 key（Secrets.xcconfig 不入庫）
+#include "../Pods/Target Support Files/Pods-HBuilder/Pods-HBuilder.debug.xcconfig"
+#include? "Secrets.xcconfig"

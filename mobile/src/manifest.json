@@ -1,11 +1,64 @@
 {
   "name": "車牌管家",
-  "appid": "",
+  "appid": "__UNI__09DF642",
   "description": "粵港澳兩地車牌代辦與客戶關係管理客戶端",
   "versionName": "0.1.0",
   "versionCode": "10",
   "transformPx": false,
-  "app-plus": { "usingComponents": true, "modules": {}, "distribute": { "android": {}, "ios": {} } },
+  "app-plus": {
+    "usingComponents": true,
+    "splashscreen": { "alwaysShowBeforeRender": false, "autoclose": false, "waiting": false, "delay": 0 },
+    "safearea": { "background": "#F7F6F1", "bottom": { "offset": "none" } },
+    "modules": { "Camera": {} },
+    "distribute": {
+      "android": {
+        "permissions": [
+          "<uses-permission android:name=\"android.permission.CAMERA\"/>",
+          "<uses-feature android:name=\"android.hardware.camera\" android:required=\"false\"/>",
+          "<uses-permission android:name=\"android.permission.READ_MEDIA_IMAGES\"/>",
+          "<uses-permission android:name=\"android.permission.READ_EXTERNAL_STORAGE\"/>"
+        ]
+      },
+      "ios": {
+        "privacyDescription": {
+          "NSCameraUsageDescription": "用於拍攝批文卡等證件，讀取和保存你的牌照資料。",
+          "NSPhotoLibraryUsageDescription": "用於從相冊選取批文卡等證件相片，讀取和保存你的牌照資料。"
+        }
+      },
+      "icons": {
+        "android": {
+          "hdpi": "unpackage/res/icons/72x72.png",
+          "xhdpi": "unpackage/res/icons/96x96.png",
+          "xxhdpi": "unpackage/res/icons/144x144.png",
+          "xxxhdpi": "unpackage/res/icons/192x192.png"
+        },
+        "ios": {
+          "appstore": "unpackage/res/icons/1024x1024.png",
+          "ipad": {
+            "app": "unpackage/res/icons/76x76.png",
+            "app@2x": "unpackage/res/icons/152x152.png",
+            "notification": "unpackage/res/icons/20x20.png",
+            "notification@2x": "unpackage/res/icons/40x40.png",
+            "proapp@2x": "unpackage/res/icons/167x167.png",
+            "settings": "unpackage/res/icons/29x29.png",
+            "settings@2x": "unpackage/res/icons/58x58.png",
+            "spotlight": "unpackage/res/icons/40x40.png",
+            "spotlight@2x": "unpackage/res/icons/80x80.png"
+          },
+          "iphone": {
+            "app@2x": "unpackage/res/icons/120x120.png",
+            "app@3x": "unpackage/res/icons/180x180.png",
+            "notification@2x": "unpackage/res/icons/40x40.png",
+            "notification@3x": "unpackage/res/icons/60x60.png",
+            "settings@2x": "unpackage/res/icons/58x58.png",
+            "settings@3x": "unpackage/res/icons/87x87.png",
+            "spotlight@2x": "unpackage/res/icons/80x80.png",
+            "spotlight@3x": "unpackage/res/icons/120x120.png"
+          }
+        }
+      }
+    }
+  },
   "mp-weixin": { "appid": "", "usingComponents": true },
   "uniStatistics": { "enable": false },
   "vueVersion": "3"

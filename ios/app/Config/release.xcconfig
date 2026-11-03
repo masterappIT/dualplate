@@ -1,0 +1,6 @@
+// CocoaPods 設定，加上本機的 DCloud 離線打包 key（Secrets.xcconfig 不入庫）
+#include "../Pods/Target Support Files/Pods-HBuilder/Pods-HBuilder.release.xcconfig"
+// 本機用開發簽名；GitHub Actions 在自己產生的 Secrets.xcconfig 改為發佈簽名（放在這裏才不會影響 Pods 的目標）
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = Apple Development
+#include? "Secrets.xcconfig"

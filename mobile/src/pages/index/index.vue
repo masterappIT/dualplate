@@ -57,9 +57,12 @@ import { api, getUser, openPlate, startRequest, requestTone, clientStage, checkT
 import DueDate from '../../components/DueDate.vue'
 import PlateChip from '../../components/PlateChip.vue'
 import WelcomeGuide from '../../components/WelcomeGuide.vue'
+import { takeHome } from '../../lib/launch'
 const user=ref(getUser()),guideReady=ref(false)
-const data=ref({unreadNotifications:0,advisor:null,customerName:'',counts:{pending:0,ok:0,due:0,overdue:0},plates:[],deadlines:[],todos:[],activeRequests:[]})
-const notices=ref([]),loaded=ref(false)
+// App 版載入頁已先取好的資料（只有第一次打開有），免得數字由 0 跳到實數
+const home=takeHome()
+const data=ref(home?.overview||{unreadNotifications:0,advisor:null,customerName:'',counts:{pending:0,ok:0,due:0,overdue:0},plates:[],deadlines:[],todos:[],activeRequests:[]})
+const notices=ref(home?.notices||[]),loaded=ref(!!home)
 const selfManaged=computed(()=>data.value.serviceMode==='自管')
 async function load(){user.value=getUser();if(!user.value)return uni.navigateTo({url:'/pages/login/login'});checkTerms(confirmBox.ask).then(result=>{if(result!=='opened')guideReady.value=true});try{const [overview,list]=await Promise.all([api('/my/overview'),api('/my/notifications').catch(()=>({items:[]}))]);data.value=overview;rememberMode(overview.serviceMode);notices.value=list.items||[]}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
 // 待辦只放要客戶動手的：要你提供的資料、你自理（或要你過關）而快到期／已逾期的事項、要你處理的未讀通知

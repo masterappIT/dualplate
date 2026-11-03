@@ -16,3 +16,6 @@ api/logs/
 
 # 本機預覽設定（含本機暫存路徑）
 .claude/
+
+# DCloud iOS 離線打包 SDK（約 1.7 GB，從 DCloud 官方網盤下載，不入庫）
+ios/dcloud-sdk-*/

@@ -1,5 +1,9 @@
 <template>
   <view class="login">
+    <!-- #ifdef APP-PLUS -->
+    <!-- App 全螢幕：狀態列下面固定一條深綠，往下滑時內容不會壓在時間、訊號上 -->
+    <view v-if="scrolled" class="status-cover" />
+    <!-- #endif -->
     <!-- 上半：深通行綠畫布，口岸節點網絡＋牌照黃脈衝（交互取自管理者腳手架的節點網絡，外觀為本產品證件感） -->
     <view class="hero guilloche">
       <!-- #ifdef MP -->
@@ -29,7 +33,7 @@
         <text class="field-label">手機號碼</text>
         <view class="phone-row">
           <picker :range="areaCodes" range-key="label" :value="areaIndex" @change="pickArea"><view class="field picker area"><text>{{ areaCodes[areaIndex].label }}</text><text class="chev">›</text></view></picker>
-          <input class="field phone" v-model.trim="phone" type="number" :placeholder="areaCodes[areaIndex].hint" :class="{ invalid: error && !phone }" />
+          <input class="field phone" v-model.trim="phone" :type="phoneType" :maxlength="areaCodes[areaIndex].digits" :placeholder="areaCodes[areaIndex].hint" :class="{ invalid: error && !phone }" />
         </view>
       </template>
       <template v-else>
@@ -66,6 +70,9 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
 import { api, saveSession } from '../../lib/api'
+// #ifdef APP-PLUS
+import { onPageScroll } from '@dcloudio/uni-app'
+// #endif
 function openTerms(tab){uni.navigateTo({url:'/pages/terms/terms?tab='+tab})}
 function goSignup(){uni.navigateTo({url:'/pages/signup/signup'})}
 import MainlandPlate from '../../components/MainlandPlate.vue'
@@ -77,12 +84,30 @@ import { startPorts } from '../../lib/ports-canvas'
 
 const email = ref(''), phone = ref(''), mode = ref('phone'), password = ref(''), binding = ref(false), bindCode = ref(''), loading = ref(false), error = ref(''), shake = ref(false), done = ref(false), application = ref(null)
 const top = (uni.getSystemInfoSync().statusBarHeight || 20) + 28
+// 只在往下滑後顯示狀態列底色，靜止時保留花紋背景
+const scrolled = ref(false)
+// #ifdef APP-PLUS
+let scrollTop = 0, keyboard = 0
+const cover = () => { scrolled.value = scrollTop > 4 || keyboard > 0 }
+onPageScroll(event => { scrollTop = event.scrollTop; cover() })
+// 鍵盤彈出時頁面被推上去，不算滑動，也要蓋住狀態列
+const onKeyboard = ({ height }) => { keyboard = height; cover() }
+uni.onKeyboardHeightChange(onKeyboard)
+onBeforeUnmount(() => uni.offKeyboardHeightChange?.(onKeyboard))
+// #endif
 // 仿真車牌以 rpx 定寬，寬螢幕會跟着放大；換算成固定像素，任何寬度都一樣大。高度都約 34px：內地 440×140 → 107px 寬，港澳 → 159px 寬
 const toRpx = value => value * 10000 / uni.upx2px(10000), mainlandWidth = toRpx(107), localWidth = toRpx(159)
 const instance = getCurrentInstance()
 
 // 手機登入要選區號：香港、澳門 8 位，內地 1 字頭 11 位；記住上次選的區號
-const areaCodes = [{ code: '+852', label: '香港 +852', hint: '8 位手機號碼', pattern: /^\d{8}$/ }, { code: '+853', label: '澳門 +853', hint: '8 位手機號碼', pattern: /^\d{8}$/ }, { code: '+86', label: '內地 +86', hint: '11 位手機號碼', pattern: /^1\d{10}$/ }]
+const areaCodes = [{ code: '+852', label: '香港 +852', hint: '8 位手機號碼', digits: 8, pattern: /^\d{8}$/ }, { code: '+853', label: '澳門 +853', hint: '8 位手機號碼', digits: 8, pattern: /^\d{8}$/ }, { code: '+86', label: '內地 +86', hint: '11 位手機號碼', digits: 11, pattern: /^1\d{10}$/ }]
+// 電話鍵盤：App、網頁用 tel，iOS 才知道這是電話欄，不當成登入用戶名而在鍵盤上方忽隱忽現地提供「密碼」；微信小程序不支援 tel，沿用 number
+// #ifdef MP
+const phoneType = 'number'
+// #endif
+// #ifndef MP
+const phoneType = 'tel'
+// #endif
 const areaIndex = ref(Math.max(0, areaCodes.findIndex(item => item.code === uni.getStorageSync('loginArea'))))
 function pickArea(event) { areaIndex.value = Number(event.detail.value); uni.setStorageSync('loginArea', areaCodes[areaIndex.value].code) }
 
@@ -163,7 +188,9 @@ function paint() {
   network = startPorts(ctx, width, height, { reduced, top: plates ? plates.getBoundingClientRect().bottom - rect.top : undefined, bottom: sheet ? sheet.getBoundingClientRect().top - rect.top : undefined, raf: f => requestAnimationFrame(f), caf: h => cancelAnimationFrame(h) })
 }
 export default {
-  mounted() { paint(); onResize = () => paint(); window.addEventListener('resize', onResize) },
+  mounted() {
+    paint(); onResize = () => paint(); window.addEventListener('resize', onResize)
+  },
   beforeUnmount() { window.removeEventListener('resize', onResize); network?.stop(); network = canvas = null; size = '' },
   methods: {
     burst(value) { if (value) network?.burst() }
@@ -173,6 +200,9 @@ export default {
 <!-- #endif -->
 <style scoped>
 .login{min-height:100vh;background:var(--paper);display:flex;flex-direction:column}
+/* #ifdef APP-PLUS */
+.status-cover{position:fixed;top:0;left:0;right:0;height:var(--status-bar-height);background:var(--jade-deep);z-index:20}
+/* #endif */
 .hero{position:relative;height:calc(52vh + 30px);min-height:350px;background:var(--jade-deep);color:#E3EFEA}
 .ports{position:absolute;left:0;top:0;width:100%;height:100%}
 .hero-text{position:relative;padding:0 24px;pointer-events:none}

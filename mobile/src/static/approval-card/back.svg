@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1013 643">
+        <defs>
+          <linearGradient id="back-paper" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f7f6"/><stop offset=".5" stop-color="#eef2f1"/><stop offset="1" stop-color="#f7f7f4"/></linearGradient>
+          <pattern id="back-micro" width="34" height="34" patternUnits="userSpaceOnUse"><path d="M0 12h34M0 27h34" stroke="#789198" stroke-width=".55" opacity=".07"/><path d="M6 0c8 8 8 18 0 28M26 4c-8 8-8 18 0 28" fill="none" stroke="#91aaa9" stroke-width=".6" opacity=".055"/><circle cx="17" cy="17" r="1" fill="#778e92" opacity=".05"/></pattern>
+          <pattern id="back-watermark" width="170" height="135" patternUnits="userSpaceOnUse"><path d="M26 80c8-37 45-58 72-20 22 30 38 18 49-19M14 112c28-22 58-21 83 1 22 19 39 13 60-9" fill="none" stroke="#8ca8a7" stroke-width="2" opacity=".12"/><circle cx="87" cy="66" r="43" fill="none" stroke="#99b0ad" stroke-width="2" opacity=".08"/></pattern>
+          <clipPath id="back-note-clip"><rect x="198" y="486" width="770" height="82"/></clipPath>
+        </defs>
+        <rect x="2" y="2" width="1009" height="639" rx="28" fill="url(#back-paper)" stroke="#aeb9b8" stroke-width="2"/>
+        <rect x="8" y="8" width="997" height="627" rx="23" fill="url(#back-micro)"/><path d="M10 33Q14 9 43 9H970Q996 10 1003 35" fill="none" stroke="#1b2729" stroke-width="4" opacity=".78"/>
+        <rect x="8" y="8" width="997" height="627" rx="23" fill="url(#back-watermark)" opacity=".24"/><ellipse cx="463" cy="348" rx="392" ry="287" fill="none" stroke="#7da6ab" stroke-width="1.5" opacity=".08"/><ellipse cx="463" cy="348" rx="317" ry="241" fill="none" stroke="#7da6ab" stroke-width="1.5" opacity=".07"/>
+      </svg>
