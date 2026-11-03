@@ -102,6 +102,7 @@ views/                頁面：只寫業務欄位、動作、校驗
 | `DateInput` | 日期輸入（腳手架沒有）：鍵盤可輸入 `YYYY-MM-DD`，也可點開原生日期選擇；與 `TextInput` 同外觀 |
 | `DueDate` | 到期徽章；`editable` 時點擊變 `DateInput`，選定即觸發 `save`，儲存中顯示載入、失敗還原並提示 |
 | `PlateChip` | 車牌徽章（見第二節） |
+| `BrandMark` | MasterApp 白色雲形 M，用在側欄和登入頁的產品名稱旁；圖形不可改動、只可等比縮放，裏面不加內容，只放深色底上。客戶端登入頁同一圖形用 `static/masterapp-mark.svg` |
 | `StatCard` | 統計數字卡（取代腳手架 `Metric` 的大讀數），可點擊作篩選 |
 | `KeyValue` | 詳情頁「標籤：值」清單，窄螢幕改單欄，不可省略標籤 |
 | `StampMark` | 印章：完成類操作蓋章（放大 → 壓下 → 落定），與客戶端同款 |

@@ -5,6 +5,7 @@ import { useAdminStore } from '../../store'
 import { slideThumb } from '../../composables/motion'
 import { ShieldCheck, LogOut } from '@lucide/vue'
 import Avatar from '../ui/Avatar.vue'
+import BrandMark from '../ui/BrandMark.vue'
 import { todayPending, pendingSummary } from '../../composables/live-refresh'
 defineProps<{ open: boolean }>()
 const emit = defineEmits<{ (event: 'navigate'): void }>()
@@ -19,7 +20,7 @@ function select(id: string) { navigate(id); emit('navigate') }
 </script>
 <template>
   <aside ref="root" class="sidebar" :class="{ 'is-open': open }">
-    <div class="brand"><div class="brand-icon">牌</div><div><strong>車牌管家</strong><small>管理端</small></div></div>
+    <div class="brand"><BrandMark /><div><strong>車牌管家</strong><small>管理端</small></div></div>
     <div class="nav-group-title">工作空間</div>
     <span ref="thumb" class="nav-thumb" aria-hidden="true" />
     <button v-for="nav in navigation.filter(item => !item.adminOnly || account?.role === 'admin')" :key="nav.id" type="button" class="nav-item" :class="{ active: active === nav.id }" :title="nav.name" @click="select(nav.id)"><component :is="nav.icon" class="nav-symbol" :size="19" :stroke-width="1.8" /><span>{{ nav.name }}</span><span v-if="nav.id === 'business' && newCount" class="nav-count">{{ newCount }}</span><span v-if="nav.id === 'dashboard' && todayPending?.total" class="nav-count" :title="pendingSummary(todayPending)" :aria-label="`${todayPending.total} 項待處理：${pendingSummary(todayPending)}`">{{ todayPending.total }}</span></button>

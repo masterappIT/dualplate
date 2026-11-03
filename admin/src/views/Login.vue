@@ -4,6 +4,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAdminStore } from '../store'
 import NeuralNet from '../components/NeuralNet.vue'
+import BrandMark from '../components/ui/BrandMark.vue'
 import Button from '../components/ui/Button.vue'
 import Field from '../components/ui/Field.vue'
 import TextInput from '../components/ui/TextInput.vue'
@@ -119,7 +120,7 @@ onBeforeUnmount(() => {
     <section class="login-canvas" aria-label="車牌管家介紹">
       <div class="canvas-grid" aria-hidden="true" />
       <NeuralNet :burst-key="netBurst" />
-      <div class="login-brand"><span class="brand-mark">牌</span><div><strong>車牌管家</strong><small>管理端</small></div></div>
+      <div class="login-brand"><BrandMark /><div><strong>車牌管家</strong><small>管理端</small></div></div>
       <div class="canvas-main">
         <div class="canvas-copy">
           <h1 class="login-title hero-line">車牌管家</h1>

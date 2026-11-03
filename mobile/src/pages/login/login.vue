@@ -10,7 +10,7 @@
       <view id="ports" class="ports" :prop="burstKey" :change:prop="portsView.burst" />
       <!-- #endif -->
       <view class="hero-text" :style="{ paddingTop: top + 'px' }">
-        <view class="brand"><view class="seal"><text>牌</text></view><text class="brand-name">車牌管家</text></view>
+        <view class="brand"><image class="brand-mark" src="/static/masterapp-mark.svg" mode="aspectFit" /><text class="brand-name">車牌管家</text></view>
         <text class="hero-title">兩地牌、公司與到期事項</text><text class="hero-title second">一處管好。</text>
         <!-- 車牌示例：上行粵港、下行粵澳；三種都用仿真車牌（牌照詳情同一套組件），加上立體壓印效果，同一高度 -->
         <view class="hero-plates"><view class="plate-pair"><MainlandPlate plate="粵Z·A123港" :width="mainlandWidth" :text-scale="0.8" relief /><HongKongPlate plate="HK 1234" :width="localWidth" :text-scale="0.8" relief /></view><view class="plate-pair"><MainlandPlate plate="粵Z·A123澳" :width="mainlandWidth" :text-scale="0.8" relief /><MacauPlate plate="MA-12-34" :width="localWidth" :text-scale="0.7" relief /></view></view>
@@ -177,8 +177,7 @@ export default {
 .ports{position:absolute;left:0;top:0;width:100%;height:100%}
 .hero-text{position:relative;padding:0 24px;pointer-events:none}
 .brand{display:flex;align-items:center;gap:8px}
-.seal{width:36px;height:36px;border-radius:50%;border:2px solid var(--plate-yellow);display:flex;align-items:center;justify-content:center}
-.seal text{color:var(--plate-yellow);font-size:var(--fs-h);font-weight:900}
+.brand-mark{flex:none;width:42px;height:32px}
 .brand-name{font-size:var(--fs-h);font-weight:800;letter-spacing:2px;color:#fff}
 .hero-title{display:block;margin-top:20px;font-size:var(--fs-title);font-weight:800;line-height:1.4;color:#fff}.hero-title.second{margin-top:0}
 .hero-plates{display:flex;flex-direction:column;gap:8px;margin-top:16px}.plate-pair{display:flex;align-items:center;gap:8px}.plate-pair .mainland-plate,.plate-pair .hk-plate,.plate-pair .mo-plate{flex:none;margin:0}
