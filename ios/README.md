@@ -19,10 +19,12 @@ Build 編號是工作流程的執行編號；每次成功上傳會在該提交�
 | 名稱 | 種類 | 內容 |
 |---|---|---|
 | `ASC_KEY_ID`、`ASC_ISSUER_ID`、`ASC_KEY_BASE64` | secret | App Store Connect API 金鑰 |
-| `IOS_DIST_P12_BASE64`、`IOS_DIST_P12_PASSWORD`、`IOS_PROFILE_BASE64` | secret | 發佈證書和描述檔，`ios/create-signing.mjs` 產生，**每年到期要重跑** |
+| `IOS_DIST_P12_BASE64`、`IOS_DIST_P12_PASSWORD`、`IOS_PROFILE_BASE64` | secret | 發佈證書和描述檔，`ios/create-signing.mjs` 產生，**每年到期要重跑**（現有的 2027-11-03 到期） |
 | `DCLOUD_APPKEY` | secret | DCloud 離線打包 key |
 | `IOS_SDK_PASSPHRASE` | secret | SDK 加密密碼 |
 | `IOS_SDK_ENC_SHA256` | variable | 加密 SDK 檔的校驗值 |
+
+本機簽名檔案放在 `ios/signing/`，這個資料夾不入庫：API 金鑰 `.p8`（團隊金鑰 `dualplate-ci`，Apple 只讓下載一次，遺失就要撤銷再建一把）、`dist.p12` 和密碼、描述檔。重跑 `ios/create-signing.mjs` 時輸出到這裏。
 
 ## 更新 SDK
 

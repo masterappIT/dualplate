@@ -19,3 +19,6 @@ api/logs/
 
 # DCloud iOS 離線打包 SDK（約 1.7 GB，從 DCloud 官方網盤下載，不入庫）
 ios/dcloud-sdk-*/
+
+# App Store Connect API 金鑰等簽名檔案（只放本機，不入庫）
+ios/signing/
