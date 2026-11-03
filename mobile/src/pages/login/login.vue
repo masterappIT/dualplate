@@ -12,7 +12,8 @@
       <view class="hero-text" :style="{ paddingTop: top + 'px' }">
         <view class="brand"><view class="seal"><text>牌</text></view><text class="brand-name">車牌管家</text></view>
         <text class="hero-title">兩地牌、公司與到期事項</text><text class="hero-title second">一處管好。</text>
-        <view class="hero-plates"><PlateChip plate="粵Z·A1234港" size="sm" /><PlateChip plate="AB 1234" size="sm" /><PlateChip plate="MA-12-34" size="sm" /></view>
+        <!-- 車牌示例：上行粵港、下行粵澳 -->
+        <view class="hero-plates"><view class="plate-pair"><PlateChip plate="粵Z·A1234港" size="sm" /><PlateChip plate="AB 1234" size="sm" /></view><view class="plate-pair"><PlateChip plate="粵Z·A1234澳" size="sm" /><PlateChip plate="MA-12-34" size="sm" /></view></view>
       </view>
     </view>
 
@@ -168,7 +169,7 @@ export default {
 <!-- #endif -->
 <style scoped>
 .login{min-height:100vh;background:var(--paper);display:flex;flex-direction:column}
-.hero{position:relative;height:52vh;min-height:320px;background:var(--jade-deep);color:#E3EFEA}
+.hero{position:relative;height:calc(52vh + 30px);min-height:350px;background:var(--jade-deep);color:#E3EFEA}
 .ports{position:absolute;left:0;top:0;width:100%;height:100%}
 .hero-text{position:relative;padding:0 24px;pointer-events:none}
 .brand{display:flex;align-items:center;gap:8px}
@@ -176,7 +177,7 @@ export default {
 .seal text{color:var(--plate-yellow);font-size:var(--fs-h);font-weight:900}
 .brand-name{font-size:var(--fs-h);font-weight:800;letter-spacing:2px;color:#fff}
 .hero-title{display:block;margin-top:20px;font-size:var(--fs-title);font-weight:800;line-height:1.4;color:#fff}.hero-title.second{margin-top:0}
-.hero-plates{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.hero-plates{display:flex;flex-direction:column;gap:8px;margin-top:16px}.plate-pair{display:flex;align-items:center;gap:8px}
 .sheet{position:relative;margin:-48px 16px 24px;background:var(--card);border-radius:var(--r-panel);border:1px solid var(--rule);box-shadow:var(--float);padding:20px 16px 24px}
 .sheet-title{display:block;font-size:var(--fs-title);font-weight:800;color:var(--jade-deep)}
 .sheet-sub{display:block;margin-top:4px;font-size:var(--fs-body);color:var(--ink-2)}
@@ -197,6 +198,6 @@ export default {
 .shake{animation:shake .38s ease}
 @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(2px)}}
 @media (prefers-reduced-motion:reduce){.shake{animation:none}}
-@media screen and (min-width:780px){.hero{height:46vh}.sheet{width:560px;margin:-80px auto 0}}
+@media screen and (min-width:780px){.hero{height:calc(46vh + 30px)}.sheet{width:560px;margin:-80px auto 0}}
 .wechat-button{width:100%;margin-top:12px}.bind{margin-top:8px}.bind-actions{display:flex;gap:8px;margin-top:12px}.bind-actions button{flex:1;margin:0}
 </style>
