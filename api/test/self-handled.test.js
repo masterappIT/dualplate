@@ -202,7 +202,7 @@ test('續期未辦好的文件照舊提醒', async () => {
   const r = await submit(plateId, { kind: 'renewal', documents: { approval: { done: true, expiresOn: shift(385) }, hk_crp: { done: false } } })
   assert.equal(r.status, 201)
   assert.equal(dateOf('plate', plateId, 'hk_crp'), shift(20))
-  assert.deepEqual(r.body.details.notDone, ['香港封閉道路通行許可證（CRP）'])
+  assert.deepEqual(r.body.details.notDone, ['封閉道路通行許可證（禁區紙）'])
 })
 test('續期全部未辦好回 400', async () => { const { plateId } = makePlate(); assert.equal((await submit(plateId, { kind: 'renewal', documents: { approval: { done: false } } })).status, 400) })
 test('續期沒有文件回 400', async () => { const { plateId } = makePlate(); assert.equal((await submit(plateId, { kind: 'renewal' })).status, 400) })

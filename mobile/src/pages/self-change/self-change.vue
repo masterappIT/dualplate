@@ -66,11 +66,11 @@
         <button v-if="drivers.length<3" class="btn-line add-driver" @click="addDriver">＋ 加一位司機</button>
       </view>
 
-      <!-- 口岸變更（粵港）：新通行口岸、新 CRP 到期日 -->
+      <!-- 口岸變更（粵港）：新通行口岸、新禁區紙到期日 -->
       <view v-if="kind==='crossing_change'" class="card">
         <text class="step-title">新的通行口岸</text><text class="subtle">原來：{{ before.crossing || '未有記錄' }}</text>
         <text class="field-label">新批文卡上的通行口岸（必填）</text><input class="field" v-model="cardText.crossing" placeholder="例如 港珠澳大橋"/>
-        <text class="field-label">新香港 CRP 到期日（可不填）</text>
+        <text class="field-label">新禁區紙到期日（可不填）</text>
         <view class="row"><picker class="grow" mode="date" :value="cardText.crpExpiresOn" @change="cardText.crpExpiresOn=$event.detail.value"><view class="field picker" :class="{placeholder:!cardText.crpExpiresOn}"><text>{{ cardText.crpExpiresOn || '選擇到期日' }}</text><text class="chev">›</text></view></picker><text v-if="cardText.crpExpiresOn" class="link" @click="cardText.crpExpiresOn=''">清除</text></view>
         <text class="subtle mark-hint">{{ forMode('口岸改變後，海關及邊檢備案可能要重辦，你的顧問會跟進。','口岸改變後，海關及邊檢備案可能要重辦，請留意；需要幫忙可交給我們辦。') }}</text>
       </view>
@@ -142,7 +142,7 @@ const localName=computed(()=>form.value.route==='粵澳'?'澳門':'香港')
 const doing={vehicle_change:'換車',renewal:'續期',driver_change:'換司機',crossing_change:'口岸變更',company_change:'商號變更',replacement:'補領'}
 const intro=computed(()=>marking.value?`你自己辦好了${markDoing[kind.value]}？在這裏標記，資料立即生效${forMode('，你的顧問會再核對','')}。`:kind.value==='stop_renewal'?'決定不再續期這個兩地牌（例如已賣車、放棄指標）？告訴我們，停止到期提醒。':`你自己辦好了${doing[kind.value]}？在這裏一次更新，資料立即生效${forMode('，你的顧問會再核對','')}。自行辦理的變更，請在辦好後 7 天內更新。`)
 const cardHint=computed(()=>({crossing_change:'拍下新卡正面，系統會讀出新的通行口岸。',company_change:'拍下新卡正面，系統會讀出新的商號和內承單位。',replacement:forMode('拍下補領的新卡，顧問會對照核對。','拍下補領的新卡。'),vehicle_change:forMode('換車後批文卡上的港澳車牌會改變，請拍下新卡正反面，顧問會對照核對。','換車後批文卡上的港澳車牌會改變，請拍下新卡正反面。'),renewal:'拍下新卡，系統會讀出新的有效期，填在下面。',driver_change:forMode('新卡背面列出駕駛人，請拍下正反面，顧問會對照核對。','新卡背面列出駕駛人，請拍下正反面。')}[kind.value]))
-const photoLabel=computed(()=>({crossing_change:'新香港 CRP 相片',company_change:'公司變更證明相片',replacement:'補領證明相片',vehicle_change:'新車行車證、保險單相片',renewal:'新證件相片（例如香港許可證）',driver_change:'新司機證件相片',inspection_done:'檢驗標誌或檢驗結果相片',filing_done:'備案回執相片',tax_paid:'行車稅繳費收據相片'}[kind.value]))
+const photoLabel=computed(()=>({crossing_change:'新禁區紙相片',company_change:'公司變更證明相片',replacement:'補領證明相片',vehicle_change:'新車行車證、保險單相片',renewal:'新證件相片（例如香港許可證）',driver_change:'新司機證件相片',inspection_done:'檢驗標誌或檢驗結果相片',filing_done:'備案回執相片',tax_paid:'行車稅繳費收據相片'}[kind.value]))
 const submitText=computed(()=>kind.value==='stop_renewal'?'確認不再續期':marking.value?'標記已辦好':'提交更新')
 function fillDefaults(){
   const f=form.value

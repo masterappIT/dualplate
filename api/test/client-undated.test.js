@@ -91,6 +91,59 @@ test('托管客戶填自理事項的日期，列入待核對', async () => {
   assert.equal((await request('/my/dates', 'PUT', { ownerType: 'plate', ownerId: ids.plate, code: 'hk_crp', expiresOn: '2027-03-01' }, ids.token)).status, 200)
   assert.equal(state.db.prepare("SELECT COUNT(*) count FROM customer_changes WHERE customer_id=? AND status='待核對'").get(ids.customer).count, 1)
 })
+// 車輛通行文件（管理者 2026-11-04）：禁區紙、澳門通行證、海關及邊檢備案，所有客戶都看得到、都可以自己填
+const permit = (body, code) => body.vehiclePermits.find(item => item.code === code)
+test('托管客戶：未填日期也列出禁區紙和海關及邊檢備案', async () => {
+  const ids = seed('托管'), body = (await plate(ids)).body
+  assert.deepEqual(body.vehiclePermits.map(item => item.code), ['hk_crp', 'customs_filing'])
+  assert.equal(permit(body, 'hk_crp').dueOn, null)
+  assert.equal(permit(body, 'hk_crp').name, '封閉道路通行許可證（禁區紙）')
+})
+test('自管客戶：未填日期也列出禁區紙和海關及邊檢備案', async () => {
+  const ids = seed(), body = (await plate(ids)).body
+  assert.deepEqual(body.vehiclePermits.map(item => item.code), ['hk_crp', 'customs_filing'])
+})
+test('粵澳牌照列出澳門通行證，不列禁區紙', async () => {
+  const ids = seed('托管')
+  state.db.prepare("UPDATE plate_assets SET route='粵澳' WHERE id=?").run(ids.plate)
+  assert.deepEqual((await plate(ids)).body.vehiclePermits.map(item => item.code), ['mo_permit', 'customs_filing'])
+})
+test('不在客戶事項清單上也照樣列出，由客戶自理', async () => {
+  const ids = seed('托管')
+  state.db.prepare('UPDATE customers SET items_customized=1 WHERE id=?').run(ids.customer)
+  const body = (await plate(ids)).body
+  assert.deepEqual(body.vehiclePermits.map(item => item.code), ['hk_crp', 'customs_filing'])
+  assert.equal(find(body.undated, 'hk_crp').fill, 'date')
+  assert.equal(find(body.undated, 'hk_licence'), undefined)
+})
+test('托管客戶填禁區紙日期：列入待核對，同時出現在到期項目', async () => {
+  const ids = seed('托管')
+  assert.equal((await request('/my/dates', 'PUT', { ownerType: 'plate', ownerId: ids.plate, code: 'hk_crp', expiresOn: '2027-03-01' }, ids.token)).status, 200)
+  const body = (await plate(ids)).body
+  assert.equal(permit(body, 'hk_crp').dueOn, '2027-03-01')
+  assert.equal(find(body.deadlines, 'hk_crp').dueOn, '2027-03-01')
+  assert.equal(state.db.prepare("SELECT COUNT(*) count FROM customer_changes WHERE customer_id=? AND status='待核對'").get(ids.customer).count, 1)
+})
+test('托管客戶：其他我們負責的事項沒有日期仍然不列出', async () => {
+  const ids = seed('托管'), body = (await plate(ids)).body
+  assert.equal(permit(body, 'hk_licence'), undefined)
+  assert.equal(find(body.undated, 'hk_licence'), undefined)
+})
+test('不再續期的牌照不列出通行文件', async () => {
+  const ids = seed('托管')
+  state.db.prepare("UPDATE plate_assets SET stopped_on='2026-01-01' WHERE id=?").run(ids.plate)
+  assert.deepEqual((await plate(ids)).body.vehiclePermits, [])
+})
+test('舊預設名稱更新為禁區紙，租戶自己改過的名稱不動', async () => {
+  const { seedRules } = await import('../src/db.js')
+  const setName = name => state.db.prepare("UPDATE rules SET name=? WHERE tenant_id='default' AND code='hk_crp'").run(name)
+  const getName = () => state.db.prepare("SELECT name FROM rules WHERE tenant_id='default' AND code='hk_crp'").get().name
+  setName('香港封閉道路通行許可證（CRP）'); seedRules('default')
+  assert.equal(getName(), '封閉道路通行許可證（禁區紙）')
+  setName('本公司自訂名稱'); seedRules('default')
+  assert.equal(getName(), '本公司自訂名稱')
+  setName('封閉道路通行許可證（禁區紙）')
+})
 test('公司頁：每個公司組列出公司還沒有填日期的事項', async () => {
   const ids = seed(), result = await request('/my/companies', 'GET', undefined, ids.token)
   assert.equal(result.status, 200)

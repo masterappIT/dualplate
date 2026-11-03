@@ -72,6 +72,14 @@
       </view>
       <view :id="'fold-vehicle'" class="list-card row fold-head" @click="toggle('vehicle')"><text class="fold-title">車輛與證件</text><text class="fold-sum grow">{{ vehicleSummary }}</text><text class="chev">{{ open.vehicle ? '⌃' : '›' }}</text></view>
       <view v-if="open.vehicle" class="fold-body">
+    <!-- 通行證與備案（管理者 2026-11-04）：所有客戶自己填；已填的同時列在「到期項目」，照常提醒 -->
+    <view v-if="vehiclePermits.length" class="card list permits">
+      <text class="undated-title">通行證與備案</text>
+      <view v-for="item in vehiclePermits" :key="item.code" class="line">
+        <view class="grow"><text class="line-title">{{ item.name }}</text><text v-if="isPending(item.ownerType,item.ownerId,'date:'+item.code)" class="pill amber pending-tag">已修改，待核對</text></view>
+        <picker mode="date" :value="item.dueOn || undefined" @change="item.dueOn ? saveDate(item,$event.detail.value) : fillDate(item,$event.detail.value)"><view class="date-edit"><DueDate v-if="item.dueOn" :date="item.dueOn" :days="item.daysLeft" :level="item.level" /><text class="link">{{ item.dueOn ? '修改' : '填日期' }}</text></view></picker>
+      </view>
+    </view>
     <view v-if="!creating && loaded && plates[0] && !boundVehicles.length && plates[0].installation_status !== '未上牌'">
       <view class="card">
         <text class="line-title">尚未登記車輛</text>
@@ -207,7 +215,9 @@ const crossingBusy=ref(false),justCrossed=ref(false),loaded=ref(false),cardBack=
 const healthLabel={ok:'正常',due:'快到期',overdue:'已逾期',pending:noDatesWord()},healthTone={ok:'',due:'amber',overdue:'red',pending:'gray'}
 // 90 天過關有自己的卡片，不在到期清單重複
 const deadlineList=computed(()=>(summary.value.deadlines||[]).filter(item=>!(summary.value.crossing?.enabled&&item.name==='90 天過關')))
-const undatedList=computed(()=>summary.value.undated||[])
+const vehiclePermits=computed(()=>summary.value.vehiclePermits||[])
+// 通行證與備案在「車輛與證件」填，不重複列在「還沒有填日期」
+const undatedList=computed(()=>(summary.value.undated||[]).filter(item=>!(item.ownerType==='plate'&&vehiclePermits.value.some(permit=>permit.code===item.code))))
 const shownDeadlines=computed(()=>allDeadlines.value?deadlineList.value:deadlineList.value.slice(0,5))
 function deadlineSub(item){return [item.ownerType==='plate'?'':item.ownerLabel,detailText(item.detail)].filter(Boolean).join(' · ')}
 const boundVehicles=computed(()=>vehicles.value.filter(v=>v.id===plates.value[0]?.vehicle_id))
@@ -288,7 +298,7 @@ const clientTodoCount=computed(()=>(summary.value.deadlines||[]).filter(i=>['due
 const levelWord={overdue:'已逾期',due:'快到期'}
 const deadlineSummary=computed(()=>{const list=deadlineList.value,gap=undatedList.value.length?undatedList.value.length+' 項未填日期':'';if(!list.length)return gap||(summary.value.health==='pending'?(cardSelfManaged?'未填到期日':'整理中'):'半年內沒有');const urgent=list.filter(i=>['overdue','due'].includes(i.level));return list.length+' 項'+(urgent.length?' · '+urgent.length+' 項'+levelWord[urgent.some(i=>i.level==='overdue')?'overdue':'due']:'')+(gap?' · '+gap:'')})
 const crossingSummary=computed(()=>{const c=summary.value.crossing;return !c?.enabled?'未開啟':c.lastCrossedOn?'上次 '+c.lastCrossedOn:'未記錄過關日期'})
-const vehicleSummary=computed(()=>{const v=boundVehicles.value[0];if(!v)return '尚未登記車輛';const list=docs.value[v.id]?.documents||[];return v.plate+(list.length?' · 證件 '+list.filter(d=>d.uploaded).length+'/'+list.length+' 已上傳':'')})
+const vehicleSummary=computed(()=>{const v=boundVehicles.value[0],gap=vehiclePermits.value.filter(item=>!item.dueOn).length,gapText=gap?' · '+gap+' 項未填日期':'';if(!v)return '尚未登記車輛'+gapText;const list=docs.value[v.id]?.documents||[];return v.plate+gapText+(list.length?' · 證件 '+list.filter(d=>d.uploaded).length+'/'+list.length+' 已上傳':'')})
 const driverSummary=computed(()=>{const list=summary.value.drivers||[];if(!list.length)return '未登記';const main=list.find(d=>d.role==='主')||list[0];return main.name+'（'+(main.role==='主'?'主':'副')+'）'+(list.length>1?' 等 '+list.length+' 人':'')})
 // 有出租時，摘要加狀態或最近一期租金的收款狀態
 const paidWord=a=>{const list=a?.invoices||[];if(list.some(i=>i.status==='逾期'))return '有逾期未收';const last=[...list].sort((x,y)=>String(y.period).localeCompare(String(x.period)))[0];return !last?'未有租金記錄':last.status==='已收'?'已收':last.status==='部分收'?'部分收到':'未到期'}

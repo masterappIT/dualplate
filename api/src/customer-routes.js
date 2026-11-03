@@ -14,6 +14,8 @@ const levelRank = { overdue: 0, due: 1, upcoming: 2, ok: 3 }
 // editable：客戶可在客戶端直接改這個到期日（按日期記錄、不是來自批文卡的事項）
 // 客戶可自行標記「已辦好」的事項（驗車、新批文備案；docs/tasks/self-handled-changes-design.md 第七節第 4 項）
 const markableCodes = new Set(['inspection', 'new_card_filing', 'mo_vehicle_tax'])
+// 車輛通行文件（管理者 2026-11-04）：禁區紙、澳門通行證、海關及邊檢備案，自管、托管客戶都看得到、都可以自己填，顯示在「車輛與證件」
+const vehiclePermitCodes = ['hk_crp', 'mo_permit', 'customs_filing']
 const publicDeadline = (item, editable = false) => ({ code: item.ruleCode, editable, handledBy: item.handler === 'client' ? 'you' : 'us', name: item.name, ownerType: item.ownerType, ownerId: item.ownerId, ownerLabel: item.ownerLabel, dueOn: item.dueOn, daysLeft: item.daysLeft, level: item.level, detail: item.method === 'expiry' ? '' : item.detail, ...(markableCodes.has(item.ruleCode) && item.completable ? { markable: true, period: item.period } : {}) })
 const plateLabel = plate => `${plate.mainland_plate || '內地車牌待補'} · ${plate.local_plate || '港澳車牌待補'}`
 const companyStatus = company => company.status || '存續'
@@ -66,7 +68,10 @@ export async function customerRoutes(req, res, url, user, h) {
     const editable = new Set(rules.filter(rule => rule.method === 'expiry' && !rule.params?.field).map(rule => rule.code))
     // 帶上客戶編號，委託範圍才按這位客戶判斷（自管客戶一律自理、客戶的事項清單）
     for (const owner of owners) owner.customerId ||= customer.id
-    return computeDeadlines({ rules, owners, tracked, completions, scopes: scopeMap(customer.tenant_id), windowDays: 180 }).map(item => ({ ...publicDeadline(item, editable.has(item.ruleCode)), plateId: plateOf(item) || null }))
+    // 車輛通行文件不在這位客戶的事項清單上時，也照樣列出，由客戶自理
+    const book = scopeMap(customer.tenant_id)
+    const scopes = { handling: (type, id, code, customerId) => book.handling(type, id, code, customerId) || (vehiclePermitCodes.includes(code) ? { handler: 'client', providerName: '' } : null) }
+    return computeDeadlines({ rules, owners, tracked, completions, scopes, windowDays: 180 }).map(item => ({ ...publicDeadline(item, editable.has(item.ruleCode)), plateId: plateOf(item) || null }))
   }
   // Vehicle deadlines belong to the plate the vehicle is mounted on.
   const visible = list => list.filter(item => item.level !== 'missing')
@@ -180,7 +185,7 @@ export async function customerRoutes(req, res, url, user, h) {
     const own = all.filter(item => plateOf(item) === plate.id || (item.ownerType === 'company' && companies.some(company => company.id === item.ownerId && company.group_id && company.group_id === plate.group_id)))
     const requests = query('SELECT id,title,status,stage,updated_at FROM requests WHERE customer_id=? AND plate_asset_id=? ORDER BY updated_at DESC', customer.id, plate.id)
     const crossing = crossingSummary(customer.tenant_id, plate.id)
-    return json(res, 200, { ...summary, crossing: { enabled: crossing.enabled, lastCrossedOn: crossing.lastCrossedOn, nextDueOn: crossing.nextDueOn, days: crossing.days }, deadlines: visible(own).sort((a, b) => String(a.dueOn).localeCompare(String(b.dueOn))), undated: undated(own), requests: requests.map(item => ({ id: item.id, title: item.title, status: requestStatus(item.status), stage: item.stage, updatedAt: item.updated_at })), companyGaps: companyGaps(customer.tenant_id, plate.group_id), drivers: query("SELECT d.id, d.name, pd.role FROM plate_drivers pd JOIN drivers d ON d.id=pd.driver_id WHERE pd.plate_asset_id=? ORDER BY CASE pd.role WHEN '主' THEN 0 ELSE 1 END, pd.sort", plate.id) }), true
+    return json(res, 200, { ...summary, crossing: { enabled: crossing.enabled, lastCrossedOn: crossing.lastCrossedOn, nextDueOn: crossing.nextDueOn, days: crossing.days }, deadlines: visible(own).sort((a, b) => String(a.dueOn).localeCompare(String(b.dueOn))), undated: undated(own), vehiclePermits: vehiclePermitCodes.flatMap(code => own.filter(item => item.ownerType === 'plate' && item.code === code)).map(item => ({ code: item.code, name: item.name, ownerType: item.ownerType, ownerId: item.ownerId, dueOn: item.dueOn, daysLeft: item.daysLeft, level: item.level })), requests: requests.map(item => ({ id: item.id, title: item.title, status: requestStatus(item.status), stage: item.stage, updatedAt: item.updated_at })), companyGaps: companyGaps(customer.tenant_id, plate.group_id), drivers: query("SELECT d.id, d.name, pd.role FROM plate_drivers pd JOIN drivers d ON d.id=pd.driver_id WHERE pd.plate_asset_id=? ORDER BY CASE pd.role WHEN '主' THEN 0 ELSE 1 END, pd.sort", plate.id) }), true
   }
   return fail(res, 404, '找不到此頁'), true
 }

@@ -16,7 +16,7 @@ export const matchKeys = ['route', 'jurisdiction', 'indicatorCategory', 'port', 
 
 export const defaultRules = [
   { code: 'approval', name: '批文／指標有效期', scope: 'plate', method: 'expiry', match: {}, params: { field: 'cardExpiresOn' }, remindDays: 60, service: 'plate_service', group: 'permit', customerVisible: true },
-  { code: 'hk_crp', name: '香港封閉道路通行許可證（CRP）', scope: 'plate', method: 'expiry', match: { route: '粵港' }, params: {}, remindDays: 120, service: 'plate_service', group: 'permit', customerVisible: true },
+  { code: 'hk_crp', name: '封閉道路通行許可證（禁區紙）', scope: 'plate', method: 'expiry', match: { route: '粵港' }, params: {}, remindDays: 120, service: 'plate_service', group: 'permit', customerVisible: true },
   { code: 'mo_permit', name: '澳門車輛邊境通行證', scope: 'plate', method: 'expiry', match: { route: '粵澳' }, params: {}, remindDays: 60, service: 'plate_service', group: 'permit', customerVisible: true },
   { code: 'hk_licence', name: '香港車輛牌照', scope: 'vehicle', method: 'expiry', match: { origin: '香港' }, params: {}, remindDays: 30, service: 'plate_service', group: 'vehicle', customerVisible: true },
   { code: 'local_insurance', name: '港澳車輛保險', scope: 'vehicle', method: 'expiry', match: {}, params: {}, remindDays: 30, service: 'plate_service', group: 'vehicle', customerVisible: true },

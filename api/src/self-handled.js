@@ -271,7 +271,7 @@ function prepareCrossingChange(ctx, body) {
   if (crossing.error || !crossing.value) return bad(400, '請填寫新的通行口岸')
   const card = cardBefore(plate)
   if (crossing.value === clean(card.crossing, 120)) return bad(400, '通行口岸與原來相同；如只是之前填錯，請直接修改批文卡')
-  if (body.crpExpiresOn !== undefined && body.crpExpiresOn !== '' && !validDate(body.crpExpiresOn)) return bad(400, '香港 CRP 到期日無效')
+  if (body.crpExpiresOn !== undefined && body.crpExpiresOn !== '' && !validDate(body.crpExpiresOn)) return bad(400, '禁區紙到期日無效')
   return {
     write(userId) {
       writeCard(plate, { crossing: crossing.value })

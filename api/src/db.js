@@ -230,6 +230,8 @@ export function seedRules(tenantId) {
   // Rules created before services existed take the default service of their code, or of their scope.
   for (const rule of defaultRules) db.prepare('UPDATE rules SET service=? WHERE tenant_id=? AND code=? AND service IS NULL').run(rule.service, tenantId, rule.code)
   db.prepare("UPDATE rules SET service=CASE scope WHEN 'company' THEN 'company_upkeep' ELSE 'plate_service' END WHERE tenant_id=? AND service IS NULL").run(tenantId)
+  // 改名（管理者 2026-11-04）：只改仍是舊預設名稱的規則，租戶自己改過的不動
+  db.prepare("UPDATE rules SET name=? WHERE tenant_id=? AND code='hk_crp' AND name='香港封閉道路通行許可證（CRP）'").run('封閉道路通行許可證（禁區紙）', tenantId)
   // The 90-day rule became opt-in after release; tenants seeded before keep their edits but gain the condition.
   db.prepare("UPDATE rules SET match_json=? WHERE tenant_id=? AND code='crossing_90' AND match_json='{}'").run(JSON.stringify({ crossingReminder: 1 }), tenantId)
   ensureSelfCustomer(tenantId)
