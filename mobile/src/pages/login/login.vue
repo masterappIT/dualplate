@@ -2,7 +2,13 @@
   <view class="login">
     <!-- 上半：深通行綠畫布，口岸節點網絡＋牌照黃脈衝（交互取自管理者腳手架的節點網絡，外觀為本產品證件感） -->
     <view class="hero guilloche">
+      <!-- #ifdef MP -->
       <canvas id="ports" type="2d" class="ports" />
+      <!-- #endif -->
+      <!-- H5、App 的畫布由下方 renderjs 在畫面層建立；burstKey 變動時播放登入成功的擴散 -->
+      <!-- #ifndef MP -->
+      <view id="ports" class="ports" :prop="burstKey" :change:prop="portsView.burst" />
+      <!-- #endif -->
       <view class="hero-text" :style="{ paddingTop: top + 'px' }">
         <view class="brand"><view class="seal"><text>牌</text></view><text class="brand-name">車牌管家</text></view>
         <text class="hero-title">兩地牌、公司與到期事項</text><text class="hero-title second">一處管好。</text>
@@ -64,6 +70,7 @@ function goSignup(){uni.navigateTo({url:'/pages/signup/signup'})}
 import PlateChip from '../../components/PlateChip.vue'
 import ContactCard from '../../components/ContactCard.vue'
 import StampMark from '../../components/StampMark.vue'
+import { startPorts } from '../../lib/ports-canvas'
 
 const email = ref(''), phone = ref(''), mode = ref('phone'), password = ref(''), binding = ref(false), bindCode = ref(''), loading = ref(false), error = ref(''), shake = ref(false), done = ref(false), application = ref(null)
 const top = (uni.getSystemInfoSync().statusBarHeight || 20) + 28
@@ -111,55 +118,54 @@ async function bindWechat() {
 }
 function fail(message) { error.value = message; shake.value = false; setTimeout(() => { shake.value = true }, 10) }
 
-// ── 口岸網絡畫布：節點緩慢呼吸，牌照黃脈衝沿連線往返；登入成功時由中心擴散。減少動態效果時只畫靜態一幀。
-const PORTS = [['深圳灣', .18, .62], ['蓮塘', .42, .38], ['皇崗', .3, .82], ['沙頭角', .62, .2], ['港珠澳大橋', .72, .7], ['拱北', .88, .48], ['橫琴', .9, .86]]
-const LINKS = [[0, 1], [0, 2], [1, 3], [1, 4], [2, 4], [4, 5], [4, 6], [5, 6], [3, 5], [0, 4]]
-let reduced = false, ctx = null, width = 0, height = 0, frame = 0, canvas = null, raf = null, burstAt = 0
-const pulses = LINKS.map((link, i) => ({ link, t: (i * 0.17) % 1, speed: 0.0025 + (i % 3) * 0.0012, dir: i % 2 ? 1 : -1 }))
-function draw() {
-  frame++
-  ctx.clearRect(0, 0, width, height)
-  const pos = PORTS.map(([, x, y], i) => [x * width, (0.44 + y * 0.5) * height + Math.sin(frame / 90 + i) * (reduced ? 0 : 3)])
-  ctx.lineWidth = 1
-  for (const [a, b] of LINKS) { ctx.strokeStyle = 'rgba(227,239,234,.16)'; ctx.beginPath(); ctx.moveTo(...pos[a]); ctx.lineTo(...pos[b]); ctx.stroke() }
-  if (!reduced) for (const p of pulses) {
-    p.t += p.speed * p.dir; if (p.t > .85 || p.t < .15) { p.dir *= -1; p.t = Math.min(.85, Math.max(.15, p.t)) }
-    const [a, b] = p.link, x = pos[a][0] + (pos[b][0] - pos[a][0]) * p.t, y = pos[a][1] + (pos[b][1] - pos[a][1]) * p.t
-    ctx.fillStyle = 'rgba(242,194,48,.22)'; ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill()
-    ctx.fillStyle = '#F2C230'; ctx.beginPath(); ctx.arc(x, y, 2.2, 0, Math.PI * 2); ctx.fill()
-  }
-  PORTS.forEach(([name], i) => {
-    const [x, y] = pos[i], breathe = reduced ? 0 : Math.sin(frame / 60 + i * 1.3) * 1.5
-    ctx.fillStyle = 'rgba(227,239,234,.12)'; ctx.beginPath(); ctx.arc(x, y, 11 + breathe, 0, Math.PI * 2); ctx.fill()
-    ctx.fillStyle = '#E3EFEA'; ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2); ctx.fill()
-    // 靠右邊的口岸把名字寫在節點左邊，免得貼邊被切
-    const left = x > width * .7
-    ctx.fillStyle = 'rgba(227,239,234,.62)'; ctx.font = '12px -apple-system, "PingFang TC", sans-serif'; ctx.textAlign = left ? 'right' : 'left'; ctx.fillText(name, left ? x - 14 : x + 14, y - 10)
-  })
-  if (burstAt) {
-    const k = Math.min(1, (frame - burstAt) / 40), cx = width / 2, cy = height * .7
-    ctx.strokeStyle = `rgba(242,194,48,${1 - k})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, k * Math.max(width, height), 0, Math.PI * 2); ctx.stroke()
-  }
-  if (!reduced) raf = (canvas.requestAnimationFrame || requestAnimationFrame)(draw)
-}
-function burst() { burstAt = frame || 1 }
+// ── 口岸網絡畫布（繪圖見 lib/ports-canvas.js）：H5、App 由 renderjs 在畫面層畫，小程序在這裏取畫布節點畫
+let reduced = false, network = null
+const burstKey = ref(0)
+function burst() { network?.burst(); burstKey.value++ }
 onMounted(() => {
   try { reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches } catch { reduced = false }
-  uni.createSelectorQuery().in(instance.proxy).select('#ports').fields({ node: true, size: true }).exec(([res]) => {
+  // #ifdef MP
+  uni.createSelectorQuery().in(instance.proxy).select('#ports').fields({ node: true, size: true, rect: true }).select('.hero-plates').boundingClientRect().select('.sheet').boundingClientRect().exec(([res, plates, sheet]) => {
     if (!res?.node) return
-    canvas = res.node; width = res.width; height = res.height
-    const dpr = Math.min(2, uni.getSystemInfoSync().pixelRatio || 1)
-    canvas.width = width * dpr; canvas.height = height * dpr
-    ctx = canvas.getContext('2d')
-    // H5 的 uni canvas 已自動按像素比縮放繪圖；小程序需要手動縮放
-    // #ifndef H5
-    ctx.scale(dpr, dpr)
-    // #endif
-    draw()
+    const canvas = res.node, dpr = Math.min(2, uni.getSystemInfoSync().pixelRatio || 1)
+    canvas.width = res.width * dpr; canvas.height = res.height * dpr
+    const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr)
+    network = startPorts(ctx, res.width, res.height, { reduced, top: plates ? plates.bottom - res.top : undefined, bottom: sheet ? sheet.top - res.top : undefined, raf: f => canvas.requestAnimationFrame(f), caf: h => canvas.cancelAnimationFrame(h) })
   })
+  // #endif
 })
-onBeforeUnmount(() => { if (raf) (canvas?.cancelAnimationFrame || cancelAnimationFrame)(raf) })
+onBeforeUnmount(() => network?.stop())
 </script>
+<!-- #ifndef MP -->
+<script module="portsView" lang="renderjs">
+import { startPorts } from '../../lib/ports-canvas'
+// 畫面層：直接用原生畫布，按像素比放大底層像素、座標仍用 CSS 像素。renderjs 的 this 不能存東西，狀態放模組變量。
+// 視窗尺寸改變（桌面拉闊縮窄、手機旋轉）時重新量度再畫，否則畫面會被拉扁
+let network = null, canvas = null, size = '', onResize = null
+function paint() {
+  const box = document.getElementById('ports')
+  if (!box) return
+  const rect = box.getBoundingClientRect(), width = rect.width, height = rect.height, dpr = Math.min(2, window.devicePixelRatio || 1)
+  if (!width || !height || size === `${width}x${height}x${dpr}`) return
+  size = `${width}x${height}x${dpr}`
+  network?.stop()
+  if (!canvas) { canvas = document.createElement('canvas'); canvas.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%'; box.appendChild(canvas) }
+  canvas.width = width * dpr; canvas.height = height * dpr
+  const ctx = canvas.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  const plates = box.parentNode.querySelector('.hero-plates'), sheet = box.parentNode.parentNode.querySelector('.sheet')
+  let reduced = false
+  try { reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches } catch { reduced = false }
+  network = startPorts(ctx, width, height, { reduced, top: plates ? plates.getBoundingClientRect().bottom - rect.top : undefined, bottom: sheet ? sheet.getBoundingClientRect().top - rect.top : undefined, raf: f => requestAnimationFrame(f), caf: h => cancelAnimationFrame(h) })
+}
+export default {
+  mounted() { paint(); onResize = () => paint(); window.addEventListener('resize', onResize) },
+  beforeUnmount() { window.removeEventListener('resize', onResize); network?.stop(); network = canvas = null; size = '' },
+  methods: {
+    burst(value) { if (value) network?.burst() }
+  }
+}
+</script>
+<!-- #endif -->
 <style scoped>
 .login{min-height:100vh;background:var(--paper);display:flex;flex-direction:column}
 .hero{position:relative;height:52vh;min-height:320px;background:var(--jade-deep);color:#E3EFEA}
