@@ -7,7 +7,7 @@
 - `app.env` 放在伺服器上
 - 備份上傳到本產品自己的 bucket（2026-10-21 起；見下面「備份」）
 
-舊的 Google VM（`dualplate-app`）、磁碟、快照、IP 已在 2026-10-19 刪除，不能再退回。Google Cloud 上仍在用的只有：Artifact Registry `dualplate`（映像）、Workload Identity 和部署帳號 `dualplate-deploy`（workflow 推送映像）、Secret Manager `dualplate-app-env`（`app.env` 副本）、備份 bucket `dualplate-511819-backups`。伺服器上傳備份和拉映像用的帳號是共用的 `masterapp-backup@masterapp-infra`（2026-10-21 起，取代本專案的 `masterapp-prod-vm`），不在本專案。所以 `dualplate-511819` 專案不能關閉。映像改放 GHCR 的方案見 `docs/ghcr-migration.md`（未實施）。
+舊的 Google VM（`dualplate-app`）、磁碟、快照、IP 已在 2026-10-19 刪除，不能再退回。Google Cloud 上仍在用的只有：Artifact Registry `dualplate`（映像）、Workload Identity 和部署帳號 `dualplate-deploy`（workflow 推送映像）、Secret Manager `dualplate-app-env`（`app.env` 副本）、備份 bucket `dualplate-511819-backups`。伺服器上傳備份和拉映像用的帳號是共用的 `masterapp-backup@masterapp-infra`（2026-10-21 起，取代本專案的 `masterapp-prod-vm`），不在本專案。所以 `dualplate-511819` 專案不能關閉。映像改放 GHCR 已決定不做（2026-11-03 結案），方案留在 `docs/ghcr-migration.md` 作參考。
 
 搬遷過程見 `docs/tasks/hostkvm-migration.md`。
 

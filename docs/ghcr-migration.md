@@ -1,7 +1,7 @@
 # 映像由 Artifact Registry 改為 GHCR 私人倉庫
 
 > 撰寫：2026-10-19。
-> **狀態（2026-10-19）**：只是方案，**未實施**。正式 workflow 和伺服器仍用 Artifact Registry。第五節第 1 步的改動曾在本機試做並驗證（見第八節），沒有提交。實施時每步先問負責人。
+> **狀態（2026-11-03 結案）**：**不實施**。管理者在 2026-10-19 接受維持 Artifact Registry 的建議（好處只是四個產品做法一致，省下的費用每月不到 1 美元，伺服器仍要用 GCP 金鑰上傳備份），2026-11-03 確認結案。本文件留作日後想統一做法時參考。正式 workflow 和伺服器仍用 Artifact Registry。第五節第 1 步的改動曾在本機試做並驗證（見第八節），沒有提交。實施時每步先問負責人。
 > 參考：`masterappIT/master-travel-project` 的 `deploy-hostkvm.yml`、`ghcr-retention.yml`（提交 `17b44700`），以及 MasterApp-infra 的 `apps/mastertravel/deploy.sh`、`docs/step-2-master-travel.md`。
 
 ## 一、為甚麼改

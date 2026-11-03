@@ -4,32 +4,41 @@
 
 ## 一、上線前（負責人與管理者一起）
 
+2026-10-19 起正式環境在 HostKVM 共用伺服器（見 `docs/deploy.md`）。☑ 是負責人在 2026-11-03 核對過的項目；第 7–10 項要管理者在後台確認後自行打勾。
+
 | # | 項目 | 誰 | 完成 |
 |---|---|---|---|
-| 1 | 確認 Google Cloud 香港區主機、獨立資料磁碟與兩個網域；小程序須另備已備案網域 | 管理者 | ☐ |
-| 2 | 兩個子網域（管理端、客戶端）都已有 HTTPS 憑證 | 負責人 | ☐ |
-| 3 | Secret Manager 的 `dualplate-app-env` 已填寫，`DEMO_SEED=0`，`PUBLIC_BASE_URL` 是客戶端網址；主機 `/srv/dualplate/app.env` 已更新 | 負責人 | ☐ |
-| 4 | `curl https://dualplate.masterappinc.com/api/health` 和 `curl https://dualplateadmin.masterappinc.com/api/health` 都回 `ok: true`、`database: ok` | 負責人 | ☐ |
-| 5 | 每日備份排程已設定；手動跑一次 `/srv/dualplate/backup-to-gcs.sh` 成功，備份檔可開啟 | 負責人 | ☐ |
-| 6 | 備份已上傳私有 Cloud Storage bucket，磁碟快照排程已啟用；記下 `docs/deploy.md` 的還原步驟 | 管理者 | ☐ |
-| 7 | 建立第一個管理員（強密碼，至少 10 位），登入後在「設定 → 我的帳號」確認 | 管理者 | ☐ |
+| 1 | 正式主機是 HostKVM 共用伺服器（香港，`45.134.82.239`），兩個網域的 DNS 都指向它。小程序另要已備案網域，見第三節第 5 項 | 負責人 | ☑ |
+| 2 | 兩個子網域（管理端、客戶端）都有 HTTPS 憑證：Let's Encrypt，2027-01-17 到期，由共用 Caddy 自動續期 | 負責人 | ☑ |
+| 3 | 伺服器 `/srv/dualplate/app.env` 的 `DEMO_SEED=0`，`PUBLIC_BASE_URL` 是客戶端網址；改設定時同步更新 Secret Manager 的副本 `dualplate-app-env`（`docs/deploy.md`「改設定與微信小程序」） | 負責人 | ☑ |
+| 4 | `curl https://dualplate.masterappinc.com/api/health` 和 `curl https://dualplateadmin.masterappinc.com/api/health` 都回 `ok: true`、`database: ok` | 負責人 | ☑ |
+| 5 | 每日備份（香港 03:15）和發布前備份都會執行，並上傳到 `gs://dualplate-511819-backups`（保留 35 天）。10/21 起每天都有，記錄沒有失敗 | 負責人 | ☑ |
+| 6 | 還原演練：從 GCS 取一份備份到隔離的位置，完整性檢查 `ok`，筆數核對無誤（`docs/deploy.md`「第一個管理員與還原演練」）。HostKVM 不提供磁碟快照，所以異地備份是唯一的機外副本 | 負責人 | ☐ |
+| 7 | 建立第一個管理員（強密碼，至少 10 位；指令見 `docs/deploy.md`「第一個管理員與還原演練」），登入後在「設定 → 我的帳號」確認 | 管理者 | ☐ |
 | 8 | 在「設定 → 員工」為每位員工開帳號，各自登入一次並改密碼 | 管理者 | ☐ |
 | 9 | 「設定 → 到期事項」逐條看一遍提前提醒天數，按實際習慣調整 | 管理者 | ☐ |
 | 10 | 「出租與租金 → 合約範本」看一遍，按公司實際文字修改 | 管理者 | ☐ |
+| 11 | 在後台設定公司的 WhatsApp 和微信；正式環境目前沒有，自管客戶在客戶端看不到聯絡方法 | 管理者 | ☐ |
+| 12 | 提供聯絡電話、電郵和私隱聯絡人，負責人補進服務條款第十節和私隱聲明第六節，管理者在「設定 → 服務條款」發佈新版本 | 管理者＋負責人 | ☐ |
 
 ## 二、正式資料
 
 正式環境從空白資料庫開始，**不把本機資料庫搬上去**（本機資料已於 2026-10-17 清空）。
 
 1. 建立第一個管理員後，由負責人用已核對的導入資料在正式環境重跑導入（李先生的 12 個指標、公司、批文卡）。
-2. 導入前先手動跑一次 `/srv/dualplate/backup-to-gcs.sh`，確認 GCS 有當日備份。
+2. 導入前先手動跑一次備份，確認 GCS 有當日備份：
+
+   ```bash
+   ssh masterapp-prod 'sudo /srv/dualplate/backup-to-gcs.sh'
+   ```
+
 3. 登入管理端抽查：每位客戶的牌照數、批文卡卡面、到期日、司機登記。
 
 ## 三、開放給客戶前
 
 | # | 項目 | 完成 |
 |---|---|---|
-| 1 | 內部員工試用一週，每日看錯誤記錄（`/srv/dualplate/logs/日期.log`），有錯誤先修 | ☐ |
+| 1 | 內部員工試用一週，每日看錯誤記錄（伺服器 `/srv/dualplate/logs/<日期>.log`；沒有錯誤時不會產生檔案），有錯誤先修 | ☐ |
 | 2 | 為客戶填好「顧問」資料（客戶詳情 → 顧問），客戶端才有致電和微信按鈕 | ☐ |
 | 3 | 委託範圍按實際設定（例如李先生：香港公司客戶自理、內地公司委託我們），今日工作不會派錯 | ☐ |
 | 4 | 「開通客戶登入」後，把系統產生的轉發文字傳給客戶；第一次登入會有 3 步導覽 | ☐ |
@@ -37,7 +46,7 @@
 
 ## 四、回滾方法（出事時）
 
-1. 如果是資料問題，在正式主機執行 `sudo docker compose --env-file /srv/dualplate/deploy.env -f /srv/dualplate/compose.yaml stop api`。
+1. 如果是資料問題，在正式主機（`ssh masterapp-prod`）執行 `sudo docker compose --env-file /srv/dualplate/deploy.env -f /srv/dualplate/compose.yaml stop api`。
 2. 如果是資料問題，按 `docs/deploy.md` 的事故還原步驟，先保留故障檔，再把已核對的備份放回 `/srv/dualplate/data/app.sqlite`。
 3. 如果是新版程式的問題：用 `sudo /srv/dualplate/rollback.sh <舊API映像@sha256> <舊web映像@sha256>` 切回舊摘要。
 4. 若曾停用 API，重新啟動容器；用兩個網域的 `/api/health` 確認。
