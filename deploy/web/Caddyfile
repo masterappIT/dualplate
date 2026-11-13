@@ -45,6 +45,21 @@ http://{$MOBILE_DOMAIN}:80 {
     handle /r/* {
         reverse_proxy dualplate-api:4100
     }
+    # App 下載頁（靜態網頁，deploy/web/download/）：沿用本網域，不開新子網域
+    redir /download /download/ 308
+    handle /download/* {
+        root * /srv
+        # 連結預覽程式（名單同 Master Driver；iMessage 以 facebookexternalhit 身分來）拿寬版分享圖的 preview.html，
+        # 一般人和 iPhone 分享到微信拿 index.html 的方形圖（deploy/web/download/index.html）
+        @linkpreview {
+            path /download/ /download/index.html
+            header_regexp User-Agent (?i)(WhatsApp|facebookexternalhit|Facebot|TelegramBot|Twitterbot|LinkedInBot|Slackbot|Discordbot|SkypeUriPreview|line-poker)
+        }
+        rewrite @linkpreview /download/preview.html
+        header Cache-Control "no-cache"
+        header Vary User-Agent
+        file_server
+    }
     handle /assets/* {
         root * /srv/mobile
         header Cache-Control "public, max-age=31536000, immutable"

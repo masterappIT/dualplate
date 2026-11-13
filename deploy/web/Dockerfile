@@ -19,3 +19,7 @@ FROM caddy:2-alpine
 COPY deploy/web/Caddyfile /etc/caddy/Caddyfile
 COPY --from=admin-build /work/admin/dist /srv/admin
 COPY --from=mobile-build /work/mobile/dist/build/h5 /srv/mobile
+# App 下載頁：圖示動畫沿用客戶端啟動頁的分層 SVG，網頁圖示沿用客戶端的
+COPY deploy/web/download /srv/download
+COPY mobile/src/static/launch /srv/download/launch
+COPY mobile/src/static/web/favicon.ico mobile/src/static/web/apple-touch-icon.png /srv/download/
