@@ -198,6 +198,7 @@ import { useBackClose } from '../../lib/back-close'
 useBackClose()
 import { ref,computed,nextTick } from 'vue'
 import { onLoad,onShow } from '@dcloudio/uni-app'
+import { pickImage } from '../../lib/pick-image'
 import { useChoice,useConfirm } from '../../lib/choice'
 import { canEntrust,startEntrust,isSelfManaged,unsetWord,noDatesWord,forMode,showSelfTag } from '../../lib/api'
 function openScope(id){uni.navigateTo({url:'/pages/scope/scope?id='+id})}
@@ -274,7 +275,7 @@ async function registerVehicle(){if(registeringVehicle.value)return;registeringV
 // 車輛證件：上傳後系統辨識並填入空白資料，回傳最新的車輛與證件清單
 const docs=ref({}),uploadingDoc=ref('')
 async function loadDocs(list){const entries=await Promise.all(list.map(v=>api('/vehicles/'+v.id+'/documents').then(r=>[v.id,r]).catch(()=>[v.id,null])));docs.value={...docs.value,...Object.fromEntries(entries.filter(([,r])=>r))}}
-function pickOne(){return new Promise((resolve,reject)=>uni.chooseImage({count:1,sizeType:['compressed'],sourceType:['camera','album'],success:resolve,fail:e=>/cancel/.test(e.errMsg||'')?resolve(null):reject(new Error('未能選擇相片'))}))}
+function pickOne(){return new Promise((resolve,reject)=>pickImage({count:1,sizeType:['compressed'],sourceType:['camera','album'],success:resolve,fail:e=>/cancel/.test(e.errMsg||'')?resolve(null):reject(new Error('未能選擇相片'))}))}
 async function uploadDoc(v,d){if(uploadingDoc.value)return;try{const picked=await pickOne();if(!picked)return;uploadingDoc.value=v.id+':'+d.kind;const {data}=await cardPhoto(picked);const r=await api('/vehicles/'+v.id+'/documents/'+d.kind,'POST',{image:data});docs.value={...docs.value,[v.id]:{vehicleId:r.vehicleId,retired:r.retired,documents:r.documents,checks:r.checks}};if(r.vehicle)vehicles.value=vehicles.value.map(item=>item.id===v.id?r.vehicle:item);if(r.applied?.length){summary.value=await api('/my/plates/'+plateId);loadPending()}uni.showToast({title:!d.recognizable?'已上傳':r.recognitionFailed?'已上傳，未能辨識，請手動填寫':r.applied?.length?'已讀出並填入'+r.applied.map(a=>a.label).join('、'):'已上傳，請對照核對',icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{uploadingDoc.value=''}}
 function editVehicle(v){if(editingVehicleId.value===v.id){editingVehicleId.value='';return}vehicleForm.value={plate:v.plate||'',brand:v.brand||'',model:v.model||'',vin:v.vin||'',manufacturedYear:v.manufactured_year?String(v.manufactured_year):'',firstRegisteredOn:v.first_registered_on||''};editingVehicleId.value=v.id}
 async function saveVehicle(v){if(savingVehicle.value)return;const newPlate=vehicleForm.value.plate.trim();if(newPlate&&v.plate&&newPlate.toUpperCase()!==v.plate.toUpperCase()){const did=await askChange('車牌由 '+v.plate+' 改為 '+newPlate,'換車');if(did===null)return;if(did){editingVehicleId.value='';return openSelf('vehicle_change',newPlate)}}savingVehicle.value=true;try{const updated=await api('/my/vehicles/'+v.id,'PATCH',{...vehicleForm.value,manufacturedYear:String(vehicleForm.value.manufacturedYear||'')});vehicles.value=vehicles.value.map(item=>item.id===v.id?updated:item);editingVehicleId.value='';loadPending();uni.showToast({title:forMode('已更新，顧問會再核對','已更新'),icon:'none'})}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{savingVehicle.value=false}}

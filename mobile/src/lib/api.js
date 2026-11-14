@@ -1,3 +1,4 @@
+import { pickImage } from './pick-image'
 const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4100'
 export function getToken() { return uni.getStorageSync('token') }
 export function saveSession(result) { uni.setStorageSync('token', result.token); uni.setStorageSync('user', result.user); try { uni.removeStorageSync('serviceMode') } catch {}; resetTermsCheck() }
@@ -187,7 +188,7 @@ export async function viewVehicleDocument(vehicleId, kind) {
 export const MAX_UPLOAD = 5 * 1024 * 1024
 // 選相片（相機或相簿）；回傳 [{ name, path, size }]
 export function pickPhotos() {
-  return new Promise((resolve, reject) => uni.chooseImage({ count: 6, sizeType: ['compressed'], sourceType: ['camera', 'album'],
+  return new Promise((resolve, reject) => pickImage({ count: 6, sizeType: ['compressed'], sourceType: ['camera', 'album'],
     success: r => resolve((r.tempFiles || []).map((f, i) => ({ name: f.name || `相片${i + 1}.jpg`, path: f.path || r.tempFilePaths[i], size: f.size }))),
     fail: e => /cancel/.test(e.errMsg || '') ? resolve([]) : reject(new Error('未能選擇相片')) }))
 }

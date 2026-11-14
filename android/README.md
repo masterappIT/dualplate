@@ -35,6 +35,13 @@ DCloud uni-app App 版，用 DCloud 安卓離線 SDK 5.34 打包。包名 `com.m
 
 底部導航列和狀態列在啟動期間設成深綠（主題設定，加上 `LaunchNavBar.java`：Android 15 起 DCloud 在導航列後面另墊一塊近白色的底，要另外改）。雙牌合位頁離開時還原成 DCloud 預設的近白色；有底部標籤列的頁面，DCloud 會再改成標籤列的顏色。
 
+## 私隱同意框和權限
+
+- 第一次打開先顯示 DCloud 的私隱同意框（`AndroidManifest.xml` 的 `DCLOUD_PRIVACY_PROMPT`，內容在 `mobile/src/androidPrivacy.json`），同意前不載入 App；按「不同意」再問一次，再不同意就退出。連結打開網站的服務條款和私隱聲明頁（`/#/pages/terms/terms`）。改了私隱聲明而要用戶重新同意時，把 `androidPrivacy.json` 的 `version` 加 1。
+- 權限：網絡、相機、讀相片（Android 13 起只讀相片；12 或以下讀儲存空間）、安裝更新（App 內更新用）。DCloud 自帶而本 App 用不到的已拿掉：華為和 vivo 的圖示角標（`tools:node="remove"`），以及讀取設備廣告標識的 `oaid_sdk`（連同它的兩個 MSA 權限）。
+- 讀影片、寫入儲存空間兩個權限由 DCloud 帶入，暫時保留：要先用帳戶測試拍照和選相片，確認拿掉後仍正常。Android 14 起「只允許部分相片」（`READ_MEDIA_VISUAL_USER_SELECTED`）也由 DCloud 帶入，本 App 的流程同樣用到，要保留。
+- 申請相機或相片權限時，頂部同時顯示用途說明卡；被拒時頂部提示到手機設定開啟（`mobile/src/lib/pick-image.js`，批文卡相機頁也用它）。iOS 和網頁版照舊直接呼叫 `uni.chooseImage`。權限流程寫入系統記錄，查問題時用 `adb logcat -s DualplatePerm`。
+
 ## App 內更新
 
 APK 在網站下載（`/download/`），不經 Google Play，所以由 App 自己檢查新版本（`mobile/src/lib/app-update.js`）：

@@ -128,6 +128,7 @@ const { sheet,choose,onSelect,onClose }=useChoice(),confirmBox=useConfirm()
 import { ref,computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { api,cardPhoto,forgetCardOriginal,forMode } from '../../lib/api'
+import { pickImage } from '../../lib/pick-image'
 import CardCapture from '../../components/CardCapture.vue'
 const names={vehicle_change:'自行換車',renewal:'自行續期',driver_change:'自行換司機',stop_renewal:'不再續期',inspection_done:'自行驗車',filing_done:'自行備案',tax_paid:'自行繳交行車稅',crossing_change:'自行口岸變更',company_change:'自行商號變更',replacement:'自行補領'}
 // 驗車、新批文備案只是標記一期辦好，不用拍新批文卡
@@ -166,7 +167,7 @@ function setDone(doc,done){renewal.value={...renewal.value,[doc.code]:{done,expi
 function setMain(index){drivers.value=drivers.value.map((d,i)=>({...d,role:i===index?'主':'副'}))}
 function addDriver(){drivers.value.push({name:'',role:drivers.value.some(d=>d.role==='主')?'副':'主',phone:'',dates:{}})}
 async function uploadCard(side){const photo=await capture.value.open({side});if(!photo)return;busy.value=true;try{const image=photo.data;await api('/plate-assets/'+plateId.value+'/card/'+side,'POST',{image});forgetCardOriginal(plateId.value);uploaded.value={...uploaded.value,[side]:true};form.value=await api('/my/plates/'+encodeURIComponent(plateId.value)+'/self-handled/form');fillDefaults();uni.showToast({title:'已上傳，請核對下面的資料',icon:'none'})}catch(e){uni.showToast({title:e.message||'上傳失敗',icon:'none'})}finally{busy.value=false}}
-function addPhoto(){uni.chooseImage({count:1,sizeType:['original'],sourceType:['album','camera'],success:async result=>{busy.value=true;try{photos.value.push(await cardPhoto(result))}catch(e){uni.showToast({title:e.message||'相片讀取失敗',icon:'none'})}finally{busy.value=false}}})}
+function addPhoto(){pickImage({count:1,sizeType:['original'],sourceType:['album','camera'],success:async result=>{busy.value=true;try{photos.value.push(await cardPhoto(result))}catch(e){uni.showToast({title:e.message||'相片讀取失敗',icon:'none'})}finally{busy.value=false}}})}
 async function viewPhoto(index){const i=await choose('這張相片',['放大查看','移除這張']);if(i===0)uni.previewImage({urls:photos.value.map(p=>p.path),current:photos.value[index].path});else if(i===1)photos.value.splice(index,1)}
 function body(){
   const base={kind:kind.value,handledOn:handledOn.value}

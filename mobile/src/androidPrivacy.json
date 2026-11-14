@@ -1,0 +1,30 @@
+{
+  "version": "1",
+  "prompt": "template",
+  "title": "服務條款及私隱聲明",
+  "message": "歡迎使用跨境車牌管家。使用前請閱讀<a href=\"https://dualplate.masterappinc.com/#/pages/terms/terms\">《服務條款》</a>和<a href=\"https://dualplate.masterappinc.com/#/pages/terms/terms?tab=privacy\">《私隱聲明》</a>，了解我們收集甚麼資料、用途和你的權利。<br/>相機和相片只會在你選擇拍照或上傳相片時使用。<br/>按「同意並繼續」，即表示你已閱讀並同意以上條款。",
+  "buttonAccept": "同意並繼續",
+  "buttonRefuse": "不同意",
+  "hrefLoader": "default",
+  "backToExit": false,
+  "second": {
+    "title": "需要你的同意",
+    "message": "不同意<a href=\"https://dualplate.masterappinc.com/#/pages/terms/terms\">《服務條款》</a>和<a href=\"https://dualplate.masterappinc.com/#/pages/terms/terms?tab=privacy\">《私隱聲明》</a>，就不能使用本 App。",
+    "buttonAccept": "同意並繼續",
+    "buttonRefuse": "退出 App"
+  },
+  "disagreeMode": {
+    "support": false,
+    "loadNativePlugins": false,
+    "visitorEntry": false,
+    "showAlways": false
+  },
+  "styles": {
+    "backgroundColor": "#FFFFFF",
+    "borderRadius": "12px",
+    "title": { "color": "#14201B" },
+    "content": { "color": "#14201B" },
+    "buttonAccept": { "color": "#0F5C4A" },
+    "buttonRefuse": { "color": "#6B7A73" }
+  }
+}

@@ -45,6 +45,7 @@ export default { methods: { stageEvent(event) { this.$.exposed?.stageEvent(event
 <!-- #endif -->
 <script setup>
 import { ref, computed, nextTick, onBeforeUnmount, getCurrentInstance } from 'vue'
+import { pickImage, askPermission, notifyDenied } from '../lib/pick-image'
 // #ifdef H5
 import { createCardStage } from '../lib/card-stage'
 // #endif
@@ -81,7 +82,7 @@ async function open(options = {}) {
   side.value = options.side === 'back' ? 'back' : 'front'
   // #ifdef MP
   // 小程序暫時沿用系統選相片
-  return new Promise(resolve => uni.chooseImage({ count: 1, sizeType: ['original'], sourceType: ['album', 'camera'], success: async result => { try { resolve(await cardPhoto(result)) } catch (e) { uni.showToast({ title: e.message, icon: 'none' }); resolve(null) } }, fail: () => resolve(null) }))
+  return new Promise(resolve => pickImage({ count: 1, sizeType: ['original'], sourceType: ['album', 'camera'], success: async result => { try { resolve(await cardPhoto(result)) } catch (e) { uni.showToast({ title: e.message, icon: 'none' }); resolve(null) } }, fail: () => resolve(null) }))
   // #endif
   // #ifdef APP-PLUS
   // App 的頁面上有原生標題列，對準框要全螢幕，所以另開一頁；那一頁再以 here 打開本元件
@@ -102,12 +103,10 @@ async function open(options = {}) {
 }
 // #ifdef APP-PLUS
 // 安卓的網頁鏡頭要 App 先取得系統相機權限，系統不會自動詢問，所以開鏡頭前先問（第一次會彈出系統詢問）。
-// 拒絕了照樣繼續：鏡頭開不了，畫面改為「拍照／從相冊選」（原有流程）。iOS 由系統自動詢問，不經這裏。
-function cameraPermission() {
-  if (plus.os.name !== 'Android') return Promise.resolve()
-  return new Promise(resolve => {
-    try { plus.android.requestPermissions(['android.permission.CAMERA'], () => resolve(), () => resolve()) } catch { resolve() }
-  })
+// 拒絕了照樣繼續：鏡頭開不了，畫面改為「拍照／從相冊選」（原有流程）。iOS 由系統自動詢問，不經這裏（askPermission 對 iOS 直接回傳）。
+// 詢問時頂部同時顯示相機用途說明；被拒時頂部提示到設定開啟，與選相片被拒的提示相同（lib/pick-image.js）
+async function cameraPermission() {
+  if (!await askPermission('camera')) notifyDenied('camera')
 }
 // #endif
 // #ifdef H5
@@ -117,7 +116,7 @@ async function startStage() { view = createCardStage(host(), () => frame.value);
 function stopStage() { view?.stopCamera(); view?.clear(); view = null; picked.value = false }
 function shoot() { const result = view?.shoot(); if (result) settle(result) }
 function pickAlbum() {
-  uni.chooseImage({ count: 1, sizeType: ['original'], sourceType: ['album'], success: result => {
+  pickImage({ count: 1, sizeType: ['original'], sourceType: ['album'], success: result => {
     if (!view) view = createCardStage(host(), () => frame.value)
     view.showImage(result.tempFilePaths[0]).then(() => { mode.value = 'album'; picked.value = true }, () => uni.showToast({ title: '這張照片無法讀取，請改用相機拍攝或選 JPG、PNG 照片', icon: 'none' }))
   } })
@@ -156,7 +155,7 @@ function readDataUrl(path) {
 }
 function pickPhoto(source) {
   lastSource = source
-  uni.chooseImage({ count: 1, sizeType: ['original'], sourceType: [source], success: async result => {
+  pickImage({ count: 1, sizeType: ['original'], sourceType: [source], success: async result => {
     try { send('image', { src: await readDataUrl(result.tempFilePaths[0]) }) } catch { stageEvent({ type: 'unreadable' }) }
   } })
 }

@@ -11,6 +11,9 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <!-- App 內更新：下載新 APK 後交給系統安裝（mobile/src/lib/app-update.js） -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- DCloud 自帶、本 App 用不到的權限：華為和 vivo 的圖示角標（本 App 沒有推送通知） -->
+    <uses-permission android:name="com.huawei.android.launcher.permission.CHANGE_BADGE" tools:node="remove" />
+    <uses-permission android:name="com.vivo.notification.permission.BADGE_ICON" tools:node="remove" />
 
     <application
         android:name=".DualplateApplication"
@@ -58,6 +61,10 @@
         <meta-data
             android:name="dcloud_appkey"
             android:value="${DCLOUD_APPKEY}" />
+        <!-- 第一次打開先顯示私隱同意框，同意前不載入 App（內容在 mobile/src/androidPrivacy.json） -->
+        <meta-data
+            android:name="DCLOUD_PRIVACY_PROMPT"
+            android:value="template" />
         <meta-data
             android:name="DCLOUD_DARK_MODE"
             android:value="light" />

@@ -137,13 +137,25 @@ function checkApk(path, versionCode) {
   }
 }
 
-// 交給系統安裝；第一次會要求允許本 App「安裝未知應用」
-// 安裝模組缺失時 plus.runtime.install 不會回應（android/app/client/build.gradle 的 install-apk-release.aar），10 秒沒回應當失敗，免得 check() 一直不完成、條款提示永遠不出
+// 交給系統安裝；第一次系統會要求允許本 App「安裝未知應用」（系統安裝畫面自己處理，用戶在設定停留多久都不影響）。
+// plus.runtime.install 只是打開系統安裝畫面（DCloud 的 install-apk-release.aar：FileUtils.addFileToSystem → startActivity），
+// 所以 App 一轉到背景（系統安裝畫面已在前面）就當交給系統成功，不再等回呼。
+// 安裝模組缺失時 plus.runtime.install 不會回應（android/app/client/build.gradle 的 install-apk-release.aar）：
+// 10 秒內既沒回呼、App 也沒轉到背景才當失敗，免得 check() 一直不完成、條款提示永遠不出
 function install(path) {
   return new Promise((resolve, reject) => {
-    const fail = () => reject(new Error('未能安裝，請到下載頁下載新版本'))
-    const timer = setTimeout(fail, 10000)
-    plus.runtime.install(path, { force: false }, () => { clearTimeout(timer); resolve() }, () => { clearTimeout(timer); fail() })
+    let done = false
+    const finish = ok => {
+      if (done) return
+      done = true
+      clearTimeout(timer)
+      plus.globalEvent.removeEventListener('pause', onPause)
+      ok ? resolve() : reject(new Error('未能安裝，請到下載頁下載新版本'))
+    }
+    const onPause = () => finish(true)
+    const timer = setTimeout(() => finish(false), 10000)
+    plus.globalEvent.addEventListener('pause', onPause)
+    plus.runtime.install(path, { force: false }, () => finish(true), () => finish(false))
   })
 }
 // #endif
