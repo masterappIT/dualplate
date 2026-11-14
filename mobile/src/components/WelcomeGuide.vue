@@ -34,12 +34,17 @@ onMounted(() => {
 })
 function close() { open.value = false; step.value = 0; emit('closed') }
 // 安卓返回鍵等於「略過」（所在頁面要呼叫 useBackClose()）
-closeOnBack(() => open.value, close)
+// 安卓 App 的底部導航列跟着遮罩變暗，顏色與 .guide-mask 相同（lib/nav-bar.js）
+closeOnBack(() => open.value, close, 'rgba(11,59,48,.55)')
 function next() { if (step.value < steps.length - 1) step.value++; else close() }
 </script>
 <style scoped>
 .guide-mask{position:fixed;inset:0;z-index:999;background:rgba(11,59,48,.55);display:flex;align-items:flex-end;justify-content:center;padding:16px}
 .guide-card{width:100%;max-width:640px;background:var(--card);border-radius:var(--r-panel);padding:20px 16px calc(16px + env(safe-area-inset-bottom));box-shadow:var(--float)}
+/* #ifdef APP-PLUS */
+/* 安卓 App 不多留導航列高度（見 App.vue 的 .page） */
+@supports not (-webkit-touch-callout:none){.guide-card{padding-bottom:16px}}
+/* #endif */
 .guide-step{display:block;color:var(--ink-3);font-size:var(--fs-cap);font-weight:700}
 .guide-title{display:block;margin:4px 0 8px;font-size:var(--fs-title);font-weight:800;color:var(--jade-deep)}
 .guide-body{display:block;color:var(--ink-2);font-size:var(--fs-body);line-height:1.7}

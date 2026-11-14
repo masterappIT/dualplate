@@ -1,11 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 啟動時的視窗底：深綠，正中雙牌（splash_logo 各密度都是 180dp，按原尺寸置中，不拉伸）。
-     Android 5（API 21–22）用：layer-list 的寬高屬性要 Android 6.0 起才支援，6.0 起改用 drawable-v23 的版本。 -->
+<!-- 啟動時的視窗底（Android 5，API 21–22）：只有深綠。layer-list 的寬高和置中要 Android 6.0 起才支援（見 drawable-v23），向量標誌在這裏會被拉伸，所以不放。 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/launch_jade" />
-    <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@drawable/splash_logo" />
-    </item>
 </layer-list>

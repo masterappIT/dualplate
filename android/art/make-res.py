@@ -1,4 +1,4 @@
-# 產生安卓圖示與啟動圖素材：dp 換算以 16 px/dp 的母版縮小到各密度
+# 產生安卓圖示素材：dp 換算以 16 px/dp 的母版縮小到各密度（啟動畫面的白色 M 雲見 make-splash.sh）
 # 用法：python3 make-res.py <android/art> <android/app/client/src/main/res> <iOS 淺色 1024 圖示>
 import sys, os
 from PIL import Image, ImageDraw
@@ -27,13 +27,6 @@ for name, f in D.items():
     save(fg_master.resize((px(108), px(108)), Image.LANCZOS), f'{OUT}/mipmap-{name}/ic_launcher_foreground.png')
     save(legacy_sq.resize((px(48), px(48)), Image.LANCZOS), f'{OUT}/mipmap-{name}/ic_launcher.png')
     save(legacy_round.resize((px(48), px(48)), Image.LANCZOS), f'{OUT}/mipmap-{name}/ic_launcher_round.png')
-    save(plates.resize((px(180), px(180)), Image.LANCZOS), f'{OUT}/drawable-{name}/splash_logo.png')
-    # DCloud 啟動圖（運行時按名稱找 drawable/splash）：深綠底 360×800dp，正中 180dp 雙牌。
-    # DCloud 按圖片原本的 dp 尺寸置中顯示，不拉伸；螢幕比圖大時，四周露出的也是深綠視窗底
-    sp = Image.new('RGBA', (px(360), px(800)), (11, 59, 48, 255))
-    logo = plates.resize((px(180), px(180)), Image.LANCZOS)
-    sp.alpha_composite(logo, ((px(360) - px(180)) // 2, (px(800) - px(180)) // 2))
-    save(sp.convert('RGB'), f'{OUT}/drawable-{name}/splash.png')
     # DCloud 運行時按名稱找 drawable/icon（例如通知），與桌面圖示同一張
     save(legacy_sq.resize((px(48), px(48)), Image.LANCZOS), f'{OUT}/drawable-{name}/icon.png')
 # Play 商店 512 圖示：與 App Store 同一張（iOS 淺色 1024）

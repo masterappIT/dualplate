@@ -3,7 +3,8 @@
        之後換上 Figma 1616:666 的分層（static/launch/，原圖匯出，M 只等比縮放；只要兩塊車牌，不要圖示的方塊外框）播「雙牌合位」：
        黃色香港牌與黑色內地牌分開再彈回合上，螺絲一閃；等候時反光掃過兩塊玻璃牌。 -->
   <view class="launch">
-    <view class="mark" :class="{ leave }" :style="{ top: top + 'px' }">
+    <!-- 安卓：不播動畫，原生啟動畫面（深綠、白色 M 雲）一直蓋着，登入頁或首頁出現才拿走（見 script） -->
+    <view v-if="!nativeOnly" class="mark" :class="{ leave }" :style="{ top: top + 'px' }">
       <image class="logo" :class="{ off: ready }" src="/static/launch-logo.png" @load="shown" @error="shown" />
       <view class="stage" :class="{ on: ready, play: ready }">
         <view class="art">
@@ -29,21 +30,22 @@
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { prefetchHome } from '../../lib/launch'
-// 安卓正式包的原生輔助（android/app 的 LaunchNavBar）：啟動期間導航列底色、導航列高度；其他環境為 null
-let navBar = null
+// 安卓正式包的原生輔助（android/app），其他環境為 null：
+// LaunchNavBar：底部導航列那一條的顏色；LaunchCover：原生啟動畫面（深綠、白色 M 雲，蓋住整個螢幕連導航列），登入頁或首頁出現後拿走
+let navBar = null, cover = null
 // #ifdef APP-PLUS
 if (plus.os.name === 'Android') {
   try { navBar = plus.android.importClass('com.masterappinc.dualplate.LaunchNavBar') } catch (e) { navBar = null }
+  try { cover = plus.android.importClass('com.masterappinc.dualplate.LaunchCover') } catch (e) { cover = null }
 }
 // #endif
 // 圖示畫布 180px，置於整個螢幕正中（與 storyboard 的 centerY 一致，不按安全區）
-// 安卓的網頁不延伸到底部導航列，原生啟動畫面卻按整個螢幕置中；加回導航列高度，接上時雙牌才不會向上跳
 function markTop() {
-  let height = uni.getWindowInfo().screenHeight
-  if (navBar) height += Number(navBar.insetDp()) || 0
-  return height / 2 - 90
+  return uni.getWindowInfo().screenHeight / 2 - 90
 }
 const top = ref(markTop())
+// 安卓（管理者 2026-11-15 決定）：不播雙牌合位，只有原生啟動畫面（白色 M 雲），直接接登入頁或首頁；iOS 和網頁版照舊
+const nativeOnly = !!navBar || (typeof plus !== 'undefined' && plus.os && plus.os.name === 'Android')
 const ready = ref(false), leave = ref(false)
 // 至少停留 2 秒（管理者要求加長），合位動畫和第一道反光播完才離開；資料慢就繼續反光等資料
 const MIN_SHOW = 2000, FADE = 220, LAYERS = 6
@@ -70,7 +72,27 @@ function go() {
     setTimeout(() => uni.reLaunch({ url: next }), FADE)
   }, Math.max(0, start + MIN_SHOW - FADE - Date.now()))
 }
+// 安卓：原生啟動畫面（LaunchCover，白色 M 雲）蓋着整個螢幕，登入頁或首頁顯示好才拿走，中間不露出網頁或底部白條
+function closeNative() {
+  if (closed) return
+  closed = true
+  if (navBar) navBar.restore() // 導航列那一條換成頁面的顏色，仍在啟動畫面下面
+  plus.navigator.closeSplashscreen()
+  if (cover) cover.hide()
+}
+function openHomeUnderSplash(url) {
+  const close = closeNative
+  uni.reLaunch({ url, success: close, fail: close })
+  setTimeout(close, 3000)
+}
 onLoad(() => {
+  // #ifdef APP-PLUS
+  if (nativeOnly) {
+    setTimeout(closeNative, 15000) // 萬一一直沒有網絡回應，也不讓啟動畫面卡住
+    prefetchHome().then(openHomeUnderSplash)
+    return
+  }
+  // #endif
   start = Date.now()
   setTimeout(closeSplash, 800) // 圖片事件萬一沒有觸發，也不讓啟動畫面卡住
   prefetchHome().then(url => { next = url; go() })

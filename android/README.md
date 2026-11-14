@@ -1,6 +1,6 @@
 # 安卓離線打包
 
-DCloud uni-app App 版，用 DCloud 安卓離線 SDK 5.34 打包。包名 `com.masterappinc.dualplate`，名稱「跨境車牌管家」（與 iOS 一致），DCloud appid `__UNI__09DF642`。圖示和啟動畫面與 iOS 正式版同一套設計，素材說明見 `android/art/README.md`。
+DCloud uni-app App 版，用 DCloud 安卓離線 SDK 5.34 打包。包名 `com.masterappinc.dualplate`，名稱「跨境車牌管家」（與 iOS 一致），DCloud appid `__UNI__09DF642`。圖示與 iOS 正式版同一套設計；啟動畫面是深綠底、白色 MasterApp 標誌（iOS 仍是雙牌合位動畫，見下文）。素材說明見 `android/art/README.md`。
 
 ## 本機
 
@@ -24,16 +24,31 @@ DCloud uni-app App 版，用 DCloud 安卓離線 SDK 5.34 打包。包名 `com.m
 
 **沒有 appkey 的包只能看啟動畫面**：DCloud 會彈出「Appkey is not configured or configured incorrectly」，按 OK 後 App 直接退出。appkey 綁定包名和簽名指紋，用別的金鑰簽的包同樣會彈出這個錯誤。目前的 appkey 在 DCloud 開發者中心 › `dualplate` › 各平台信息 › Android App 正式版（2026-11-14 建立）。
 
-## 啟動畫面怎樣接上
+## 啟動畫面
 
-順序與 iOS 一樣：深綠底、正中 180dp 雙牌，接 `mobile/src/pages/launch/launch.vue` 的雙牌合位動畫。
+安卓只有一個靜態畫面：深綠底、正中白色 MasterApp 標誌（M 雲，100×76dp），一直顯示到登入頁或首頁出現，不播雙牌合位動畫（管理者 2026-11-15 決定；iOS 和網頁版照舊播）。以前安卓要經過系統啟動畫面、DCloud 啟動圖、雙牌合位頁三層雙牌，DCloud 那層只在導航列以上置中，雙牌大小位置對不上，看起來像兩段動畫。
 
-1. Android 12 起：系統啟動畫面（`res/values-v31/styles.xml`、`res/drawable-v31/launch_icon.xml`）。圖示用自適應圖示格式，縮放比例才固定；雙牌四邊留 14.5% 是在 Android 17 模擬器上量出來的。
-2. 視窗底（`res/drawable*/launch_background.xml`）：入口畫面和 DCloud 主畫面的主題都用它，換畫面時不會露出灰色或白色。
-3. DCloud 啟動圖（`res/drawable-*/splash.png`，由 `android/art/make-res.py` 產生）。
-4. 雙牌合位頁。
+由按下圖示起，先後經過下面幾層，都用同一張圖（`res/drawable/launch_mark.xml`），大小位置一樣，看不出切換：
 
-底部導航列和狀態列在啟動期間設成深綠（主題設定，加上 `LaunchNavBar.java`：Android 15 起 DCloud 在導航列後面另墊一塊近白色的底，要另外改）。雙牌合位頁離開時還原成 DCloud 預設的近白色；有底部標籤列的頁面，DCloud 會再改成標籤列的顏色。
+1. Android 12 起的系統啟動畫面（`res/values-v31/styles.xml`、`res/drawable-v31/launch_icon.xml`），每個 App 都一定有，關不掉。系統把 108dp 畫布顯示為 288dp（Android 17 模擬器實測），`launch_icon.xml` 按比例留邊，令標誌顯示為 100×76dp。
+2. 入口畫面和 DCloud 主畫面的視窗底（`res/drawable-v23/launch_background.xml`）。Android 5 只有深綠（`res/drawable/launch_background.xml`，那時的 layer-list 不能指定大小和置中）。
+3. `LaunchCover.java`：叫 DCloud 不建立它自己的啟動圖（啟動 Intent 的 `__splash_view__` 設成 false；那張圖會被拉伸到整個螢幕，之後又縮到導航列以上，標誌會變大再移位），再在 DCloud 主畫面最上面蓋一層同一張圖的畫面，連導航列也蓋住，網頁載入時的灰白和底部近白色的底都不會露出。`mobile/src/pages/launch/launch.vue` 在安卓上不畫任何東西，只取首頁資料，打開登入頁或首頁後呼叫 `LaunchCover.hide()` 淡出（萬一沒有呼叫，15 秒後自動拿走）。
+4. DCloud 啟動圖 `res/drawable-*/splash.png`（`android/art/make-splash.sh` 產生）：平時不顯示，只在第 3 步叫 DCloud 不建立它失敗時才出現，所以同樣畫成深綠底白色標誌。
+
+`LaunchCover` 和 `LaunchNavBar` 每次 DCloud 主畫面建立都重新做：按返回鍵離開後再打開、更新後重開時，程序可能還在，只做第一次的話會露出 DCloud 啟動圖和底部白條（試做時出現過）。
+
+2026-11-15 在 Android 17 模擬器錄影逐格核對冷開機、完全關掉後打開、按返回鍵離開再打開三種情況：系統畫面到 `LaunchCover` 標誌位置大小不變，淡入首頁時沒有空白、沒有底部白條。模擬器上標誌停留約 7 秒（真機應快得多）。Android 11 未測。
+
+## 底部導航列那一條
+
+Android 15 起 DCloud 把網頁縮到導航列以上（`android:id/content` 的外邊距固定設成導航列高度，改了會被它不停改回），在導航列後面墊一塊近白色 `#FCFCFC` 的底；iOS 的 `safearea.bottom.offset: none` 在安卓不起作用。所以不改排版，只由 `LaunchNavBar.java` 把那一條塗成 iPhone 上同一位置的顏色：
+
+- 啟動期間深綠，被 `LaunchCover` 蓋住；打開登入頁或首頁時換成頁面的顏色。
+- 之後由 `mobile/src/lib/nav-bar.js`（只在安卓 App 執行）按頁面指定：有標籤列的頁面跟標籤列（白色），其他頁面用頁面底色 `#F7F6F1`（批文卡相機頁黑色）；彈窗打開時跟遮罩一起淡入淡出，變成遮罩疊在頁面底色上的顏色。標籤頁的彈窗遮罩蓋不到標籤列，那一條保持白色，與 iPhone 一致。彈窗由 `mobile/src/lib/back-close.js` 登記。
+- DCloud 在畫面高度變化時（例如彈出鍵盤）會另墊新的底，又變回 `#FCFCFC`，每次排版後檢查並塗回。
+- 安卓 WebView 的 `env(safe-area-inset-bottom)` 仍回報導航列高度（Android 17 為 24px），但網頁已停在導航列上面，所以 `App.vue` 的 `.page`、`WelcomeGuide.vue`、`CardCapture.vue` 在安卓不再多留這段。App 裏用 `-webkit-touch-callout`（只有 iPhone 的 WebView 支援）分辨，萬一以後 iOS 不再支援它，iPhone 頁面底部會少留安全區。
+
+2026-11-15 在 Android 17 模擬器逐項核對：啟動接首頁、首頁、標籤頁的批文卡預覽、牌照詳情頁、「有變動？」選單（含第二層和返回鍵關閉）、退出登入確認框、使用導覽、表單頁鍵盤彈出再收起、批文卡相機頁、頁面底部留白。模擬器較慢，第一次打開「有變動？」選單時，那一條比選單早約 1 秒變暗；真機未測。
 
 ## 私隱同意框和權限
 
@@ -65,11 +80,6 @@ APK 在網站下載（`/download/`），不經 Google Play，所以由 App 自�
 
 ## 已知問題
 
-- **雙牌位置和大小在接上時仍有變化，第一版接受、不修**（經理 2026-11-14 決定）。在 Android 11 模擬器（`Dualplate_API_30`）和 Android 17 模擬器（`Medium_Phone_API_37.0`）上，DCloud 啟動圖和雙牌合位頁（`launch.vue`）的雙牌比原生畫面偏高約 12 至 23dp，大小也不一致，啟動時看得到雙牌輕微跳動。以後要修時從下面的量度記錄開始查。
-- 量度記錄（2026-11-14 配好 appkey 後實測；沒有 appkey 時頁面根本呼叫不到原生類別，配好後 `LaunchNavBar.insetDp()`、`restore()` 都正常被呼叫，Android 11 回傳 48dp，頁面算出的位置正確）：
-  - Android 17：視窗底的雙牌在螢幕正中；DCloud 啟動圖顯示時向上約 12dp（看來它只畫在導航列以上的範圍）；雙牌合位頁回到正中，但雙牌寬度約為原生的 87%。
-  - Android 11：雙牌合位頁比原生畫面高約 23dp，大小也不一致，原因未查明。
-  - 導航列由原生程式在 DCloud 換上網頁後 2.22 秒還原（最遲 8 秒），雙牌合位頁離開時也會呼叫 `restore()`。
 - Android 13 的單色主題圖示沒有做；安卓沒有深色模式圖示。
 - 用戶在系統安裝畫面按取消後，App 要下次打開才會再提示更新（一般更新可接受，未改）。
 

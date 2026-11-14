@@ -222,5 +222,7 @@ export default {
 .top{top:var(--status-bar-height)}
 .bottom{bottom:env(safe-area-inset-bottom)}
 .buttons{bottom:calc(48px + env(safe-area-inset-bottom))}
+/* 安卓 App：網頁停在導航列上面，不多留導航列高度（見 App.vue 的 .page） */
+@supports not (-webkit-touch-callout:none){.bottom{bottom:0}.buttons{bottom:48px}}
 /* #endif */
 </style>
