@@ -13,6 +13,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { getUser, isSelfManaged } from '../lib/api'
+import { closeOnBack } from '../lib/back-close'
 const props = defineProps({ force: Boolean })
 const emit = defineEmits(['closed'])
 // 自管客戶（自己管理）看另一套導覽：沒有顧問、全部事項自己辦
@@ -32,6 +33,8 @@ onMounted(() => {
   try { if (!uni.getStorageSync(key())) { uni.setStorageSync(key(), Date.now()); open.value = true } } catch { open.value = false }
 })
 function close() { open.value = false; step.value = 0; emit('closed') }
+// 安卓返回鍵等於「略過」（所在頁面要呼叫 useBackClose()）
+closeOnBack(() => open.value, close)
 function next() { if (step.value < steps.length - 1) step.value++; else close() }
 </script>
 <style scoped>

@@ -90,6 +90,9 @@
   </view>
 </template>
 <script setup>
+import { useBackClose } from '../../lib/back-close'
+// 安卓返回鍵先關本頁的彈窗（lib/back-close.js）
+useBackClose()
 import { ref, computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { api, getUser, money, copyText, openLink, pickPhotos, pickPdf, readBase64, privateImage, forMode } from '../../lib/api'

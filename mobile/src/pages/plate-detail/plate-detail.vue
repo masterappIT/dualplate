@@ -193,6 +193,9 @@
   </view>
 </template>
 <script setup>
+import { useBackClose } from '../../lib/back-close'
+// 安卓返回鍵先關本頁的彈窗（lib/back-close.js）
+useBackClose()
 import { ref,computed,nextTick } from 'vue'
 import { onLoad,onShow } from '@dcloudio/uni-app'
 import { useChoice,useConfirm } from '../../lib/choice'

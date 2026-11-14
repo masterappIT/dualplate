@@ -41,6 +41,7 @@ import { computed,ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { api,getUser,daysText,unsetWord,noDatesWord,isSelfManaged,forMode } from '../../lib/api'
 import ApprovalCard from '../../components/ApprovalCard.vue'
+import { closeOnBack,useBackClose } from '../../lib/back-close'
 const plates=ref([]),summaries=ref([]),details=ref({}),loaded=ref(false),selectedPlateId=ref(''),flipped=ref(false),mode=ref(uni.getStorageSync('plateView')||'cards'),keyword=ref(''),filter=ref('')
 const healthLabel={ok:'正常',due:'快到期',overdue:'已逾期',pending:noDatesWord()},healthTone={ok:'',due:'amber',overdue:'red',pending:'gray'},noteTone={overdue:'note-red',due:'note-amber',upcoming:'note-green',ok:'note-gray'}
 const idle=p=>p.installationStatus==='未上牌'||p.usageStatus==='暫停使用'
@@ -55,6 +56,9 @@ function addPlate(){uni.navigateTo({url:'/pages/plate-create/plate-create'})}
 function openPlate(p){closeCard();uni.navigateTo({url:'/pages/plate-detail/plate-detail?id='+encodeURIComponent(p.id)})}
 function selectPlate(p){selectedPlateId.value=p.id;flipped.value=false}
 function closeCard(){selectedPlateId.value='';flipped.value=false}
+// 安卓返回鍵先關批文卡預覽
+closeOnBack(()=>selectedPlate.value,closeCard)
+useBackClose()
 const cardReveal=230
 const deckStyle=computed(()=>({minHeight:`${490+Math.max(0,plates.value.length-1)*cardReveal}rpx`}))
 function deckCardStyle(index){return {zIndex:index+1,transform:`translateY(${index*cardReveal}rpx)`}}

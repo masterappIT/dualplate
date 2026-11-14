@@ -1,8 +1,10 @@
 import { reactive } from 'vue'
 import { useMessage } from 'wot-design-uni'
+import { pushLayer, closeOnBack } from './back-close'
 
 // 選單與確認框一律用 Wot Design Uni（docs/design-system.md 第 159 行：用它的操作，外觀跟本產品），不用系統原生的 showActionSheet／showModal。
 // 每頁放一個 <wd-action-sheet> 和一個 <wd-message-box />，由這裏的函數驅動。
+// 安卓返回鍵會先關掉打開中的選單或確認框（lib/back-close.js；頁面要呼叫 useBackClose()），結果等於點了框外。
 
 // 底部選單：choose(標題, 選項) 回傳選中的序號，取消回傳 -1。選項可以是文字，或 { title, sub }（sub 是說明）。
 export function useChoice() {
@@ -20,6 +22,8 @@ export function useChoice() {
   const settle = index => { const resolve = pending; pending = null; if (resolve) resolve(index) }
   function onSelect({ index }) { settle(index) }
   function onClose() { closedAt = Date.now(); settle(-1) }
+  // 用程式收起時 Wot 不會發出 close，這裏自己補上
+  closeOnBack(() => sheet.show, () => { sheet.show = false; onClose() })
   return { sheet, choose, onSelect, onClose }
 }
 
@@ -29,9 +33,18 @@ const square = { round: false }
 
 export function useConfirm() {
   const message = useMessage()
+  // 打開期間登記返回鍵；Wot 用程式關閉時不會回傳結果，所以由這裏回傳 onBack
+  function guarded(open, onBack) {
+    return new Promise(resolve => {
+      let done = false
+      const finish = result => { if (done) return; done = true; remove(); resolve(result) }
+      const remove = pushLayer(() => { message.close(); finish(onBack) })
+      open().then(finish)
+    })
+  }
   // danger：不能復原的操作（例如註銷帳號），確認鍵用紅色
-  const ask = ({ title, msg = '', ok = '確認', cancel = '取消', danger = false }) => message.confirm({ title, msg, confirmButtonText: ok, cancelButtonText: cancel, closeOnClickModal: true, confirmButtonProps: danger ? { ...square, type: 'error' } : square, cancelButtonProps: square })
-    .then(() => 'confirm').catch(result => result?.action || 'modal')
-  const notice = ({ title, msg = '', ok = '知道了' }) => message.alert({ title, msg, confirmButtonText: ok, confirmButtonProps: square }).catch(() => {})
+  const ask = ({ title, msg = '', ok = '確認', cancel = '取消', danger = false }) => guarded(() => message.confirm({ title, msg, confirmButtonText: ok, cancelButtonText: cancel, closeOnClickModal: true, confirmButtonProps: danger ? { ...square, type: 'error' } : square, cancelButtonProps: square })
+    .then(() => 'confirm').catch(result => result?.action || 'modal'), 'modal')
+  const notice = ({ title, msg = '', ok = '知道了' }) => guarded(() => message.alert({ title, msg, confirmButtonText: ok, confirmButtonProps: square }).catch(() => {}), undefined)
   return { ask, notice }
 }

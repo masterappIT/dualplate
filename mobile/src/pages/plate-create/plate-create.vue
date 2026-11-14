@@ -29,6 +29,7 @@
 <script setup>
 import { ref,computed,watch,onBeforeUnmount } from 'vue'
 import { onBackPress } from '@dcloudio/uni-app'
+import { closeTopLayer } from '../../lib/back-close'
 import { api,getUser,isSelfManaged } from '../../lib/api'
 import { useChoice,useConfirm } from '../../lib/choice'
 import ApprovalCard from '../../components/ApprovalCard.vue'
@@ -53,7 +54,7 @@ const fields=[['cardNumber','批文卡編號'],['company','商號'],['contractor
 // 錄入到一半離開：已拍相片或填過資料時先問是否放棄（返回鍵、導航返回）；網頁版關閉或重新整理分頁時由瀏覽器提示
 const dirty=computed(()=>Boolean(images.value.front||images.value.back||Object.values(draft.value).some(value=>String(value||'').trim())))
 let leaving=false
-onBackPress(()=>{if(capture.value?.isOpen()){capture.value.cancel();return true}if(leaving||!dirty.value)return false;confirmBox.ask({title:'放棄這次錄入？',msg:'已拍的相片和填寫的資料不會保存。',ok:'放棄',cancel:'繼續錄入'}).then(r=>{if(r==='confirm'){leaving=true;uni.navigateBack()}});return true})
+onBackPress(()=>{if(closeTopLayer())return true;if(capture.value?.isOpen()){capture.value.cancel();return true}if(leaving||!dirty.value)return false;confirmBox.ask({title:'放棄這次錄入？',msg:'已拍的相片和填寫的資料不會保存。',ok:'放棄',cancel:'繼續錄入'}).then(r=>{if(r==='confirm'){leaving=true;uni.navigateBack()}});return true})
 // #ifdef H5
 const warnUnload=event=>{if(!leaving&&dirty.value){event.preventDefault();event.returnValue=''}}
 window.addEventListener('beforeunload',warnUnload)
