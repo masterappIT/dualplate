@@ -45,6 +45,10 @@ export function useConfirm() {
   // danger：不能復原的操作（例如註銷帳號），確認鍵用紅色
   const ask = ({ title, msg = '', ok = '確認', cancel = '取消', danger = false }) => guarded(() => message.confirm({ title, msg, confirmButtonText: ok, cancelButtonText: cancel, closeOnClickModal: true, confirmButtonProps: danger ? { ...square, type: 'error' } : square, cancelButtonProps: square })
     .then(() => 'confirm').catch(result => result?.action || 'modal'), 'modal')
-  const notice = ({ title, msg = '', ok = '知道了' }) => guarded(() => message.alert({ title, msg, confirmButtonText: ok, confirmButtonProps: square }).catch(() => {}), undefined)
+  // locked：只能按確認鍵（例如必須更新），點框外和返回鍵都關不了
+  const notice = ({ title, msg = '', ok = '知道了', locked = false }) => {
+    const open = () => message.alert({ title, msg, confirmButtonText: ok, confirmButtonProps: square, closeOnClickModal: !locked }).catch(() => {})
+    return locked ? open() : guarded(open, undefined)
+  }
   return { ask, notice }
 }

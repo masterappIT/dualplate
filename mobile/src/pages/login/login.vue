@@ -65,13 +65,22 @@
       <view class="terms-links"><text class="link" @click="openTerms('terms')">服務條款</text><text class="terms-dot">·</text><text class="link" @click="openTerms('privacy')">私隱聲明</text></view>
       <view v-if="done" class="done"><StampMark text="已登入" tone="jade" play /></view>
     </view>
+    <!-- #ifdef APP-PLUS -->
+    <wd-message-box />
+    <!-- #endif -->
   </view>
 </template>
 <script setup>
 import { ref, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
 import { api, saveSession } from '../../lib/api'
 // #ifdef APP-PLUS
-import { onPageScroll } from '@dcloudio/uni-app'
+import { onPageScroll, onShow } from '@dcloudio/uni-app'
+// 安卓 App 檢查新版本（lib/app-update.js）：沒登入也要收到必須更新的通知
+import { useAppUpdate } from '../../lib/app-update'
+import { useBackClose } from '../../lib/back-close'
+const appUpdate = useAppUpdate()
+useBackClose()
+onShow(() => appUpdate.check())
 // #endif
 function openTerms(tab){uni.navigateTo({url:'/pages/terms/terms?tab='+tab})}
 function goSignup(){uni.navigateTo({url:'/pages/signup/signup'})}

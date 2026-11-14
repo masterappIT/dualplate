@@ -19,8 +19,8 @@ android {
         applicationId 'com.masterappinc.dualplate'
         minSdk 21
         targetSdk 36
-        versionCode((System.getenv('ANDROID_VERSION_CODE') ?: '1') as int)
-        versionName '1.0.0'
+        versionCode((System.getenv('ANDROID_VERSION_CODE') ?: project.property('appVersionCode')) as int)
+        versionName project.property('appVersionName')
         multiDexEnabled true
         manifestPlaceholders = [DCLOUD_APPKEY: secret('DCLOUD_APPKEY')]
     }
@@ -72,6 +72,8 @@ dependencies {
         'breakpad-build-release.aar',
         'android-gif-drawable-1.2.29.aar',
         'oaid_sdk_1.0.25.aar',
+        // App 內更新：plus.runtime.install 安裝 APK 要用（mobile/src/lib/app-update.js）；缺了它按「立即更新」不會打開系統安裝畫面
+        'install-apk-release.aar',
     ])
     implementation 'androidx.appcompat:appcompat:1.1.0'
     implementation 'androidx.localbroadcastmanager:localbroadcastmanager:1.0.0'
