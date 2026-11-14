@@ -18,6 +18,8 @@ command -v rclone >/dev/null || { printf 'rclone missing.\n' >&2; exit 3; }
 
 install -d -m 755 -o root -g root "$ROOT"
 install -d -m 700 -o 10001 -g 10001 "$ROOT/data" "$ROOT/backups" "$ROOT/logs"
+# 安卓 APK（web 容器唯讀掛載，見 compose.yaml）
+install -d -m 755 -o root -g root "$ROOT/download"
 if [[ ! -f "$ROOT/app.env" ]]; then
   [[ -s "${APP_ENV_FILE:-}" ]] || { printf 'APP_ENV_FILE required for the first install.\n' >&2; exit 3; }
   install -m 600 -o root -g root "$APP_ENV_FILE" "$ROOT/app.env"

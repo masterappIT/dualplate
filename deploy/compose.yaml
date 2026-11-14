@@ -22,6 +22,9 @@ services:
     environment:
       ADMIN_DOMAIN: ${ADMIN_DOMAIN:-dualplateadmin.masterappinc.com}
       MOBILE_DOMAIN: ${MOBILE_DOMAIN:-dualplate.masterappinc.com}
+    # 安卓 APK 放在主機這個資料夾，Caddy 以 /download/dualplate.apk 提供（deploy/web/Caddyfile）
+    volumes:
+      - /srv/dualplate/download:/srv/apk:ro
     networks: [edge, internal]
     mem_limit: 64m
 networks:
