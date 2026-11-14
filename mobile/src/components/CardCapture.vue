@@ -95,10 +95,21 @@ async function open(options = {}) {
   try { await startStage() } catch { mode.value = 'album' }
   // #endif
   // #ifdef APP-PLUS
+  await cameraPermission()
   send('start')
   // #endif
   return promise
 }
+// #ifdef APP-PLUS
+// 安卓的網頁鏡頭要 App 先取得系統相機權限，系統不會自動詢問，所以開鏡頭前先問（第一次會彈出系統詢問）。
+// 拒絕了照樣繼續：鏡頭開不了，畫面改為「拍照／從相冊選」（原有流程）。iOS 由系統自動詢問，不經這裏。
+function cameraPermission() {
+  if (plus.os.name !== 'Android') return Promise.resolve()
+  return new Promise(resolve => {
+    try { plus.android.requestPermissions(['android.permission.CAMERA'], () => resolve(), () => resolve()) } catch { resolve() }
+  })
+}
+// #endif
 // #ifdef H5
 let view = null
 const host = () => stage.value?.$el || stage.value

@@ -29,8 +29,21 @@
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { prefetchHome } from '../../lib/launch'
+// 安卓正式包的原生輔助（android/app 的 LaunchNavBar）：啟動期間導航列底色、導航列高度；其他環境為 null
+let navBar = null
+// #ifdef APP-PLUS
+if (plus.os.name === 'Android') {
+  try { navBar = plus.android.importClass('com.masterappinc.dualplate.LaunchNavBar') } catch (e) { navBar = null }
+}
+// #endif
 // 圖示畫布 180px，置於整個螢幕正中（與 storyboard 的 centerY 一致，不按安全區）
-const top = ref(uni.getWindowInfo().screenHeight / 2 - 90)
+// 安卓的網頁不延伸到底部導航列，原生啟動畫面卻按整個螢幕置中；加回導航列高度，接上時雙牌才不會向上跳
+function markTop() {
+  let height = uni.getWindowInfo().screenHeight
+  if (navBar) height += Number(navBar.insetDp()) || 0
+  return height / 2 - 90
+}
+const top = ref(markTop())
 const ready = ref(false), leave = ref(false)
 // 至少停留 2 秒（管理者要求加長），合位動畫和第一道反光播完才離開；資料慢就繼續反光等資料
 const MIN_SHOW = 2000, FADE = 220, LAYERS = 6
@@ -53,6 +66,7 @@ function go() {
   if (!closed || !next) return
   setTimeout(() => {
     leave.value = true
+    if (navBar) navBar.restore()
     setTimeout(() => uni.reLaunch({ url: next }), FADE)
   }, Math.max(0, start + MIN_SHOW - FADE - Date.now()))
 }

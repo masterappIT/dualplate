@@ -1,0 +1,4 @@
+// 車牌管家安卓離線打包工程（DCloud 安卓離線 SDK，見 android/README.md）
+plugins {
+    id 'com.android.application' version '8.10.1' apply false
+}

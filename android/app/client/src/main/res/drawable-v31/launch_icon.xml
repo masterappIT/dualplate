@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 起的系統啟動畫面圖示。用自適應圖示格式，縮放比例固定：108dp 畫布顯示為 288dp，只露出中間 192dp 圓形。
+     雙牌四邊各留 14.5%（模擬器實測，顯示為 180dp），與 iOS、DCloud 啟動圖、launch.vue 第一幀同尺寸；最遠點 95dp，不會被切。 -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/launch_jade" />
+    <foreground>
+        <inset
+            android:drawable="@drawable/splash_logo"
+            android:inset="14.5%" />
+    </foreground>
+</adaptive-icon>

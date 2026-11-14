@@ -1,0 +1,86 @@
+plugins {
+    id 'com.android.application'
+}
+
+// DCloud SDK 不入庫，從官方網盤下載後解壓到 android/dcloud-sdk-<版本>/
+def dcloudSdk = rootProject.file('../dcloud-sdk-5.34/SDK/libs')
+
+// 本機或 CI 的簽名與 DCloud appkey，只放在 android/signing/release.properties，不入庫
+def releaseProps = new Properties()
+def releaseFile = rootProject.file('../signing/release.properties')
+if (releaseFile.exists()) releaseFile.withInputStream { releaseProps.load(it) }
+def secret = { String key -> System.getenv(key) ?: releaseProps.getProperty(key, '') }
+
+android {
+    namespace 'com.masterappinc.dualplate'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'com.masterappinc.dualplate'
+        minSdk 21
+        targetSdk 36
+        versionCode((System.getenv('ANDROID_VERSION_CODE') ?: '1') as int)
+        versionName '1.0.0'
+        multiDexEnabled true
+        manifestPlaceholders = [DCLOUD_APPKEY: secret('DCLOUD_APPKEY')]
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    // 正式簽名金鑰：網站 APK 每一版都要用同一把簽，用戶才能覆蓋更新；DCloud appkey 也綁定它的指紋。
+    // 除錯版也用它簽，模擬器上的包和正式包同一個指紋，appkey 才有效。
+    def hasReleaseKey = secret('RELEASE_STORE_FILE') as boolean
+    signingConfigs {
+        release {
+            if (hasReleaseKey) {
+                storeFile rootProject.file("../signing/${secret('RELEASE_STORE_FILE')}")
+                storePassword secret('RELEASE_STORE_PASSWORD')
+                keyAlias secret('RELEASE_KEY_ALIAS')
+                keyPassword secret('RELEASE_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            if (hasReleaseKey) signingConfig signingConfigs.release
+        }
+        release {
+            minifyEnabled false
+            if (hasReleaseKey) signingConfig signingConfigs.release
+        }
+    }
+
+    packagingOptions {
+        jniLibs { useLegacyPackaging true }
+    }
+
+    androidResources {
+        additionalParameters '--auto-add-overlay'
+        ignoreAssetsPattern '!.svn:!.git:.*:!CVS:!thumbs.db:!picasa.ini:!*.scc:*~'
+    }
+}
+
+dependencies {
+    // 與 DCloud 範例工程 HBuilder-Integrate-AS 相同的五個庫
+    implementation fileTree(dir: dcloudSdk, include: [
+        'lib.5plus.base-release.aar',
+        'uniapp-v8-release.aar',
+        'breakpad-build-release.aar',
+        'android-gif-drawable-1.2.29.aar',
+        'oaid_sdk_1.0.25.aar',
+    ])
+    implementation 'androidx.appcompat:appcompat:1.1.0'
+    implementation 'androidx.localbroadcastmanager:localbroadcastmanager:1.0.0'
+    implementation 'androidx.core:core:1.1.0'
+    implementation 'androidx.fragment:fragment:1.1.0'
+    implementation 'androidx.recyclerview:recyclerview:1.1.0'
+    implementation 'com.facebook.fresco:fresco:2.5.0'
+    implementation 'com.facebook.fresco:animated-gif:2.5.0'
+    implementation 'com.github.bumptech.glide:glide:4.9.0'
+    implementation 'com.alibaba:fastjson:1.2.83'
+    implementation 'androidx.webkit:webkit:1.5.0'
+}

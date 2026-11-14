@@ -22,3 +22,9 @@ ios/dcloud-sdk-*/
 
 # App Store Connect API 金鑰等簽名檔案（只放本機，不入庫）
 ios/signing/
+
+# DCloud 安卓離線打包 SDK（約 300 MB，從 DCloud 官方網盤下載，不入庫）
+android/dcloud-sdk-*/
+
+# Google Play 上傳金鑰等簽名檔案（只放本機，不入庫）
+android/signing/

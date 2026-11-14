@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 與 mobile 的 jade-deep 變數、iOS LaunchScreen 背景同色 -->
+    <color name="launch_jade">#0B3B30</color>
+</resources>

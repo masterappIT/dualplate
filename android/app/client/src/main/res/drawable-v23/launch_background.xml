@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 啟動時的視窗底（Android 6.0 起）：深綠，正中 180dp 雙牌，與 iOS LaunchScreen、drawable splash.png、launch.vue 第一幀同尺寸。
+     明確指定 180dp 寬高；用 bitmap 的話，Android 11 實測會縮小約 8%。 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/launch_jade" />
+    <item
+        android:width="180dp"
+        android:height="180dp"
+        android:gravity="center"
+        android:drawable="@drawable/splash_logo" />
+</layer-list>

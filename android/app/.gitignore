@@ -1,0 +1,9 @@
+# Gradle 產生
+.gradle/
+build/
+client/build/
+local.properties
+.idea/
+*.iml
+# 由 android/sync-www.sh 從 mobile 編譯結果複製
+client/src/main/assets/apps/
