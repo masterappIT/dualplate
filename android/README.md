@@ -32,7 +32,7 @@ DCloud uni-app App 版，用 DCloud 安卓離線 SDK 5.34 打包。包名 `com.m
 
 1. Android 12 起的系統啟動畫面（`res/values-v31/styles.xml`、`res/drawable-v31/launch_icon.xml`），每個 App 都一定有，關不掉。系統把 108dp 畫布顯示為 288dp（Android 17 模擬器實測），`launch_icon.xml` 按比例留邊，令標誌顯示為 100×76dp。
 2. 入口畫面和 DCloud 主畫面的視窗底（`res/drawable-v23/launch_background.xml`）。Android 5 只有深綠（`res/drawable/launch_background.xml`，那時的 layer-list 不能指定大小和置中）。
-3. `LaunchCover.java`：叫 DCloud 不建立它自己的啟動圖（啟動 Intent 的 `__splash_view__` 設成 false；那張圖會被拉伸到整個螢幕，之後又縮到導航列以上，標誌會變大再移位），再在 DCloud 主畫面最上面蓋一層同一張圖的畫面，連導航列也蓋住，網頁載入時的灰白和底部近白色的底都不會露出。`mobile/src/pages/launch/launch.vue` 在安卓上不畫任何東西，只取首頁資料，打開登入頁或首頁後呼叫 `LaunchCover.hide()` 淡出（萬一沒有呼叫，15 秒後自動拿走）。
+3. `LaunchCover.java`：叫 DCloud 不建立它自己的啟動圖（啟動 Intent 的 `__splash_view__` 設成 false；那張圖會被拉伸到整個螢幕，之後又縮到導航列以上，標誌會變大再移位），再在 DCloud 主畫面最上面蓋一層同一張圖的畫面，連導航列也蓋住，網頁載入時的灰白和底部近白色的底都不會露出。`mobile/src/pages/launch/launch.vue` 在安卓上不畫任何東西，打開登入頁或首頁後呼叫 `LaunchCover.hide()` 淡出（萬一沒有呼叫，15 秒後自動拿走）。啟動畫面不等網絡（安卓官方做法：只等本機少量資料）：首頁每次取到資料就按帳戶存在手機（`homeCache`，`mobile/src/lib/launch.js`，退出登入時刪掉），下次打開直接用它顯示首頁，首頁再照常向伺服器取最新資料更新；沒有存過資料（裝好後第一次）才等網絡，每個請求最多 5 秒。11-15 A17 量度：由點圖示到首頁約 3.2 秒，之前等網絡時 7.7–9.3 秒。
 4. DCloud 啟動圖 `res/drawable-*/splash.png`（`android/art/make-splash.sh` 產生）：平時不顯示，只在第 3 步叫 DCloud 不建立它失敗時才出現，所以同樣畫成深綠底白色標誌。
 
 `LaunchCover` 和 `LaunchNavBar` 每次 DCloud 主畫面建立都重新做：按返回鍵離開後再打開、更新後重開時，程序可能還在，只做第一次的話會露出 DCloud 啟動圖和底部白條（試做時出現過）。

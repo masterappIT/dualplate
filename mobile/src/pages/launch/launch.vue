@@ -29,7 +29,7 @@
 <script setup>
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { prefetchHome } from '../../lib/launch'
+import { prefetchHome, quickHome } from '../../lib/launch'
 // 安卓正式包的原生輔助（android/app），其他環境為 null：
 // LaunchNavBar：底部導航列那一條的顏色；LaunchCover：原生啟動畫面（深綠、白色 M 雲，蓋住整個螢幕連導航列），登入頁或首頁出現後拿走
 let navBar = null, cover = null
@@ -89,7 +89,7 @@ onLoad(() => {
   // #ifdef APP-PLUS
   if (nativeOnly) {
     setTimeout(closeNative, 15000) // 萬一一直沒有網絡回應，也不讓啟動畫面卡住
-    prefetchHome().then(openHomeUnderSplash)
+    quickHome().then(openHomeUnderSplash) // 有上次的首頁資料就不等網絡
     return
   }
   // #endif
