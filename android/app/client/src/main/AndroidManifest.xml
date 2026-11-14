@@ -14,6 +14,9 @@
     <!-- DCloud 自帶、本 App 用不到的權限：華為和 vivo 的圖示角標（本 App 沒有推送通知） -->
     <uses-permission android:name="com.huawei.android.launcher.permission.CHANGE_BADGE" tools:node="remove" />
     <uses-permission android:name="com.vivo.notification.permission.BADGE_ICON" tools:node="remove" />
+    <!-- DCloud 自帶、本 App 用不到的權限：讀影片（只選相片），寫入儲存空間（更新 APK 和相片暫存都在 App 自己的資料夾） -->
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
 
     <application
         android:name=".DualplateApplication"
