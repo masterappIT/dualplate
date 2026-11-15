@@ -100,3 +100,31 @@ TextStyle ts(double size, {FontWeight weight = FontWeight.w400, Color color = C.
 // font-weight 700 / 800
 const w700 = FontWeight.w700;
 const w800 = FontWeight.w800;
+
+// 外殼（階段 1c）：頂部導航列、底部分頁、換頁動畫。現在 App 這幾樣由 DCloud 原生層畫，數值取自 uni-app App 端預設：
+// @dcloudio/uni-shared NAVBAR_HEIGHT 44、TABBAR_HEIGHT 50；uni-cli-shared DEFAULT_TAB_BAR（字 10px、圖示 24px、間距 3px）；
+// pages.json tabBar.borderStyle "white" → rgba(255,255,255,.4)；HTML5+ titleNView 標題 17px、左右留 88px、返回圖示 27px；
+// uni-app-plus 換頁 pop-in、300ms；SDK PandoraApi.bundle/left-shadow-img@2x.png（10pt 寬，黑色由 0 到約 10%）。
+abstract final class Shell {
+  static const navHeight = 44.0;
+  static const navTitleSize = 17.0;
+  static const navTitleWeight = FontWeight.w400; // 現有 App 截圖是一般粗細（網頁版是粗體）
+  static const navTitleInset = 88.0;
+  static const navText = Color(0xFF000000); // navigationBarTextStyle black
+  static const backIconSize = 27.0;
+  static const backInset = 5.0; // uni-app 網頁版導航列 padding 3 + 按鈕 margin 2（原生層未能核對）
+  static const tabHeight = 50.0;
+  static const tabIcon = 24.0;
+  // 網頁版 uni-app 預設圖示置中、spacing 3px；原生分頁列不同。量 iPhone 16 Pro Max 現有 App 截圖（3 倍）：
+  // 圖示頂距分頁列頂 6.5pt，圖示底到文字行（行高 14）頂 1/3pt，照現有 App
+  static const tabIconTop = 6.5;
+  static const tabSpacing = 1 / 3;
+  static const tabFontSize = 10.0;
+  static const tabBorder = Color(0x66FFFFFF);
+  static const pageDuration = Duration(milliseconds: 300);
+  static const pageCurve = Cubic(0.42, 0.0, 0.58, 1.0); // 未能從 SDK 查到，暫用 iOS UIView 預設 easeInOut
+  static const pageParallax = 1 / 3; // 上一頁向左移的比例，未能從 SDK 查到
+  static const edgeShadowWidth = 10.0;
+  static const edgeShadow = Color(0x19000000);
+  static const swipeEdge = 20.0; // iOS 從左邊緣右滑的感應寬度
+}
