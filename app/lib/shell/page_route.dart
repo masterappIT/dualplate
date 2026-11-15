@@ -3,12 +3,14 @@
 // Android：照 DCloud SDK 的 dcloud_page_open／close 動畫：上一頁左移 25% 並變淡到 0.6，返回 360ms，沒有陰影。
 // iOS 可從左邊緣右滑返回（pages.json 沒有關掉 popGesture，App 端預設 'close'）；Android 沒有右滑返回。
 // 彈窗（dialogs.dart 的確認框、選單）不是 PopInRoute，打開時下面的頁面不移動。
-// 彈窗開着時右滑：彈窗蓋住整個畫面，手勢到不了頁面，所以甚麼都不發生——和現有 App 一樣（2026-11-15 在 16 Pro Max
-// 「我的」頁核實：確認框開着時從左邊緣右滑，畫面不變，要按取消）。
+// 彈窗開着時右滑：和現有 App 一樣，子頁連彈窗一起滑走返回（1e 在 16 Pro Max 牌照詳情開「有變動？」選單核實：
+// iOS 原生右滑不經 onBackPress，不先關彈窗；負責人 2026-11-15 定照做）。分頁頁面本來就不能返回，右滑不動。
+// 彈窗區（dialogs.dart 的 DialogArea）向頁面登記了「先關彈窗」，所以 popGestureEnabled 為假，這裏另外放行。
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
+import '../ui/dialogs.dart';
 import '../ui/tokens.dart';
 
 class PopInPage<T> extends Page<T> {
@@ -198,7 +200,13 @@ class _BackSwipeState extends State<_BackSwipe> {
   double get _width => context.size?.width ?? 1;
 
   void _down(PointerDownEvent event) {
-    if (widget.route.popGestureEnabled) _drag.addPointer(event);
+    if (widget.route.popGestureEnabled || _withDialog) _drag.addPointer(event);
+  }
+
+  // 彈窗開着的頁面也照常右滑，彈窗跟着頁面滑走
+  bool get _withDialog {
+    final route = widget.route;
+    return !route.isFirst && route.animation!.isCompleted && DialogArea.openOn(route);
   }
 
   void _start(DragStartDetails _) {

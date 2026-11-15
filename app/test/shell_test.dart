@@ -97,6 +97,13 @@ void main() {
     expect(tester.getCenter(title).dy, closeTo(Shell.navHeight / 2, 1));
   });
 
+  testWidgets('導航列標題比置中高 1/3pt（1e 對照現有 App 截圖）', (tester) async {
+    await openTabs(tester);
+    final title = find.text('車牌管家');
+    final line = tester.getSize(title).height;
+    expect(tester.getTopLeft(title).dy, closeTo((Shell.navHeight - line) / 2 - 1 / 3, 0.001));
+  });
+
   testWidgets('子頁蓋住分頁列，有返回箭頭', (tester) async {
     await openDemo(tester);
     expect(find.byKey(const ValueKey('nav-back')), findsOneWidget);
@@ -245,22 +252,21 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('iOS 右滑：確認框打開時甚麼都不發生，確認框和頁面都留着（和現有 App 一樣）', (tester) async {
+  // 1e：現有 App 子頁的彈窗開着時，iOS 原生右滑連頁面一起返回（1c 原本定為甚麼都不發生，負責人按 1e 實測改正）
+  testWidgets('iOS 右滑：子頁確認框打開時，頁面連確認框一起返回', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     await openDemo(tester);
     await tester.tap(find.text('確認框'));
     await tester.pumpAndSettle();
     await tester.dragFrom(const Offset(5, 400), const Offset(600, 0));
     await tester.pumpAndSettle();
-    expect(find.text('刪除這張牌照？'), findsOneWidget);
-    expect(find.text('示範子頁'), findsOneWidget);
-    await tester.tap(find.text('取消'));
-    await tester.pumpAndSettle();
-    expect(find.text('結果：cancel'), findsOneWidget);
+    expect(find.text('刪除這張牌照？'), findsNothing);
+    expect(find.text('示範子頁'), findsNothing);
+    expect(find.text('車牌管家'), findsOneWidget);
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('iOS 右滑：底部選單打開時甚麼都不發生，選單和頁面都留着', (tester) async {
+  testWidgets('iOS 右滑：子頁底部選單打開時，頁面連選單一起返回', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     await openDemo(tester);
     await tester.tap(find.text('底部選單'));
@@ -268,8 +274,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.dragFrom(const Offset(5, 300), const Offset(600, 0));
     await tester.pumpAndSettle();
-    expect(find.text('有變動？'), findsOneWidget);
-    expect(find.text('示範子頁'), findsOneWidget);
+    expect(find.text('有變動？'), findsNothing);
+    expect(find.text('示範子頁'), findsNothing);
+    expect(find.text('車牌管家'), findsOneWidget);
     debugDefaultTargetPlatformOverride = null;
   });
 
@@ -288,7 +295,8 @@ void main() {
     await openDemo(tester);
     await tester.tap(find.text('鎖定提示框'));
     await tester.pumpAndSettle();
-    await tester.tapAt(const Offset(20, 20));
+    // 1e：遮罩只蓋內容區，(20, 20) 是導航列的返回箭頭；改點導航列下面、框外的遮罩
+    await tester.tapAt(const Offset(20, Shell.navHeight + 100));
     await tester.pumpAndSettle();
     expect(find.text('必須更新'), findsOneWidget);
   });
