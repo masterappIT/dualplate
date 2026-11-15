@@ -236,3 +236,79 @@ abstract final class Shell {
   static const pageDimAndroid = 0.6;
   static const swipeEdge = 20.0; // iOS 從左邊緣右滑的感應寬度
 }
+
+// ── 1d 登入頁（mobile/src/pages/login/login.vue、lib/ports-canvas.js、ContactCard.vue）──
+abstract final class LoginStyle {
+  // .hero：深通行綠，字色 #E3EFEA（扭索紋 currentColor）；高 calc(52vh + 30px)，最少 350；寬 780 以上 46vh
+  static const heroVh = .52;
+  static const heroVhWide = .46;
+  static const heroExtra = 30.0;
+  static const heroMin = 350.0;
+  static const heroTop = 28.0; // 狀態列高度 + 28
+  static const sheetOverlap = 48.0; // .sheet margin-top:-48px（寬 780 以上 -80）
+  static const sheetOverlapWide = 80.0;
+  static const sheetWidthWide = 560.0;
+  static const white = Color(0xFFFFFFFF);
+  static const brandMarkW = 42.0;
+  static const brandMarkH = 32.0;
+  // 口岸網絡畫布（ports-canvas.js）
+  static const portLine = Color(0x29E3EFEA); // rgba(227,239,234,.16)
+  static const pulseHalo = Color(0x38F2C230); // rgba(242,194,48,.22)
+  static const pulseDot = Color(0xFFF2C230);
+  static const nodeHalo = Color(0x1FE3EFEA); // rgba(227,239,234,.12)
+  static const node = Color(0xFFE3EFEA);
+  static const portLabel = Color(0x9EE3EFEA); // rgba(227,239,234,.62)
+  static const portLabelSize = 12.0;
+  static const burstColor = Color(0xFFF2C230); // rgba(242,194,48,1-k)
+  static const frame = Duration(microseconds: 16667); // requestAnimationFrame 60 幀／秒（WKWebView 預設上限）
+  // 輸入框：.field 加 uni-input（height 1.4em → 高 48，字 16、行高 22）；佔位字 gray
+  static const placeholder = Color(0xFF808080);
+  static const inputLine = 1.4;
+  static const caret = Color(0xFF007AFF); // WKWebView 的游標用 iOS 系統藍（App.vue 沒有設 caret-color）
+  static const focusRing = Color(0x73F2C230); // .field:focus box-shadow 0 0 0 3px rgba(242,194,48,.45)
+  static const areaWidth = 128.0;
+  // 送出中：uni-button[disabled]:not([type]) 灰底、淡黑字，蓋過 .primary 的綠底；.login-button.busy opacity .85
+  static const busyBg = Color(0xFFF7F7F7);
+  static const busyText = Color(0x4D000000); // rgba(0,0,0,.3)
+  static const busyOpacity = .85;
+  // 錯誤時卡片搖動：.38s ease，0%→20%→40%→60%→80%→100% 的 translateX
+  static const shake = Duration(milliseconds: 380);
+  static const shakeFrames = [0.0, -7.0, 6.0, -4.0, 2.0, 0.0];
+  static const enterDelay = Duration(milliseconds: 700); // 印章後 700ms 轉到首頁
+  // 區號選擇器：uni-app App 端的 __uniapppicker（uni-app-vite/lib/template/__uniapppicker.js）
+  static const pickerMask = Color(0x66000000); // iOS rgba(0,0,0,.4)
+  static const pickerMaskAndroid = Color(0x99000000); // 安卓 rgba(0,0,0,.6)
+  static const pickerDuration = Duration(milliseconds: 200);
+  static const pickerHeight = 261.0; // 另加底部安全區
+  static const pickerHeader = 45.0;
+  static const pickerBody = 216.0;
+  static const pickerRow = 34.0;
+  static const pickerLine = Color(0xFFC8C9C9);
+  static const pickerCancel = Color(0xFF888888);
+  static const pickerConfirm = Color(0xFF007AFF);
+  static const pickerText = Color(0xFF000000);
+  static const pickerBg = Color(0xFFFFFFFF);
+  static const pickerActionSize = 17.0;
+  static const pickerItemSize = 16.0;
+  static const pickerFadeTop = Color(0xF2FFFFFF); // picker-view 遮罩 hsla(0,0%,100%,.95) → .6
+  static const pickerFadeMid = Color(0x99FFFFFF);
+}
+
+// ── 1d 鍵盤上方的「⌃ ⌄ 完成」列（ui/keyboard_bar.dart）──
+// 量自現有 App（iPhone 16 Pro Max，iOS 18.4，WKWebView 的表單輔助列，硬件鍵盤時貼在畫面底部）：
+// 高 44、底 #F0F0F1、頂部 1 物理像素細線 #919497；⌃ 中心離左 31.5、⌄ 中心離左 71.2，各 17.6×9.6；「完成」右邊離右 21.7
+abstract final class KeyboardBarStyle {
+  static const height = 44.0;
+  static const bg = Color(0xFFF0F0F1);
+  static const line = Color(0xFF919497);
+  static const tint = Color(0xFF007AFF);
+  static const disabled = Color(0xFFBCBCBC); // 不能按的箭頭
+  static const doneSize = 17.0;
+  static const chevronW = 17.6;
+  static const chevronH = 9.6;
+  static const chevronStroke = 2.2;
+  static const sidePad = 11.5;
+  static const itemW = 40.0; // 每個箭頭的觸控寬度：中心 31.5、71.5
+  static const itemGap = 0.0;
+  static const donePad = 10.0; // 「完成」左右內距：右邊離右 21.5
+}
