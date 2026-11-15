@@ -309,8 +309,8 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 |---|---|---|
 | `App.vue` 通用樣式類別（列表卡、標籤、按鈕、輸入框等） | 1 | 已寫，未和現有 App 對照 |
 | 確認框、提示框、底部選單（`choice.js`） | 1 | 已寫，未和現有 App 對照 |
-| 單選、勾選（`wd-radio`、`wd-checkbox`） | 1 | 未做 |
-| 提示（toast） | 1 | 未做 |
+| 單選、勾選（`wd-radio`、`wd-checkbox`） | 1 | 已寫（1a），未和現有 App 對照 |
+| 提示（toast） | 1 | 已寫（1a），未和現有 App 對照 |
 | MainlandPlate、HongKongPlate、MacauPlate | 1 | 未做 |
 | PlateChip、DueDate、StampMark | 1 | 未做 |
 | ApprovalCard（顯示、翻轉） | 2 | 未做 |
@@ -360,3 +360,13 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 - 單選、勾選、提示、三款仿真車牌、PlateChip、DueDate、StampMark、導航列、底部分頁、API、用語工具、登入頁。
 - 樣板頁下半部和彈窗還沒在模擬器上逐個點開看；Android 未運行。
 - 現有 App 的對照截圖和一比一核對未做。現有 App 沒有組件樣板頁，繼續時改用登入頁做第一次對照。
+
+### 2026-11-15（階段 1a 已合併）
+
+- 1a 在分支完成（`11a4bb1`），負責人驗收後快轉合併到 `main`，已刪除分支和 worktree。
+- 新增：`app/lib/ui/choices.dart`（單選 `WdRadioGroup`／`WdRadio`、勾選 `WdCheckbox`）、`toast.dart`（`showToast`／`hideToast`，對應 `uni.showToast` 的 87 處 `icon:'none'` 用法，App 端是原生等待框）、`sample_choices.dart`、`app/run.sh`（Android 模擬器）、`app/test/tour/sample_tour.dart`（模擬器巡覽截圖用，不是測試）。
+- 檢查：負責人重跑 `flutter analyze` 無問題、`flutter test` 29 個全部通過；看過 iPhone 17 Pro 的單選、勾選、提示截圖和 Android 樣板頁上半部截圖。
+- 未做：
+  - 和現有 App 並排對照（模擬器不能點擊，要等 1b 的點擊工具；對照頁面：company-new、rental-new、plate-delete、signup）；
+  - Android 只截了樣板頁上半部，新組件未在 Android 上看過；Android 的 `uni.showToast` 原生外觀可能和 iOS 不同，合併三批後統一在 Android 上核對。
+- 管理者 2026-11-15 表示階段 1 的安排和決定由負責人代為處理。
