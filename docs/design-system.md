@@ -191,6 +191,13 @@ Sidebar（深綠實心） │ Topbar：麵包屑 ………… ⌘K 搜尋 · 今
 | `NavBar`、`BackArrow`、`AppPage` | `lib/shell/nav_bar.dart` | uni-app 原生導航列；有導航列的頁面一律用 `AppPage` |
 | `BottomTabs`、`TabsShell` | `lib/shell/tab_bar.dart` | `pages.json` 的 tabBar |
 | `PopInPage` | `lib/shell/page_route.dart` | 原生換頁（iOS 300ms easeInOut＋右滑返回；Android pop-in 300／360ms） |
+| `KeyboardBarArea`、`KeyboardBar` | `lib/ui/keyboard_bar.dart` | iOS WebView 鍵盤上方的「上一項／下一項／完成」工具列（系統畫的，Flutter 要自己畫）；只在 iOS 顯示 |
+| `ContactCard`、`copyText`、`openLink` | `lib/pages/login/contact_card.dart` | `ContactCard.vue`、`lib/api.js`；暫放登入頁目錄，階段 3 其他頁要用時移到 `lib/ui/` |
+| `SvgImage`（`brandMark`、`whatsappIcon`、`wechatIcon`） | `lib/pages/login/svg_icon.dart` | `static/` 同名 SVG（只畫用到的路徑） |
+| `PortsCanvas` | `lib/pages/login/ports_canvas.dart` | `lib/ports-canvas.js`（口岸圖） |
+| `LoginInput` | `lib/pages/login/login_page.dart` | 登入頁 `.field`（高 48）；`lib/ui/base.dart` 的 `Field` 高 50，兩者是否統一待定 |
+
+共用邏輯（`lib/core/`）：`api.dart`（`api`、`publicApi`、401 自動登出並打開登入頁、條款檢查）、`session.dart`（登入狀態、`isSelfManaged`）、`wording.dart`（自管／托管用語、`money`、`friendlyDate`、`daysLeft`、`phoneText`、`requestTone`、`clientStage` 等，對應 `lib/api.js` 同名函數）、`js.dart`（照 JavaScript 的真假值和字串轉換，讓移植的判斷結果一樣）。
 
 `lib/business/css.dart` 提供 rpx 換算、CSS 陰影和行高換算，給照抄 CSS 數值的組件用。新頁面在 `lib/shell/router.dart` 登記。
 

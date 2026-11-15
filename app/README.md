@@ -10,13 +10,16 @@
 
 | 位置 | 用途 |
 |---|---|
-| `lib/main.dart` | App 入口（`MaterialApp.router`）；階段 1 期間先打開組件樣板頁 |
+| `lib/main.dart` | App 入口（`MaterialApp.router`）；未登入打開登入頁，已登入打開首頁分頁（開發時可用 `--dart-define=START=/sample` 打開組件樣板頁） |
 | `lib/ui/tokens.dart` | 顏色、字號、圓角、陰影、控件高度、動畫。數值照抄 `mobile/src/App.vue`；頁面只可用這裏的數值，不可自寫 |
 | `lib/ui/base.dart` | `App.vue` 通用樣式類別的對應組件（例如 `.list-card` → `ListCard`） |
 | `lib/ui/dialogs.dart` | 確認框 `ask`、提示框 `notice`、底部選單 `choose`，對應 `mobile/src/lib/choice.js`；不用系統原生對話框 |
 | `lib/ui/choices.dart`、`lib/ui/toast.dart` | 單選、勾選；提示（對應 `uni.showToast`） |
 | `lib/business/` | 仿真車牌、`PlateChip`、`DueDate`、`StampMark`；`css.dart` 是 CSS 數值換算 |
 | `lib/shell/` | 導航列、底部分頁、換頁動畫、路由；新頁面在 `router.dart` 登記 |
+| `lib/core/` | API 連線和 401 處理、登入狀態、自管／托管用語和金額日期工具，對應 `mobile/src/lib/api.js` |
+| `lib/pages/` | 各頁面，一頁一個目錄（現有 `login/`） |
+| `lib/ui/keyboard_bar.dart` | iOS 鍵盤上方的「上一項／下一項／完成」工具列 |
 | `assets/tabbar/` | 底部分頁圖示，和 `mobile/src/static/` 同名檔案相同 |
 | `lib/ui/sample.dart`、`sample_*.dart` | 組件樣板頁，用來和現有 App 對照（只在開發時用）；`lib/sample_business_main.dart` 是開發用入口 |
 | `integration_test/` | 模擬器上自動操作外殼示範，配合錄影（不是單元測試） |
@@ -48,6 +51,12 @@ app/run.sh
 
 ```bash
 cd app && flutter test integration_test/shell_demo_test.dart -d <udid>
+```
+
+登入頁各狀態（印出 `SHOT:名稱` 時由外面截圖；帳號只用 `--dart-define=DP_PHONE=… --dart-define=DP_PASS=…` 傳入，不寫進檔案，不傳就不登入）：
+
+```bash
+cd app && flutter test integration_test/login_flow_test.dart -d <udid>
 ```
 
 ## 規則
