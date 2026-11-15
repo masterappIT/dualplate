@@ -1,12 +1,13 @@
 // 頁面跳轉（go_router）：底部四個分頁用 StatefulShellRoute（切換不重建、各自保留狀態）；
 // 其他頁面開在最上層導航器，蓋住分頁列（和 uni-app navigateTo 一樣）。
 // 路徑沿用 pages.json 的頁面名稱。階段 1 期間啟動後先打開組件樣板頁（/sample）。
+// 返回時先關彈窗（mobile/src/lib/back-close.js）：Android 返回鍵由 go_router 先交給最上層導航器，
+// 打開中的確認框、選單先被關掉（等於點了框外），不離開頁面；鎖定提示框例外，和現有 App 一樣照常返回頁面（dialogs.dart）。
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import '../ui/base.dart';
 import '../ui/dialogs.dart';
 import '../ui/sample.dart';
-import 'back_close.dart';
 import 'nav_bar.dart';
 import 'page_route.dart';
 import 'tab_bar.dart';
@@ -14,12 +15,11 @@ import 'tab_bar.dart';
 // 各分頁標題照 pages.json navigationBarTitleText
 const tabPages = [('/index', '車牌管家'), ('/vehicles', '我的牌照'), ('/companies', '我的公司'), ('/me', '我的')];
 
-GoRouter buildRouter({required Layers layers, String initialLocation = '/sample'}) {
+GoRouter buildRouter({String initialLocation = '/sample'}) {
   final root = GlobalKey<NavigatorState>(debugLabel: 'root');
   return GoRouter(
     navigatorKey: root,
     initialLocation: initialLocation,
-    observers: [layers],
     routes: [
       GoRoute(path: '/sample', pageBuilder: (context, state) => PopInPage(key: state.pageKey, child: const SamplePage())),
       StatefulShellRoute.indexedStack(

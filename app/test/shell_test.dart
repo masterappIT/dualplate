@@ -245,30 +245,31 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('iOS 右滑：確認框打開時先關確認框，不離開頁面', (tester) async {
+  testWidgets('iOS 右滑：確認框打開時甚麼都不發生，確認框和頁面都留着（和現有 App 一樣）', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     await openDemo(tester);
     await tester.tap(find.text('確認框'));
     await tester.pumpAndSettle();
-    await tester.dragFrom(const Offset(5, 400), const Offset(300, 0));
+    await tester.dragFrom(const Offset(5, 400), const Offset(600, 0));
     await tester.pumpAndSettle();
-    expect(find.text('刪除這張牌照？'), findsNothing);
+    expect(find.text('刪除這張牌照？'), findsOneWidget);
     expect(find.text('示範子頁'), findsOneWidget);
-    expect(find.text('結果：modal'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(find.text('結果：cancel'), findsOneWidget);
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('iOS 右滑：底部選單打開時先關選單，不離開頁面', (tester) async {
+  testWidgets('iOS 右滑：底部選單打開時甚麼都不發生，選單和頁面都留着', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     await openDemo(tester);
     await tester.tap(find.text('底部選單'));
     await tester.pump(const Duration(milliseconds: 300)); // dialogs.dart：上一個選單收起後等 300ms（用真實時鐘）
     await tester.pumpAndSettle();
-    await tester.dragFrom(const Offset(5, 300), const Offset(300, 0));
+    await tester.dragFrom(const Offset(5, 300), const Offset(600, 0));
     await tester.pumpAndSettle();
-    expect(find.text('有變動？'), findsNothing);
+    expect(find.text('有變動？'), findsOneWidget);
     expect(find.text('示範子頁'), findsOneWidget);
-    expect(find.text('結果：選了 -1'), findsOneWidget);
     debugDefaultTargetPlatformOverride = null;
   });
 
@@ -316,11 +317,44 @@ void main() {
     expect(find.text('示範子頁'), findsNothing);
   });
 
-  testWidgets('iOS 換頁：上一頁不變淡', (tester) async {
+  testWidgets('iOS 換頁：上一頁左移 25%、蓋上 20% 黑色，300ms 完成', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await openDemo(tester);
-    expect(find.ancestor(of: find.text('車牌管家', skipOffstage: false), matching: find.byType(FadeTransition)), findsNothing);
+    await openTabs(tester);
+    await tester.tap(find.text('打開示範子頁'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 299)); // 300ms 時上一頁已被蓋住、移出畫面，量 299ms
+    final dims = tester.widgetList<FadeTransition>(find.ancestor(of: find.byKey(const ValueKey('page-dim'), skipOffstage: false), matching: find.byType(FadeTransition)));
+    expect(dims.any((f) => (f.opacity.value - 0.2).abs() < 0.002), isTrue);
+    final slides = tester.widgetList<SlideTransition>(find.ancestor(of: find.text('車牌管家', skipOffstage: false), matching: find.byType(SlideTransition)));
+    expect(slides.any((t) => (t.position.value.dx + 0.25).abs() < 0.002), isTrue);
+    await tester.pump(const Duration(milliseconds: 2));
+    expect(tester.hasRunningAnimations, isFalse);
     debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('iOS 換頁一半時，新頁位置照 easeInOut（150ms 時在正中）', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    await openTabs(tester);
+    await tester.tap(find.text('打開示範子頁'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 150));
+    final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
+    expect(tester.getTopLeft(find.byKey(const ValueKey('nav-back'))).dx, closeTo(screen.width / 2, 1));
+    await tester.pumpAndSettle();
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('頁面停定後變暗層完全透明', (tester) async {
+    await openDemo(tester);
+    for (final f in tester.widgetList<FadeTransition>(find.ancestor(of: find.byKey(const ValueKey('page-dim')), matching: find.byType(FadeTransition)))) {
+      expect(f.opacity.value, 0);
+    }
+  });
+
+  testWidgets('返回箭頭在導航列左邊 7pt 開始', (tester) async {
+    await openDemo(tester);
+    final arrow = find.descendant(of: find.byKey(const ValueKey('nav-back')), matching: find.byType(CustomPaint));
+    expect(tester.getTopLeft(arrow).dx, Shell.backInset);
   });
 
   testWidgets('連開兩頁，返回一次只退一頁', (tester) async {

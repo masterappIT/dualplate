@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
-import 'shell/back_close.dart';
 import 'shell/router.dart';
 import 'ui/base.dart';
 import 'ui/tokens.dart';
@@ -18,8 +17,7 @@ class DualplateApp extends StatefulWidget {
 }
 
 class _DualplateAppState extends State<DualplateApp> {
-  final layers = Layers(); // 打開中的彈窗（返回時先關，見 shell/back_close.dart）
-  late final GoRouter router = buildRouter(layers: layers, initialLocation: widget.initialLocation);
+  late final GoRouter router = buildRouter(initialLocation: widget.initialLocation);
 
   @override
   void dispose() {
@@ -33,7 +31,7 @@ class _DualplateAppState extends State<DualplateApp> {
         debugShowCheckedModeBanner: false,
         routerConfig: router,
         // 紙色墊底：Android 換頁時上一頁變淡，透出的是頁面底色（uni-app animationAlphaBGColor = backgroundColor #F7F6F1）
-        builder: (context, child) => ColoredBox(color: C.paper, child: SwipeCloseLayer(layers: layers, child: child!)),
+        builder: (context, child) => ColoredBox(color: C.paper, child: child!),
         // 繁體字形：不指定時部分 Android 手機會用簡體或日文字形
         locale: const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant', countryCode: 'HK'),
         localizationsDelegates: GlobalMaterialLocalizations.delegates,

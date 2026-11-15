@@ -1,8 +1,10 @@
 // 換頁動畫：對應 uni-app App 端預設的 pop-in／pop-out（uni-app-plus ANI_SHOW 'pop-in'、ANI_DURATION 300）。
-// iOS：新頁從右邊滑入，左邊緣帶一道淺陰影；上一頁同時向左移出一部分；返回時倒過來。
+// iOS：新頁從右邊滑入；上一頁同時左移 25% 並蓋上 20% 黑色；返回時倒過來（數值按現有 App 錄影量度）。
 // Android：照 DCloud SDK 的 dcloud_page_open／close 動畫：上一頁左移 25% 並變淡到 0.6，返回 360ms，沒有陰影。
 // iOS 可從左邊緣右滑返回（pages.json 沒有關掉 popGesture，App 端預設 'close'）；Android 沒有右滑返回。
 // 彈窗（dialogs.dart 的確認框、選單）不是 PopInRoute，打開時下面的頁面不移動。
+// 彈窗開着時右滑：彈窗蓋住整個畫面，手勢到不了頁面，所以甚麼都不發生——和現有 App 一樣（2026-11-15 在 16 Pro Max
+// 「我的」頁核實：確認框開着時從左邊緣右滑，畫面不變，要按取消）。
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -147,16 +149,17 @@ class _PopInTransitionState extends State<PopInTransition> {
       position: s.drive(Tween(begin: Offset.zero, end: const Offset(-Shell.pageParallax, 0))),
       child: SlideTransition(
         position: p.drive(_in),
-        child: Stack(clipBehavior: Clip.none, fit: StackFit.passthrough, children: [
-          // 新頁左邊緣的陰影（SDK left-shadow-img），頁面停定後在畫面外
-          const Positioned(
-            left: -Shell.edgeShadowWidth,
-            width: Shell.edgeShadowWidth,
-            top: 0,
-            bottom: 0,
-            child: IgnorePointer(child: DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(colors: [Color(0x00000000), Shell.edgeShadow])))),
-          ),
+        child: Stack(fit: StackFit.passthrough, children: [
           widget.child,
+          // 被下一頁蓋住時變暗（沒有下一頁時完全透明、不擋點擊）
+          Positioned.fill(
+            child: IgnorePointer(
+              child: FadeTransition(
+                opacity: s.drive(Tween(begin: 0.0, end: Shell.pageDim)),
+                child: const ColoredBox(key: ValueKey('page-dim'), color: Color(0xFF000000)),
+              ),
+            ),
+          ),
         ]),
       ),
     );

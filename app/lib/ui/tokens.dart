@@ -104,7 +104,7 @@ const w800 = FontWeight.w800;
 // 外殼（階段 1c）：頂部導航列、底部分頁、換頁動畫。現在 App 這幾樣由 DCloud 原生層畫，數值取自 uni-app App 端預設：
 // @dcloudio/uni-shared NAVBAR_HEIGHT 44、TABBAR_HEIGHT 50；uni-cli-shared DEFAULT_TAB_BAR（字 10px、圖示 24px、間距 3px）；
 // pages.json tabBar.borderStyle "white" → rgba(255,255,255,.4)；HTML5+ titleNView 標題 17px、左右留 88px、返回圖示 27px；
-// uni-app-plus 換頁 pop-in、300ms；SDK PandoraApi.bundle/left-shadow-img@2x.png（10pt 寬，黑色由 0 到約 10%）。
+// uni-app-plus 換頁 pop-in、300ms。iOS 換頁和返回箭頭位置按 iPhone 16 Pro Max 現有 App 錄影量度（2026-11-15，/private/tmp/dualplate-flutter/1c/app/）。
 abstract final class Shell {
   static const navHeight = 44.0;
   static const navTitleSize = 17.0;
@@ -112,7 +112,7 @@ abstract final class Shell {
   static const navTitleInset = 88.0;
   static const navText = Color(0xFF000000); // navigationBarTextStyle black
   static const backIconSize = 27.0;
-  static const backInset = 5.0; // uni-app 網頁版導航列 padding 3 + 按鈕 margin 2（原生層未能核對）
+  static const backInset = 7.0; // 現有 App 截圖：箭頭墨跡左距 16pt（字形本身左空 9pt）
   static const tabHeight = 50.0;
   static const tabIcon = 24.0;
   // 網頁版 uni-app 預設圖示置中、spacing 3px；原生分頁列不同。量 iPhone 16 Pro Max 現有 App 截圖（3 倍）：
@@ -121,10 +121,11 @@ abstract final class Shell {
   static const tabSpacing = 1 / 3;
   static const tabFontSize = 10.0;
   static const tabBorder = Color(0x66FFFFFF);
-  // iOS：pop-in 300ms（HTML5+ 文檔）；曲線和上一頁左移比例未能從 SDK 查到，暫用 easeInOut、1/3
+  // iOS：量現有 App 錄影，推入和返回都是 300ms easeInOut（誤差約 1pt）；上一頁左移 25%、蓋上 20% 黑色（亮度到 0.8）；新頁邊緣沒有陰影
   static const pageDuration = Duration(milliseconds: 300);
   static const pageCurve = Cubic(0.42, 0.0, 0.58, 1.0);
-  static const pageParallax = 1 / 3;
+  static const pageParallax = 0.25;
+  static const pageDim = 0.2;
   // Android：DCloud SDK lib.5plus.base res/anim dcloud_page_open_enter/exit、dcloud_page_close_enter/exit
   // （pop-in 用這四個，見 AnimOptions、core/ui/i）：打開 300ms、返回 360ms，decelerate；上一頁左移 25%、透明度 1→0.6；沒有陰影
   static const pageDurationAndroid = Duration(milliseconds: 300);
@@ -132,7 +133,5 @@ abstract final class Shell {
   static const pageCurveAndroid = Curves.decelerate; // android decelerate_interpolator：1-(1-t)²
   static const pageParallaxAndroid = 0.25;
   static const pageDimAndroid = 0.6;
-  static const edgeShadowWidth = 10.0;
-  static const edgeShadow = Color(0x19000000);
   static const swipeEdge = 20.0; // iOS 從左邊緣右滑的感應寬度
 }
