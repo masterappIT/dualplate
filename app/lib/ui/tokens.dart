@@ -134,3 +134,63 @@ abstract final class ToastStyle {
   static const fade = Duration(milliseconds: 300);
   static const duration = Duration(milliseconds: 1500); // uni.showToast 預設 duration 1500
 }
+
+// ── 1b 業務小組件（仿真車牌、PlateChip、DueDate、StampMark）的顏色，照抄 mobile/src/components/ 各組件的 <style> 和行內樣式 ──
+abstract final class PlateC {
+  // 內地、澳門牌：黑色金屬底 linear-gradient(180deg,#262626 0%,#0b0b0b 45%,#141414 100%)
+  static const darkTop = Color(0xFF262626);
+  static const darkMid = Color(0xFF0B0B0B);
+  static const darkBottom = Color(0xFF141414);
+  static const whiteText = Color(0xFFF5F5F5); // 白字、分隔點、澳門短橫
+  static const rim = Color(0xFFF2F2F2); // 內地牌白色內框
+  static const moEdge = Color(0xFFC9C9C9); // 澳門牌銀色細框
+  static const rivetLight = Color(0xFFD9D9D9); // 內地、澳門牌鉚釘 radial-gradient
+  static const rivetDark = Color(0xFF7A7A7A);
+  static const rivetRing = Color(0xFF3A3A3A);
+  // 香港牌：黃色反光底 linear-gradient(180deg,#ffd83a 0%,#f6c400 55%,#eab900 100%)
+  static const hkTop = Color(0xFFFFD83A);
+  static const hkMid = Color(0xFFF6C400);
+  static const hkBottom = Color(0xFFEAB900);
+  static const hkEdge = Color(0x8C3C2D00); // rgba(60,45,0,.55)
+  static const hkText = Color(0xFF111111);
+  static const screwLight = Color(0xFFF4F4F4);
+  static const screwDark = Color(0xFF9A9A9A);
+  static const screwRing = Color(0x59000000); // rgba(0,0,0,.35)
+  // 陰影顏色（box-shadow、text-shadow）
+  static const black = Color(0xFF000000);
+  static const black95 = Color(0xF2000000);
+  static const black90 = Color(0xE6000000);
+  static const black70 = Color(0xB3000000);
+  static const black55 = Color(0x8C000000);
+  static const black50 = Color(0x80000000);
+  static const black28 = Color(0x47000000);
+  static const black22 = Color(0x38000000);
+  static const white75 = Color(0xBFFFFFFF);
+  static const white60 = Color(0x99FFFFFF);
+  static const white55 = Color(0x8CFFFFFF);
+  static const white45 = Color(0x73FFFFFF);
+  static const white40 = Color(0x66FFFFFF);
+  static const white32 = Color(0x52FFFFFF);
+  static const white30 = Color(0x4DFFFFFF);
+  static const white20 = Color(0x33FFFFFF);
+  static const white18 = Color(0x2EFFFFFF);
+  static const white12 = Color(0x1FFFFFFF);
+  static const white06 = Color(0x0FFFFFFF);
+  static const white0 = Color(0x00FFFFFF);
+  static const hkShade90 = Color(0xE65A4100); // rgba(90,65,0,.9)
+  static const hkShade55 = Color(0x8C785500); // rgba(120,85,0,.55)
+  static const hkShade60 = Color(0x99503700); // rgba(80,55,0,.6)
+  // PlateChip.vue
+  static const chipMainland = Color(0xFF141414);
+  static const chipWhite = Color(0xFFFFFFFF);
+  static const chipInk = Color(0xFF111111);
+  static const chipEdge = Color(0x2E000000); // rgba(0,0,0,.18)
+}
+
+// 車牌字型（照抄各組件 font-family 次序）
+const plateLatinFont = 'DIN Alternate'; // MainlandPlate.vue 英文數字
+const plateLatinFallback = ['DIN Condensed', 'Arial Narrow', 'Arial'];
+const plateHanFont = 'PingFang SC'; // MainlandPlate.vue 粵、港、澳
+const plateHanFallback = ['Heiti SC', 'Microsoft YaHei'];
+const plateArialFont = 'Arial'; // HongKongPlate.vue、MacauPlate.vue
+const plateArialFallback = ['Helvetica Neue'];
