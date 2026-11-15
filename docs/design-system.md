@@ -173,6 +173,26 @@ Sidebar（深綠實心） │ Topbar：麵包屑 ………… ⌘K 搜尋 · 今
 
 客戶端字號與控件（2026-10-17 負責人修訂）：字號一律用 `App.vue` 的變量（px，不隨螢幕寬度縮放）——頁標題 22／區塊與列表標題 16／正文 14／輔助 13／標籤 12／統計數字 28，**不得出現小於 12px 的字**；輸入框 16px。主要按鈕高 48、次要 44、行內小按鈕 40；分段切換統一用 `.segmented`；不能復原的操作（例如注銷帳號）用 `.primary.danger`，按下後先用確認框再確認。頂部導航列已顯示頁名的頁面不再重複大標題，改用一句 `.intro` 說明。狀態顏色與用語統一取 `lib/api.js`：`requestTone`（辦理狀態）、`clientStage`（把「客戶提供……」改成「等你提供……」）、`selfHandled`（客戶自己辦的事項一律標「自行辦理」，灰色）、`money`（HK$／¥／MOP）。到期日一律用 `DueDate`。
 
+### 客戶端（Flutter）
+
+2026-11-15 起 iOS、Android App 改用 Flutter（`app/`，方案見 `docs/tasks/flutter-app-plan.md`）。外觀和互動必須和現在的 uni-app App 一比一，不用 Material／Cupertino 外觀。數值一律放 `app/lib/ui/tokens.dart`（照抄 `mobile/src/App.vue` 和各組件樣式），頁面內不可自寫顏色、字號、圓角、陰影。文字用 `ts()`：先用系統字（對應 `-apple-system`），中文落到蘋方；行高照 WebView 向下取整。
+
+| 組件 | 檔案 | 對應現有 App |
+|---|---|---|
+| `PageBody`、`PageTitle`、`Intro`、`CardBox`、`ListCard`／`ListTitle`／`ListSub`／`ListNote`、`SectionHead`、`Pill`、`Who`、`Chips`／`Chip`、`Segmented`、`Btn`、`Field`、`Kv`、`Empty` 等 | `lib/ui/base.dart` | `App.vue` 同名通用類別 |
+| `ask`（確認框）、`notice`（提示框，可鎖定）、`choose`（底部選單） | `lib/ui/dialogs.dart` | `lib/choice.js`（`wd-message-box`、`wd-action-sheet`） |
+| `WdRadioGroup`／`WdRadio`、`WdCheckbox` | `lib/ui/choices.dart` | `wd-radio shape="dot"`、`wd-checkbox shape="square"` |
+| `showToast`／`hideToast` | `lib/ui/toast.dart` | `uni.showToast({ icon: 'none' })`（App 端原生等待框） |
+| `MainlandPlate`、`HongKongPlate`、`MacauPlate` | `lib/business/plates.dart` | 同名 `.vue`（仿真車牌，受保護設計） |
+| `PlateChip`（sm／md／lg） | `lib/business/plate_chip.dart` | `PlateChip.vue` |
+| `DueDate` | `lib/business/due_date.dart` | `DueDate.vue` |
+| `StampMark` | `lib/business/stamp_mark.dart` | `StampMark.vue`（含蓋章動畫） |
+| `NavBar`、`BackArrow`、`AppPage` | `lib/shell/nav_bar.dart` | uni-app 原生導航列；有導航列的頁面一律用 `AppPage` |
+| `BottomTabs`、`TabsShell` | `lib/shell/tab_bar.dart` | `pages.json` 的 tabBar |
+| `PopInPage` | `lib/shell/page_route.dart` | 原生換頁（iOS 300ms easeInOut＋右滑返回；Android pop-in 300／360ms） |
+
+`lib/business/css.dart` 提供 rpx 換算、CSS 陰影和行高換算，給照抄 CSS 數值的組件用。新頁面在 `lib/shell/router.dart` 登記。
+
 ## 九、動態視圖對應（第 11.6 輪起；2026-10-16 按管理者「要搬到有用的地方，不要為了做而做」重新篩選）
 
 **原則：每個動畫都要回答「它幫用戶看懂或做到甚麼」。答不出就不做。** 動效只用在三類地方：

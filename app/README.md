@@ -10,11 +10,16 @@
 
 | 位置 | 用途 |
 |---|---|
-| `lib/main.dart` | App 入口；階段 1 期間只打開組件樣板頁 |
+| `lib/main.dart` | App 入口（`MaterialApp.router`）；階段 1 期間先打開組件樣板頁 |
 | `lib/ui/tokens.dart` | 顏色、字號、圓角、陰影、控件高度、動畫。數值照抄 `mobile/src/App.vue`；頁面只可用這裏的數值，不可自寫 |
 | `lib/ui/base.dart` | `App.vue` 通用樣式類別的對應組件（例如 `.list-card` → `ListCard`） |
 | `lib/ui/dialogs.dart` | 確認框 `ask`、提示框 `notice`、底部選單 `choose`，對應 `mobile/src/lib/choice.js`；不用系統原生對話框 |
-| `lib/ui/sample.dart` | 組件樣板頁，用來和現有 App 對照（只在開發時用） |
+| `lib/ui/choices.dart`、`lib/ui/toast.dart` | 單選、勾選；提示（對應 `uni.showToast`） |
+| `lib/business/` | 仿真車牌、`PlateChip`、`DueDate`、`StampMark`；`css.dart` 是 CSS 數值換算 |
+| `lib/shell/` | 導航列、底部分頁、換頁動畫、路由；新頁面在 `router.dart` 登記 |
+| `assets/tabbar/` | 底部分頁圖示，和 `mobile/src/static/` 同名檔案相同 |
+| `lib/ui/sample.dart`、`sample_*.dart` | 組件樣板頁，用來和現有 App 對照（只在開發時用）；`lib/sample_business_main.dart` 是開發用入口 |
+| `integration_test/` | 模擬器上自動操作外殼示範，配合錄影（不是單元測試） |
 | `test/` | 單元和組件測試，一個情況一個具名測試 |
 
 ## 常用指令
@@ -33,7 +38,17 @@ iOS 模擬器（iPhone 17 Pro，iOS 26）：
 cd app && flutter build ios --simulator --debug && xcrun simctl install booted build/ios/iphonesimulator/Runner.app && xcrun simctl launch booted com.masterappinc.dualplate
 ```
 
-Android：尚未設定（階段 1 會加 `app/run.sh`，做法同 `android/emu-run.sh`）。
+Android 模擬器（打包、安裝、打開、截圖；用法見腳本開頭）：
+
+```bash
+app/run.sh
+```
+
+外殼示範（自動操作，可同時用 `xcrun simctl io <udid> recordVideo` 錄影）：
+
+```bash
+cd app && flutter test integration_test/shell_demo_test.dart -d <udid>
+```
 
 ## 規則
 
