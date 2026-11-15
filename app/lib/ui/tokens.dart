@@ -211,6 +211,9 @@ abstract final class Shell {
   static const navTitleSize = 17.0;
   static const navTitleWeight = FontWeight.w400; // 現有 App 截圖是一般粗細（網頁版是粗體）
   static const navTitleInset = 88.0;
+  // 1e 複核全局字型修正（8892462）後：iPhone 17 Flutter 版三個分頁標題的墨跡頂都比 16 Pro Max 現有 App 低 1/3pt（一個實際像素），
+  // 高度、粗細相同，所以整行上移 1/3pt
+  static const navTitleDy = -1 / 3;
   static const navText = Color(0xFF000000); // navigationBarTextStyle black
   static const backIconSize = 27.0;
   static const backInset = 7.0; // 現有 App 截圖：箭頭墨跡左距 16pt（字形本身左空 9pt）
@@ -235,4 +238,7 @@ abstract final class Shell {
   static const pageParallaxAndroid = 0.25;
   static const pageDimAndroid = 0.6;
   static const swipeEdge = 20.0; // iOS 從左邊緣右滑的感應寬度
+  // 彈窗開着時 iOS 右滑：false＝甚麼都不發生（1c 定的行為，任務 1e 指定保留）；
+  // true＝和 16 Pro Max 現有 App 子頁一樣，頁面連彈窗一起滑走返回（1e 錄影核實：原生右滑不經 onBackPress，不先關彈窗）。待負責人決定。
+  static const swipeBackWithDialog = false;
 }

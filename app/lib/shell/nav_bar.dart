@@ -3,6 +3,7 @@
 // 不用 Material AppBar：沒有陰影、沒有分隔線、標題不靠左、沒有水波紋。
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import '../ui/dialogs.dart';
 import '../ui/tokens.dart';
 
 class NavBar extends StatelessWidget {
@@ -28,12 +29,15 @@ class NavBar extends StatelessWidget {
             top: 0,
             bottom: 0,
             child: Center(
-              child: Text(title,
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: ts(Shell.navTitleSize, weight: Shell.navTitleWeight, color: Shell.navText, height: 1.2)),
+              child: Transform.translate(
+                offset: const Offset(0, Shell.navTitleDy),
+                child: Text(title,
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: ts(Shell.navTitleSize, weight: Shell.navTitleWeight, color: Shell.navText, height: 1.2)),
+              ),
             ),
           ),
           if (showBack) Positioned(left: 0, top: 0, bottom: 0, child: BackArrow(onTap: () => Navigator.of(context).maybePop())),
@@ -100,7 +104,8 @@ class _BackPainter extends CustomPainter {
   bool shouldRepaint(_BackPainter old) => false;
 }
 
-// 有導航列的頁面：紙色底，導航列在上，內容填滿其餘位置（manifest safearea.background #F7F6F1，底部安全區也是紙色）
+// 有導航列的頁面：紙色底，導航列在上，內容填滿其餘位置（manifest safearea.background #F7F6F1，底部安全區也是紙色）。
+// 內容區就是現有 App 的 WebView：確認框、選單只蓋這一塊（DialogArea，見 dialogs.dart），狀態列和導航列不變暗。
 class AppPage extends StatelessWidget {
   const AppPage({super.key, required this.title, this.back, this.child});
   final String title;
@@ -111,7 +116,7 @@ class AppPage extends StatelessWidget {
         color: C.paper,
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           NavBar(title, back: back),
-          Expanded(child: MediaQuery.removePadding(context: context, removeTop: true, child: child ?? const SizedBox.shrink())),
+          Expanded(child: MediaQuery.removePadding(context: context, removeTop: true, child: DialogArea(child: child ?? const SizedBox.shrink()))),
         ]),
       );
 }
