@@ -272,6 +272,57 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
+  testWidgets('Android 返回鍵：鎖定提示框打開時，提示框和子頁一起關掉（和現有 App 一樣）', (tester) async {
+    await openDemo(tester);
+    await tester.tap(find.text('鎖定提示框'));
+    await tester.pumpAndSettle();
+    expect(find.text('必須更新'), findsOneWidget);
+    await pressBack(tester);
+    expect(find.text('必須更新'), findsNothing);
+    expect(find.text('示範子頁'), findsNothing);
+    expect(find.text('車牌管家'), findsOneWidget);
+  });
+
+  testWidgets('鎖定提示框點框外仍關不了', (tester) async {
+    await openDemo(tester);
+    await tester.tap(find.text('鎖定提示框'));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(20, 20));
+    await tester.pumpAndSettle();
+    expect(find.text('必須更新'), findsOneWidget);
+  });
+
+  testWidgets('Android 換頁：上一頁左移 25% 並變淡到 0.6，300ms 完成', (tester) async {
+    await openTabs(tester);
+    await tester.tap(find.text('打開示範子頁'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 299)); // 300ms 時上一頁已被蓋住、移出畫面，量 299ms
+    final fades = tester.widgetList<FadeTransition>(find.ancestor(of: find.text('車牌管家', skipOffstage: false), matching: find.byType(FadeTransition)));
+    expect(fades.any((f) => (f.opacity.value - 0.6).abs() < 0.002), isTrue);
+    final slides = tester.widgetList<SlideTransition>(find.ancestor(of: find.text('車牌管家', skipOffstage: false), matching: find.byType(SlideTransition)));
+    expect(slides.any((t) => (t.position.value.dx + 0.25).abs() < 0.002), isTrue);
+    await tester.pump(const Duration(milliseconds: 2));
+    expect(tester.hasRunningAnimations, isFalse);
+  });
+
+  testWidgets('Android 返回換頁 360ms 完成', (tester) async {
+    await openDemo(tester);
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 320));
+    expect(tester.hasRunningAnimations, isTrue);
+    await tester.pump(const Duration(milliseconds: 41));
+    expect(tester.hasRunningAnimations, isFalse);
+    expect(find.text('示範子頁'), findsNothing);
+  });
+
+  testWidgets('iOS 換頁：上一頁不變淡', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    await openDemo(tester);
+    expect(find.ancestor(of: find.text('車牌管家', skipOffstage: false), matching: find.byType(FadeTransition)), findsNothing);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
   testWidgets('連開兩頁，返回一次只退一頁', (tester) async {
     await openDemo(tester);
     await tester.tap(find.text('再開一頁'));

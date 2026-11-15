@@ -1,5 +1,6 @@
 // 換頁動畫：對應 uni-app App 端預設的 pop-in／pop-out（uni-app-plus ANI_SHOW 'pop-in'、ANI_DURATION 300）。
-// 新頁從右邊滑入，左邊緣帶一道淺陰影；上一頁同時向左移出一部分；返回時倒過來。
+// iOS：新頁從右邊滑入，左邊緣帶一道淺陰影；上一頁同時向左移出一部分；返回時倒過來。
+// Android：照 DCloud SDK 的 dcloud_page_open／close 動畫：上一頁左移 25% 並變淡到 0.6，返回 360ms，沒有陰影。
 // iOS 可從左邊緣右滑返回（pages.json 沒有關掉 popGesture，App 端預設 'close'）；Android 沒有右滑返回。
 // 彈窗（dialogs.dart 的確認框、選單）不是 PopInRoute，打開時下面的頁面不移動。
 import 'dart:math' as math;
@@ -26,10 +27,11 @@ class PopInRoute<T> extends PageRoute<T> {
   String? get barrierLabel => null;
   @override
   bool get maintainState => true;
+  static bool get _android => defaultTargetPlatform == TargetPlatform.android;
   @override
-  Duration get transitionDuration => Shell.pageDuration;
+  Duration get transitionDuration => _android ? Shell.pageDurationAndroid : Shell.pageDuration;
   @override
-  Duration get reverseTransitionDuration => Shell.pageDuration;
+  Duration get reverseTransitionDuration => _android ? Shell.pageReverseDurationAndroid : Shell.pageDuration;
 
   // 只有下一頁也是換頁時，這一頁才跟着左移（彈窗打開時不動）
   @override
@@ -84,22 +86,65 @@ class PopInRoute<T> extends PageRoute<T> {
   }
 }
 
-class PopInTransition extends StatelessWidget {
+class PopInTransition extends StatefulWidget {
   const PopInTransition({super.key, required this.primary, required this.secondary, required this.linear, required this.child});
   final Animation<double> primary, secondary;
   final bool linear;
   final Widget child;
+  @override
+  State<PopInTransition> createState() => _PopInTransitionState();
+}
 
+class _PopInTransitionState extends State<PopInTransition> {
   static final _in = Tween(begin: const Offset(1, 0), end: Offset.zero);
-  static final _out = Tween(begin: Offset.zero, end: const Offset(-Shell.pageParallax, 0));
-  static final _curve = CurveTween(curve: Shell.pageCurve);
+  // CurvedAnimation 倒播時用 reverseCurve 的翻轉，所以 Android 的 decelerate 返回時也是先快後慢
+  late CurvedAnimation _p, _s;
+  bool get _android => defaultTargetPlatform == TargetPlatform.android;
+
+  void _make() {
+    final curve = _android ? Shell.pageCurveAndroid : Shell.pageCurve;
+    _p = CurvedAnimation(parent: widget.primary, curve: curve, reverseCurve: curve);
+    _s = CurvedAnimation(parent: widget.secondary, curve: curve, reverseCurve: curve);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _make();
+  }
+
+  @override
+  void didUpdateWidget(PopInTransition old) {
+    super.didUpdateWidget(old);
+    if (old.primary != widget.primary || old.secondary != widget.secondary) {
+      _p.dispose();
+      _s.dispose();
+      _make();
+    }
+  }
+
+  @override
+  void dispose() {
+    _p.dispose();
+    _s.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final p = linear ? primary : primary.drive(_curve);
-    final s = linear ? secondary : secondary.drive(_curve);
+    final Animation<double> p = widget.linear ? widget.primary : _p;
+    final Animation<double> s = widget.linear ? widget.secondary : _s;
+    if (_android) {
+      return FadeTransition(
+        opacity: s.drive(Tween(begin: 1.0, end: Shell.pageDimAndroid)),
+        child: SlideTransition(
+          position: s.drive(Tween(begin: Offset.zero, end: const Offset(-Shell.pageParallaxAndroid, 0))),
+          child: SlideTransition(position: p.drive(_in), child: widget.child),
+        ),
+      );
+    }
     return SlideTransition(
-      position: s.drive(_out),
+      position: s.drive(Tween(begin: Offset.zero, end: const Offset(-Shell.pageParallax, 0))),
       child: SlideTransition(
         position: p.drive(_in),
         child: Stack(clipBehavior: Clip.none, fit: StackFit.passthrough, children: [
@@ -111,7 +156,7 @@ class PopInTransition extends StatelessWidget {
             bottom: 0,
             child: IgnorePointer(child: DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(colors: [Color(0x00000000), Shell.edgeShadow])))),
           ),
-          child,
+          widget.child,
         ]),
       ),
     );

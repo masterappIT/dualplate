@@ -76,6 +76,8 @@ class _ShellDemoPageState extends State<ShellDemoPage> {
             setState(() => last = '選了 $r');
           }),
           const SizedBox(height: 12),
+          Btn('鎖定提示框', kind: BtnKind.line, onTap: () => notice(context, title: '必須更新', msg: '請更新到最新版本。', ok: '更新', locked: true)),
+          const SizedBox(height: 12),
           Btn('再開一頁', kind: BtnKind.line, onTap: () => context.push('/demo')),
           if (last.isNotEmpty) Subtle('結果：$last'),
         ]),

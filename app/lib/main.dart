@@ -32,7 +32,8 @@ class _DualplateAppState extends State<DualplateApp> {
         title: '跨境車牌管家',
         debugShowCheckedModeBanner: false,
         routerConfig: router,
-        builder: (context, child) => SwipeCloseLayer(layers: layers, child: child!),
+        // 紙色墊底：Android 換頁時上一頁變淡，透出的是頁面底色（uni-app animationAlphaBGColor = backgroundColor #F7F6F1）
+        builder: (context, child) => ColoredBox(color: C.paper, child: SwipeCloseLayer(layers: layers, child: child!)),
         // 繁體字形：不指定時部分 Android 手機會用簡體或日文字形
         locale: const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant', countryCode: 'HK'),
         localizationsDelegates: GlobalMaterialLocalizations.delegates,

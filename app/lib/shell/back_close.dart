@@ -2,7 +2,7 @@
 // 確認框、提示框、底部選單（dialogs.dart）都是開在最上層導航器上、沒有頁面設定的路由（pageless route），
 // 這裏用 NavigatorObserver 記下打開中的彈窗，不必每個彈窗自己登記。
 // - Android 返回鍵：go_router 先問最上層導航器，打開中的彈窗先被關掉（等於點了框外：ask 回傳 'modal'、choose 回傳 -1），
-//   不離開頁面；鎖定的提示框（notice locked）關不了，和點框外一樣。
+//   不離開頁面；鎖定的提示框（notice locked）例外：和現有 App 一樣照常返回頁面（見 dialogs.dart）。
 // - iOS 從左邊緣右滑：彈窗打開時先關最上層彈窗，不離開頁面（SwipeCloseLayer）；沒有彈窗時由 page_route.dart 照常右滑返回。
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';

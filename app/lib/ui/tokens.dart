@@ -121,9 +121,17 @@ abstract final class Shell {
   static const tabSpacing = 1 / 3;
   static const tabFontSize = 10.0;
   static const tabBorder = Color(0x66FFFFFF);
+  // iOS：pop-in 300ms（HTML5+ 文檔）；曲線和上一頁左移比例未能從 SDK 查到，暫用 easeInOut、1/3
   static const pageDuration = Duration(milliseconds: 300);
-  static const pageCurve = Cubic(0.42, 0.0, 0.58, 1.0); // 未能從 SDK 查到，暫用 iOS UIView 預設 easeInOut
-  static const pageParallax = 1 / 3; // 上一頁向左移的比例，未能從 SDK 查到
+  static const pageCurve = Cubic(0.42, 0.0, 0.58, 1.0);
+  static const pageParallax = 1 / 3;
+  // Android：DCloud SDK lib.5plus.base res/anim dcloud_page_open_enter/exit、dcloud_page_close_enter/exit
+  // （pop-in 用這四個，見 AnimOptions、core/ui/i）：打開 300ms、返回 360ms，decelerate；上一頁左移 25%、透明度 1→0.6；沒有陰影
+  static const pageDurationAndroid = Duration(milliseconds: 300);
+  static const pageReverseDurationAndroid = Duration(milliseconds: 360);
+  static const pageCurveAndroid = Curves.decelerate; // android decelerate_interpolator：1-(1-t)²
+  static const pageParallaxAndroid = 0.25;
+  static const pageDimAndroid = 0.6;
   static const edgeShadowWidth = 10.0;
   static const edgeShadow = Color(0x19000000);
   static const swipeEdge = 20.0; // iOS 從左邊緣右滑的感應寬度
