@@ -3,6 +3,7 @@
 import 'package:dualplate/main.dart';
 import 'package:dualplate/ui/dialogs.dart';
 import 'package:dualplate/ui/tokens.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -239,5 +240,80 @@ void main() {
     await tester.tap(find.text('確認框'));
     await tester.pumpAndSettle();
     expect(rectOf(tester, overlay), const Rect.fromLTWH(0, 0, _w, _h));
+  });
+  testWidgets('iOS 右滑一半時，選單和遮罩跟着子頁向右移，上一頁沒有遮罩', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    await openDemo(tester);
+    await openSheet(tester);
+    final g = await tester.startGesture(const Offset(5, 300));
+    await g.moveBy(const Offset(20, 0)); // 先過拖動門檻
+    await tester.pump();
+    final sheet = rectOf(tester, sheetBox).left, mask = rectOf(tester, overlay).left;
+    await g.moveBy(const Offset(150, 0));
+    await tester.pump();
+    expect(rectOf(tester, sheetBox).left, closeTo(sheet + 150, 0.5));
+    expect(rectOf(tester, overlay).left, closeTo(mask + 150, 0.5));
+    await g.up();
+    await tester.pumpAndSettle();
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('iOS 選單開着時右滑沒過一半而且慢慢放手：頁面和選單都留着，選單仍可按取消', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    await openDemo(tester);
+    await openSheet(tester);
+    final g = await tester.startGesture(const Offset(5, 300));
+    for (var i = 0; i < 10; i++) {
+      await g.moveBy(const Offset(10, 0));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await tester.pump(const Duration(milliseconds: 300));
+    await g.up();
+    await tester.pumpAndSettle();
+    expect(find.text('示範子頁'), findsOneWidget);
+    expect(find.text('有變動？'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(find.text('結果：選了 -1'), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('iOS 右滑：鎖定提示框打開時，子頁也連提示框一起返回', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    await openDemo(tester);
+    await tester.tap(find.text('鎖定提示框'));
+    await tester.pumpAndSettle();
+    await tester.dragFrom(const Offset(5, 300), const Offset(400, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('必須更新'), findsNothing);
+    expect(find.text('示範子頁'), findsNothing);
+    expect(find.text('車牌管家'), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('iOS 右滑：分頁頁面的選單打開時不動，選單留着', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    await openTabs(tester);
+    await openSheet(tester);
+    await tester.dragFrom(const Offset(5, 300), const Offset(400, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('有變動？'), findsOneWidget);
+    expect(find.text('車牌管家'), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('iOS 右滑返回後再開子頁，彈窗區是新的，沒有留下舊選單', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    await openDemo(tester);
+    await openSheet(tester);
+    await tester.dragFrom(const Offset(5, 300), const Offset(400, 0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打開示範子頁'));
+    await tester.pumpAndSettle();
+    expect(find.text('有變動？'), findsNothing);
+    await tester.binding.handlePopRoute(); // 沒有彈窗，返回鍵直接離開子頁
+    await tester.pumpAndSettle();
+    expect(find.text('車牌管家'), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
   });
 }

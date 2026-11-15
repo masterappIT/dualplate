@@ -252,22 +252,21 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('iOS 右滑：確認框打開時甚麼都不發生，確認框和頁面都留着（和現有 App 一樣）', (tester) async {
+  // 1e：現有 App 子頁的彈窗開着時，iOS 原生右滑連頁面一起返回（1c 原本定為甚麼都不發生，負責人按 1e 實測改正）
+  testWidgets('iOS 右滑：子頁確認框打開時，頁面連確認框一起返回', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     await openDemo(tester);
     await tester.tap(find.text('確認框'));
     await tester.pumpAndSettle();
     await tester.dragFrom(const Offset(5, 400), const Offset(600, 0));
     await tester.pumpAndSettle();
-    expect(find.text('刪除這張牌照？'), findsOneWidget);
-    expect(find.text('示範子頁'), findsOneWidget);
-    await tester.tap(find.text('取消'));
-    await tester.pumpAndSettle();
-    expect(find.text('結果：cancel'), findsOneWidget);
+    expect(find.text('刪除這張牌照？'), findsNothing);
+    expect(find.text('示範子頁'), findsNothing);
+    expect(find.text('車牌管家'), findsOneWidget);
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('iOS 右滑：底部選單打開時甚麼都不發生，選單和頁面都留着', (tester) async {
+  testWidgets('iOS 右滑：子頁底部選單打開時，頁面連選單一起返回', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     await openDemo(tester);
     await tester.tap(find.text('底部選單'));
@@ -275,8 +274,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.dragFrom(const Offset(5, 300), const Offset(600, 0));
     await tester.pumpAndSettle();
-    expect(find.text('有變動？'), findsOneWidget);
-    expect(find.text('示範子頁'), findsOneWidget);
+    expect(find.text('有變動？'), findsNothing);
+    expect(find.text('示範子頁'), findsNothing);
+    expect(find.text('車牌管家'), findsOneWidget);
     debugDefaultTargetPlatformOverride = null;
   });
 

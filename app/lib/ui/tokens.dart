@@ -238,7 +238,4 @@ abstract final class Shell {
   static const pageParallaxAndroid = 0.25;
   static const pageDimAndroid = 0.6;
   static const swipeEdge = 20.0; // iOS 從左邊緣右滑的感應寬度
-  // 彈窗開着時 iOS 右滑：false＝甚麼都不發生（1c 定的行為，任務 1e 指定保留）；
-  // true＝和 16 Pro Max 現有 App 子頁一樣，頁面連彈窗一起滑走返回（1e 錄影核實：原生右滑不經 onBackPress，不先關彈窗）。待負責人決定。
-  static const swipeBackWithDialog = false;
 }

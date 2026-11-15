@@ -52,22 +52,18 @@ void main() {
     // 右滑返回
     await tap(find.text('打開示範子頁'));
     await swipeFromEdge();
-    // 確認框開着時右滑：甚麼都不發生（和現有 App 一樣），按取消關掉
+    // 確認框開着時右滑：子頁連確認框一起返回（1e 按現有 App 實測改正）
     await tap(find.text('打開示範子頁'));
     await tap(find.text('確認框'));
     await shot('07-demo-ask');
     await swipeFromEdge();
     await shot('08-demo-after-swipe-ask');
-    await tap(find.text('取消'));
-    // 選單開着時右滑：甚麼都不發生，點框外關掉
+    // 選單開着時右滑：子頁連選單一起返回
+    await tap(find.text('打開示範子頁'));
     await tap(find.text('底部選單'));
     await shot('09-demo-choose');
     await swipeFromEdge();
     await shot('10-demo-after-swipe-choose');
-    await tester.tapAt(const Offset(200, 150));
-    await wait(900);
-    await tap(find.byKey(const ValueKey('nav-back')));
-    await wait(1000);
 
     // 1e：分頁頁面「我的」開確認框（和現有 App 的「退出登入」同一句），遮罩只蓋內容區；開着時切分頁再切回
     await tap(find.text('我的'));

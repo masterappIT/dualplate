@@ -8,8 +8,8 @@
 // 確認框在這一塊的正中；彈窗開着時分頁列照常可按，切走再切回，彈窗仍開着。
 // Flutter 版照做：AppPage 把頁面內容包在 DialogArea 裏，ask()／notice()／choose() 開在最近的 DialogArea 內；
 // 找不到 DialogArea（例如組件樣板頁）才蓋整個畫面。
-// 返回：DialogArea 有彈窗時向所在頁面登記「先關彈窗」——Android 返回鍵、導航列返回箭頭先關最上層彈窗（back-close.js），
-// iOS 右滑不動（Shell.swipeBackWithDialog）。
+// 返回：DialogArea 有彈窗時向所在頁面登記「先關彈窗」——Android 返回鍵、導航列返回箭頭先關最上層彈窗（back-close.js；
+// 返回箭頭 1e 在現有 App 核實）；iOS 右滑例外，頁面連彈窗一起滑走（page_route.dart）。
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
