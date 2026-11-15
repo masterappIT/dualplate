@@ -1,6 +1,7 @@
 // 組件樣板頁（flutter-app-plan.md 階段 1）：把每個通用組件排出來，和現有 App 一比一對照，管理者確認後才用來做頁面。
 // 只在開發時打開，不進正式版的頁面跳轉。
 import 'package:flutter/widgets.dart';
+import 'package:go_router/go_router.dart';
 import 'base.dart';
 import 'dialogs.dart';
 import 'sample_choices.dart';
@@ -26,6 +27,7 @@ class _SamplePageState extends State<SamplePage> {
           child: PageBody(children: [
             const PageTitle('組件樣板'),
             const Intro('每個組件對照 mobile/src/App.vue 的同名樣式類別。'),
+            Btn('打開外殼（底部分頁和示範子頁）', kind: BtnKind.line, onTap: () => context.go('/index')),
             Segmented<String>(options: const [('粵港', '粵港'), ('粵澳', '粵澳')], value: seg, onChanged: (v) => setState(() => seg = v)),
             Chips(children: [for (final (i, t) in ['全部', '快到期', '已逾期'].indexed) Chip(t, active: chip == i, onTap: () => setState(() => chip = i))]),
             const SectionTitle('狀態標籤'),

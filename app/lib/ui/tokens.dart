@@ -201,3 +201,38 @@ const plateHanFont = 'PingFang SC'; // MainlandPlate.vue 粵、港、澳
 const plateHanFallback = ['Heiti SC', 'Microsoft YaHei'];
 const plateArialFont = 'Arial'; // HongKongPlate.vue、MacauPlate.vue
 const plateArialFallback = ['Helvetica Neue'];
+
+// 外殼（階段 1c）：頂部導航列、底部分頁、換頁動畫。現在 App 這幾樣由 DCloud 原生層畫，數值取自 uni-app App 端預設：
+// @dcloudio/uni-shared NAVBAR_HEIGHT 44、TABBAR_HEIGHT 50；uni-cli-shared DEFAULT_TAB_BAR（字 10px、圖示 24px、間距 3px）；
+// pages.json tabBar.borderStyle "white" → rgba(255,255,255,.4)；HTML5+ titleNView 標題 17px、左右留 88px、返回圖示 27px；
+// uni-app-plus 換頁 pop-in、300ms。iOS 換頁和返回箭頭位置按 iPhone 16 Pro Max 現有 App 錄影量度（2026-11-15，/private/tmp/dualplate-flutter/1c/app/）。
+abstract final class Shell {
+  static const navHeight = 44.0;
+  static const navTitleSize = 17.0;
+  static const navTitleWeight = FontWeight.w400; // 現有 App 截圖是一般粗細（網頁版是粗體）
+  static const navTitleInset = 88.0;
+  static const navText = Color(0xFF000000); // navigationBarTextStyle black
+  static const backIconSize = 27.0;
+  static const backInset = 7.0; // 現有 App 截圖：箭頭墨跡左距 16pt（字形本身左空 9pt）
+  static const tabHeight = 50.0;
+  static const tabIcon = 24.0;
+  // 網頁版 uni-app 預設圖示置中、spacing 3px；原生分頁列不同。量 iPhone 16 Pro Max 現有 App 截圖（3 倍）：
+  // 圖示頂距分頁列頂 6.5pt，圖示底到文字行（行高 14）頂 1/3pt，照現有 App
+  static const tabIconTop = 6.5;
+  static const tabSpacing = 1 / 3;
+  static const tabFontSize = 10.0;
+  static const tabBorder = Color(0x66FFFFFF);
+  // iOS：量現有 App 錄影，推入和返回都是 300ms easeInOut（誤差約 1pt）；上一頁左移 25%、蓋上 20% 黑色（亮度到 0.8）；新頁邊緣沒有陰影
+  static const pageDuration = Duration(milliseconds: 300);
+  static const pageCurve = Cubic(0.42, 0.0, 0.58, 1.0);
+  static const pageParallax = 0.25;
+  static const pageDim = 0.2;
+  // Android：DCloud SDK lib.5plus.base res/anim dcloud_page_open_enter/exit、dcloud_page_close_enter/exit
+  // （pop-in 用這四個，見 AnimOptions、core/ui/i）：打開 300ms、返回 360ms，decelerate；上一頁左移 25%、透明度 1→0.6；沒有陰影
+  static const pageDurationAndroid = Duration(milliseconds: 300);
+  static const pageReverseDurationAndroid = Duration(milliseconds: 360);
+  static const pageCurveAndroid = Curves.decelerate; // android decelerate_interpolator：1-(1-t)²
+  static const pageParallaxAndroid = 0.25;
+  static const pageDimAndroid = 0.6;
+  static const swipeEdge = 20.0; // iOS 從左邊緣右滑的感應寬度
+}

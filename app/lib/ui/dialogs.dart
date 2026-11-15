@@ -15,7 +15,7 @@ const _ease = Motion.ease;
 Future<String> ask(BuildContext context, {required String title, String msg = '', String ok = '確認', String cancel = '取消', bool danger = false}) =>
     _messageBox<String>(context, title: title, msg: msg, buttons: [(cancel, _BtnType.info, 'cancel'), (ok, danger ? _BtnType.error : _BtnType.primary, 'confirm')], dismissValue: 'modal', dismissible: true);
 
-// locked：只能按確認鍵（例如必須更新），點框外和返回鍵都關不了
+// locked：只能按確認鍵（例如必須更新），點框外關不了；返回鍵照常返回頁面（和現有 App 一樣）
 Future<void> notice(BuildContext context, {required String title, String msg = '', String ok = '知道了', bool locked = false}) =>
     _messageBox<void>(context, title: title, msg: msg, buttons: [(ok, _BtnType.primary, null)], dismissValue: null, dismissible: !locked);
 
@@ -30,6 +30,16 @@ Future<T> _messageBox<T>(BuildContext context, {required String title, required 
     reverseTransitionDuration: _duration,
     pageBuilder: (context, animation, _) => PopScope(
       canPop: dismissible,
+      // 鎖定的提示框：點框外關不了；但返回鍵（iOS 右滑）和現有 App 一樣照常返回頁面——
+      // choice.js 沒有把鎖定提示框登記到 back-close.js，返回鍵直接離開頁面（負責人 2026-11-15 決定照舊，記入計劃第七節）
+      onPopInvokedWithResult: dismissible
+          ? null
+          : (didPop, _) {
+              if (didPop) return;
+              final router = Router.maybeOf(context)?.routerDelegate; // 關掉提示框後，再照常返回一次（等於再按一次返回鍵）
+              Navigator.of(context).pop(dismissValue);
+              if (router != null) Future.microtask(router.popRoute);
+            },
       child: _MessageBox<T>(animation: animation, title: title, msg: msg, buttons: buttons, onModal: dismissible ? () => Navigator.of(context).pop(dismissValue) : null),
     ),
   ));
