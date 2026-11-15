@@ -181,6 +181,7 @@ Sidebar（深綠實心） │ Topbar：麵包屑 ………… ⌘K 搜尋 · 今
 |---|---|---|
 | `PageBody`、`PageTitle`、`Intro`、`CardBox`、`ListCard`／`ListTitle`／`ListSub`／`ListNote`、`SectionHead`、`Pill`、`Who`、`Chips`／`Chip`、`Segmented`、`Btn`、`Field`、`Kv`、`Empty` 等 | `lib/ui/base.dart` | `App.vue` 同名通用類別 |
 | `ask`（確認框）、`notice`（提示框，可鎖定）、`choose`（底部選單） | `lib/ui/dialogs.dart` | `lib/choice.js`（`wd-message-box`、`wd-action-sheet`） |
+| `DialogArea` | `lib/ui/dialogs.dart` | 彈窗只蓋頁面內容區（現有 App 的彈窗在 WebView 裏）；`AppPage` 自動使用，頁面不用自己加。在內容區裏 `Navigator.of(context)` 指向彈窗區自己的導航器，頁面要離開用 go_router 或導航列返回箭頭 |
 | `WdRadioGroup`／`WdRadio`、`WdCheckbox` | `lib/ui/choices.dart` | `wd-radio shape="dot"`、`wd-checkbox shape="square"` |
 | `showToast`／`hideToast` | `lib/ui/toast.dart` | `uni.showToast({ icon: 'none' })`（App 端原生等待框） |
 | `MainlandPlate`、`HongKongPlate`、`MacauPlate` | `lib/business/plates.dart` | 同名 `.vue`（仿真車牌，受保護設計） |
