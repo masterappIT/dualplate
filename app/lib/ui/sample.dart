@@ -3,6 +3,7 @@
 import 'package:flutter/widgets.dart';
 import 'base.dart';
 import 'dialogs.dart';
+import 'sample_business.dart';
 import 'tokens.dart';
 
 class SamplePage extends StatefulWidget {
@@ -84,6 +85,7 @@ class _SamplePageState extends State<SamplePage> {
             ]),
             if (last.isNotEmpty) Subtle('結果：$last'),
             const Empty('暫時沒有記錄'),
+            const SampleBusiness(),
           ]),
         ),
       );
