@@ -76,7 +76,7 @@
 - 新組件登記在 `docs/design-system.md` 新增的「客戶端（Flutter）」一節，頁面內不可自寫顏色、字號、圓角、陰影。
 
 **怎樣核對**：每一頁都和**現有 App** 同一頁比較，不是和網頁版比較。
-- 在同一款模擬器、同一尺寸、同一個測試帳號下截圖：iOS 用 iPhone 16 Pro（iOS 18.4，按現有方法裝目前代碼），Android 用 `android/emu-run.sh` 打包的目前代碼。
+- 在同一尺寸、同一個測試帳號下截圖：iOS 現有 App 用 iPhone 16 Pro Max（iOS 18.4，按現有方法裝目前代碼；本機只有這台 18.4 模擬器），Flutter 版用同尺寸的 iPhone 17 Pro Max；Android 用 `android/emu-run.sh` 打包的目前代碼。
 - 每頁要截的狀態：正常、載入中、空白、出錯；有自管／托管差別的頁面兩種都截；彈窗、選單、鍵盤彈出各截一張。
 - 動畫和互動用錄影並排比較（批文卡翻轉、印章、啟動、頁面切換、彈窗）。
 - 兩張並排，再疊在一起比較，差異逐項列出，修到一致。
@@ -148,6 +148,23 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
   - 組件樣板和登入頁與現有 App 一比一：並排、疊圖看不出分別，差異清單為空；
   - 在 iOS、Android 模擬器登入測試帳號，四個分頁正常；
   - 繁體字形正確。
+
+#### 階段 1 分四批（管理者 2026-11-15 同意）
+
+| 批次 | 內容 | 做完給管理者看 | 依賴 |
+|---|---|---|---|
+| 1a 通用組件和彈窗 | 外觀數值、`App.vue` 通用類別、確認框、提示框、底部選單；補做單選、勾選、提示（toast）；寫 `app/run.sh`（Android） | 樣板頁在 iOS、Android 模擬器的截圖，彈窗逐個點開 | 無 |
+| 1b 業務小組件 | 內地、香港、澳門三款仿真車牌，`PlateChip`、`DueDate`、`StampMark` | 樣板頁截圖，和現有 App 牌照頁上的同一組件並排、疊圖 | 只用已提交的 `tokens.dart`、`base.dart` |
+| 1c 外殼 | 頂部導航列、底部四個分頁（內容先空）、從右滑入的頁面切換、返回鍵先關彈窗（`back-close.js`） | 兩個平台的截圖，切換和返回行為錄影 | 只用已提交的 `tokens.dart`、`base.dart`、`dialogs.dart` |
+| 1d 登入 | API 連線和 401 處理、自管／托管用語等工具（附單元測試）、登入頁 | 登入頁和現有 App 並排、疊圖，附差異清單；兩個平台都用測試帳號登入成功 | 1a–1c 合併後才開始 |
+
+做法：
+- 1a、1b、1c 同時開工，各自一個 session、一條分支（各自的 worktree）。完成後由負責人逐批驗收，合併到 `main`，再刪除分支和 worktree。1d 在三批合併後從 `main` 開工，同樣做法。
+- 為了合併時少衝突，各批只改自己的檔案：新組件放新檔案；樣板頁每批一個獨立區塊檔（例如 `sample_plates.dart`），`sample.dart` 只加一行引用。本計劃文件、`app/README.md`、`docs/design-system.md` 由負責人在合併時統一更新，各批把要登記的內容寫在報告裏。
+- 模擬器分配（同時開工時不可共用，否則互相蓋掉安裝）：
+  - iOS 現有 App 的對照基準在 iPhone 16 Pro Max（iOS 18.4，`78302077`），**Flutter 版不可裝在這台**（Bundle ID 相同，會蓋掉現有 App）。
+  - Flutter 版：1a 用 iPhone 17 Pro（iOS 26.0）；1b 用 iPhone 17 Pro Max（iOS 26.0，畫面尺寸和 16 Pro Max 相同，用來並排對照）；1c 用 iPhone 17（iOS 26.0）。
+  - Android 這一輪只有 1a 運行（寫 `app/run.sh` 並跑一次）。1b、1c 的 Android 截圖由負責人在合併後統一跑一次。
 
 ### 階段 2：掃描批文卡和牌照詳情（約 1 週，關卡）
 
@@ -326,7 +343,7 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 
 ### 2026-11-15（階段 1，按管理者指示暫停）
 
-已完成（未提交）：
+已完成（已提交為 `524f365`，未推送）：
 - 建立 `app/`：iOS Bundle ID、Android 包名都是 `com.masterappinc.dualplate`；加入 `go_router`、`http`、`flutter_secure_storage`、`shared_preferences`，以及 Flutter 自帶的 `flutter_localizations`（顯示繁體用）。
 - `app/lib/ui/tokens.dart`：顏色、字號、圓角、陰影、控件高度、動畫，數值抄自 `mobile/src/App.vue`。
 - `app/lib/ui/base.dart`：`App.vue` 通用樣式類別的對應組件。
