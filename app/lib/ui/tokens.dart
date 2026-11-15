@@ -100,3 +100,37 @@ TextStyle ts(double size, {FontWeight weight = FontWeight.w400, Color color = C.
 // font-weight 700 / 800
 const w700 = FontWeight.w700;
 const w800 = FontWeight.w800;
+
+// 單選、勾選（wd-radio shape="dot"、wd-checkbox shape="square"）：數值取自 wot-design-uni 1.14 的 common/abstracts/variable.scss、
+// wd-radio/index.scss、wd-checkbox/index.scss；選中色是 App.vue 的 --wot-color-theme（= C.jade），其餘 App.vue 沒有覆寫。
+abstract final class WotChoice {
+  static const label = Color(0xD9000000); // $-checkbox-label-color rgba(0,0,0,.85)
+  static const labelFs = 14.0; // $-checkbox-label-fs
+  static const labelLine = 20.0; // .wd-radio__label / .wd-checkbox__txt line-height:20px
+  static const border = Color(0xFFDCDCDC); // $-radio-dot-border-color、$-checkbox-border-color
+  static const box = Color(0xFFFFFFFF); // $-checkbox-bg（勾選框未選時白底）
+  static const check = Color(0xFFFFFFFF); // $-checkbox-check-color、單選圓點內的白點
+  static const size = 16.0; // $-radio-size、$-checkbox-size
+  static const borderWidth = 2.0;
+  static const dot = 8.0; // $-radio-dot-size
+  static const icon = 14.0; // $-checkbox-icon-size（check-bold 字形）
+  static const squareRadius = 4.0; // $-checkbox-square-radius
+  static const labelGap = 9.0; // $-checkbox-label-margin（勾選框和文字的距離）
+  static const radioMargin = 10.0; // $-radio-margin：每個 .wd-radio 的 margin-top（第一個也有）
+  static const duration = Duration(milliseconds: 200); // 圓點 transform .2s ease-in；勾選框底色 background .2s、勾號 opacity .2s
+  static const easeIn = Cubic(0.42, 0.0, 1.0, 1.0); // CSS ease-in
+}
+
+// 提示（uni.showToast({ title, icon: 'none' })）：App 端是原生等待框 plus.nativeUI.showWaiting，
+// uni-app-plus dist/uni.runtime.esm.js 傳 padding 10px、字 16px、不顯示 loading、modal:false（不擋操作）；
+// 其餘用 5+ API 預設：背景 rgba(0,0,0,.7)、白字、圓角 10px、置中。iOS 的等待框是 MBProgressHUD 改版：淡入淡出 0.3 秒，文字最寬為螢幕寬減 4 倍內距。
+abstract final class ToastStyle {
+  static const bg = Color(0xB3000000); // rgba(0,0,0,.7)
+  static const fg = Color(0xFFFFFFFF);
+  static const fs = 16.0;
+  static const line = 1.4; // UILabel 用系統字型的自然行高（PingFang 約 1.4 倍）
+  static const padding = 10.0;
+  static const radius = 10.0;
+  static const fade = Duration(milliseconds: 300);
+  static const duration = Duration(milliseconds: 1500); // uni.showToast 預設 duration 1500
+}

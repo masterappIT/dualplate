@@ -3,6 +3,7 @@
 import 'package:flutter/widgets.dart';
 import 'base.dart';
 import 'dialogs.dart';
+import 'sample_choices.dart';
 import 'tokens.dart';
 
 class SamplePage extends StatefulWidget {
@@ -83,6 +84,7 @@ class _SamplePageState extends State<SamplePage> {
               }),
             ]),
             if (last.isNotEmpty) Subtle('結果：$last'),
+            const SampleChoices(),
             const Empty('暫時沒有記錄'),
           ]),
         ),
