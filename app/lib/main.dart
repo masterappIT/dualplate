@@ -1,13 +1,27 @@
 // 跨境車牌管家 iOS／Android App（Flutter，docs/tasks/flutter-app-plan.md）。
-// 階段 1 進行中：啟動後先打開組件樣板頁；樣板頁有入口進外殼（底部四個分頁和示範子頁）。
+// 啟動：先讀登入狀態，未登入開登入頁、已登入開首頁分頁（照 lib/launch.js；預先取首頁資料屬階段 4）。
+// 開發時看組件樣板頁：flutter run --dart-define=START=/sample
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
+import 'core/session.dart';
 import 'shell/router.dart';
 import 'ui/base.dart';
 import 'ui/tokens.dart';
 
-void main() => runApp(const DualplateApp());
+const _devStart = String.fromEnvironment('START');
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Session.load();
+  } catch (_) {
+    // 讀不到登入資料（例如 Keychain 暫時不能用）：當作未登入
+  }
+  runApp(DualplateApp(initialLocation: startLocation()));
+}
+
+String startLocation() => _devStart.isNotEmpty ? _devStart : signedIn ? '/index' : '/login';
 
 class DualplateApp extends StatefulWidget {
   const DualplateApp({super.key, this.initialLocation = '/sample'});
