@@ -82,15 +82,22 @@ abstract final class Motion {
   static const disabledOpacity = 0.55;
 }
 
-// 字型：App.vue 的 font-family 次序；CSS 的 line-height 把多出的行距平均分到上下（half-leading），
-// Flutter 要用 TextLeadingDistribution.even 才會一樣，否則每行高低位置差一兩個像素。
+// 字型：App.vue 的 font-family 次序（-apple-system 排第一，中文才落到 PingFang TC）。
+// -apple-system 在 Flutter 是 '.AppleSystemUIFont'；不指定時英文數字會用蘋方，短橫較長，粗體英文還會畫成空心（1b 2026-11-15 實測）。
+// Android 沒有這個字型，照 CSS 次序往下找。
+// CSS 的 line-height 把多出的行距平均分到上下（half-leading），Flutter 要用 TextLeadingDistribution.even 才會一樣；
+// WebView 又把行高向下取整到整數 px（例如 14px×1.6 = 22.4 → 22），所以 ts() 也取整。
+const fontFamily = '.AppleSystemUIFont';
 const fontFallback = ['PingFang TC', 'Noto Sans TC', 'PingFang SC'];
+
+double cssLine(double size, double height) => (size * height + 1e-6).floorToDouble() / size;
 
 TextStyle ts(double size, {FontWeight weight = FontWeight.w400, Color color = C.ink, double height = 1.5, double? letterSpacing}) => TextStyle(
       fontSize: size,
       fontWeight: weight,
       color: color,
-      height: height,
+      height: cssLine(size, height),
+      fontFamily: fontFamily,
       letterSpacing: letterSpacing,
       leadingDistribution: TextLeadingDistribution.even,
       fontFamilyFallback: fontFallback,

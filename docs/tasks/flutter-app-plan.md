@@ -266,6 +266,9 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 
 | 日期 | 頁面 | 問題 | 管理者決定 |
 |---|---|---|---|
+| 2026-11-15 | 多頁（PlateChip） | 沒指定地區、號碼又是空時顯示「待補充」，因「待」是漢字被判為內地牌，顯示黑底白字，而不是中性灰框 | |
+| 2026-11-15 | 多頁（DueDate） | 收到不是「年-月-日」格式的日期時，顯示綠色的「還有 NaN 天」 | |
+| 2026-11-15 | 牌照詳情 | 粵澳路線沒有用 MacauPlate，另寫了一款澳門牌，和登入頁的澳門牌樣子不同 | |
 
 ## 八、代替清單（全部打勾才算可以代替）
 
@@ -311,8 +314,8 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 | 確認框、提示框、底部選單（`choice.js`） | 1 | 已寫，未和現有 App 對照 |
 | 單選、勾選（`wd-radio`、`wd-checkbox`） | 1 | 已寫（1a），未和現有 App 對照 |
 | 提示（toast） | 1 | 已寫（1a），未和現有 App 對照 |
-| MainlandPlate、HongKongPlate、MacauPlate | 1 | 未做 |
-| PlateChip、DueDate、StampMark | 1 | 未做 |
+| MainlandPlate、HongKongPlate、MacauPlate | 1 | 完成（1b，已和現有 App 對照） |
+| PlateChip、DueDate、StampMark | 1 | 完成（1b，已和現有 App 對照；差異見進度記錄） |
 | ApprovalCard（顯示、翻轉） | 2 | 未做 |
 | CardCapture（原生相機、對準框、找卡邊、自動拍） | 2 | 未做 |
 | AdvisorCard、ContactCard、WelcomeGuide | 3a | 未做 |
@@ -370,3 +373,17 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
   - 和現有 App 並排對照（模擬器不能點擊，要等 1b 的點擊工具；對照頁面：company-new、rental-new、plate-delete、signup）；
   - Android 只截了樣板頁上半部，新組件未在 Android 上看過；Android 的 `uni.showToast` 原生外觀可能和 iOS 不同，合併三批後統一在 Android 上核對。
 - 管理者 2026-11-15 表示階段 1 的安排和決定由負責人代為處理。
+
+### 2026-11-15（階段 1b 已合併，全局字型修正）
+
+- 1b 在分支完成（`8446602`、`11b958f`），負責人驗收後合併到 `main`（`63f7aa5`），已刪除分支和 worktree。合併後 `flutter analyze` 無問題、`flutter test` 69 個全部通過。
+- 新增 `app/lib/business/`：`plates.dart`（MainlandPlate、HongKongPlate、MacauPlate）、`plate_chip.dart`、`due_date.dart`、`stamp_mark.dart`、`css.dart`（rpx 換算、CSS 陰影、行高取整）；樣板區塊 `lib/ui/sample_business.dart`；開發用入口 `lib/sample_business_main.dart`。
+- 和現有 App 對照（現有 App 在 iPhone 16 Pro Max iOS 18.4，用審查帳號；Flutter 版在 iPhone 17 Pro Max）：
+  - 登入頁四塊立體車牌：寬差 0–1 個實際像素，字位差不到 1pt；內地牌底下陰影短約 1pt（未修）。
+  - 牌照詳情的內地牌、香港牌：差 1–2 個實際像素。
+  - 到期徽章：同高、頂端對齊。
+  - 車牌徽章：高度一致，Flutter 版寬約 3%（未修）。
+  - 印章：外圈尺寸和動畫幅度吻合；定住時間快約 2 幀（可能是錄影誤差）；「已登入」字寬多 1.3pt。
+  - 字寬差別的共同原因：Flutter 畫系統字比 WebView 寬約 3%、矮約 5%。不是 iOS 版本差別，試過的設定都無效。照第六節，不調版面遷就，由管理者並排看後判斷。
+- 對照用工具：Xcode 27 的模擬器不能用指令點擊，1b 在 `/private/tmp/dualplate-uitest/` 做了 XCUITest 點擊工具（不在倉庫）。它在鍵盤打開後點擊不可靠，登入時改由管理者手動操作。
+- 全局字型修正（負責人）：`tokens.dart` 的 `ts()` 改為先用系統字 `.AppleSystemUIFont`（對應 App.vue 的 `-apple-system`），中文才落到蘋方；行高照 WebView 向下取整到整數 px。之前英文數字用蘋方，短橫較長，粗體英文還會畫成空心。已在 iPhone 17 Pro Max 看過樣板頁。
