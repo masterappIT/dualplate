@@ -364,6 +364,11 @@ abstract final class CaptureStyle {
   static const buttonFont = 16.0;
   static const buttonWeight = FontWeight.w600;
   static const ghostBorder = Color(0xB3FFFFFF); // .ghost border 1px rgba(255,255,255,.7)
+  // 2b 即時找卡邊（現有 App 沒有，等管理者確認）：對齊的框線、四角和「可以拍了」用深綠底上的「正常」綠（C.onDeepOk），
+  // 黑色遮罩和鏡頭畫面上都看得清；線粗和外移沿用四角（cornerBorder、cornerOffset）
+  static const edgeOn = C.onDeepOk;
+  static const readySize = Fs.h; // 「可以拍了」16、粗 600
+  static const readyWeight = FontWeight.w600;
 }
 
 // 安卓申請權限時頂部的用途說明卡、被拒提示卡（pick-image.js showCard：plus.nativeObj.View 原生圖層）
