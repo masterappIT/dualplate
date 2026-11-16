@@ -4,7 +4,8 @@
 // - 選了相片：雙指縮放、拖動對框，「重選／確認」；確認截出框內卡面（card_stage.dart）。
 // - 安卓開鏡頭前先申請相機權限，同時頂部顯示用途說明；拒絕了照樣繼續，鏡頭開不了就改為「拍照／從相冊選」（pick_image.dart）。
 // 和現有 App 不同的只有系統畫的部分（系統權限框、系統相冊、系統相機頁），以及鏡頭改用原生相機（計劃第一節）。
-// 階段 2b 新增（現有 App 沒有）：鏡頭模式下即時找卡邊（card_edges.dart，背景 isolate），框上標示四邊有沒有對齊。
+// 階段 2b 新增（現有 App 沒有，管理者 2026-11-16 批准、選定樣式三）：鏡頭模式下即時找卡邊（card_edges.dart，背景 isolate），
+// 對齊的框線轉綠；四邊都對齊、不歪、清楚時提示「可以拍了」，維持 autoShotHold 就自動拍（和快門同一條路），拍一次後停止找邊。
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:camera/camera.dart';
@@ -20,26 +21,42 @@ import 'pick_image.dart';
 
 const unreadablePhoto = '這張照片無法讀取，請改用相機拍攝或選 JPG、PNG 照片';
 
-/// 找到卡邊時新加的提示（新文字，等管理者確認）
+/// 找到卡邊時新加的提示（管理者 2026-11-16 同意）
 const readyHint = '可以拍了';
 
-/// 四邊標示樣式（階段 2b 第一步給管理者選一款；選定後只保留那一款）
-enum EdgeMarkStyle {
-  /// 對齊的那條框線轉綠；四邊都對齊時四角也轉綠
-  lines,
+/// 找邊結果的來源。正式流程是 [CameraEdgeFeed]（相機 image stream＋背景 isolate）；開發截圖和測試用 [ManualEdgeFeed]。
+abstract class EdgeFeed {
+  Stream<CardEdges> get edges;
 
-  /// 四角轉綠：一個角的兩條邊都對齊才轉綠
-  corners,
-
-  /// 和 [lines] 相同，另外四邊都對齊、不歪、清楚時，框下提示改為「可以拍了」
-  linesAndHint,
+  /// 停止找邊（正式流程同時停止 image stream）；可重複呼叫
+  Future<void> stop();
 }
 
-/// 只供開發截圖（模擬器沒有鏡頭）：不開鏡頭，用 [preview] 當鏡頭畫面，找邊結果由 [edges] 提供。正式流程不傳。
+/// 只供開發截圖和測試：由外面逐個送入找邊結果，記下有沒有被停止
+class ManualEdgeFeed implements EdgeFeed {
+  final _out = StreamController<CardEdges>.broadcast(sync: true);
+  bool stopped = false;
+  @override
+  Stream<CardEdges> get edges => _out.stream;
+  void add(CardEdges e) {
+    if (!stopped) _out.add(e);
+  }
+
+  @override
+  Future<void> stop() async {
+    if (stopped) return;
+    stopped = true;
+    await _out.close();
+  }
+}
+
+/// 只供開發截圖和測試（模擬器沒有鏡頭）：不開鏡頭，用 [preview] 當鏡頭畫面，找邊結果由 [feed] 提供，
+/// 拍照由 [takePicture] 代替（回傳截出的 data URL；拋出錯誤當作拍照失敗；不傳時快門和自動拍都不做事）。正式流程不傳。
 class CaptureDemo {
-  const CaptureDemo({required this.preview, required this.edges});
+  const CaptureDemo({required this.preview, required this.feed, this.takePicture});
   final Widget preview;
-  final ValueListenable<CardEdges> edges;
+  final EdgeFeed feed;
+  final Future<String> Function()? takePicture;
 }
 
 String captureHint({required bool camera, required bool picked, required String side}) {
@@ -50,12 +67,11 @@ String captureHint({required bool camera, required bool picked, required String 
 }
 
 class CardCapturePage extends StatefulWidget {
-  const CardCapturePage({super.key, required this.side, this.picker, this.cameras, this.markStyle = EdgeMarkStyle.linesAndHint, this.demo});
+  const CardCapturePage({super.key, required this.side, this.picker, this.cameras, this.demo});
   final String side; // 'front' 或 'back'
   final ImagePicker? picker; // 測試用
   final Future<List<CameraDescription>> Function()? cameras; // 測試用，預設 availableCameras
-  final EdgeMarkStyle markStyle;
-  final CaptureDemo? demo; // 只供開發截圖
+  final CaptureDemo? demo; // 只供開發截圖和測試
   @override
   State<CardCapturePage> createState() => CardCapturePageState();
 }
@@ -73,10 +89,11 @@ class CardCapturePageState extends State<CardCapturePage> {
   final Map<int, Offset> _pointers = {};
   ({double gap, double cx, double cy})? _pinch;
   // 即時找卡邊（只在鏡頭模式）
-  EdgeWorker? _worker;
+  EdgeFeed? _feed;
+  StreamSubscription<CardEdges>? _feedSub;
   CardEdges _edges = CardEdges.none;
-  int _analysed = 0;
-  DateTime _rateSince = DateTime.now();
+  Timer? _hold; // 可以拍了之後開始計時，維持 autoShotHold 才自動拍
+  bool _shot = false; // 已拍過（自動或快門）：不再自動拍
 
   String get _side => widget.side == 'back' ? 'back' : 'front';
   bool get _android => defaultTargetPlatform == TargetPlatform.android;
@@ -86,19 +103,15 @@ class CardCapturePageState extends State<CardCapturePage> {
     super.initState();
     final demo = widget.demo;
     if (demo != null) {
-      _edges = demo.edges.value;
-      demo.edges.addListener(_demoEdges);
+      _attachFeed(demo.feed);
       return;
     }
     // 現有 App 在頁面 onReady 時開鏡頭
     WidgetsBinding.instance.addPostFrameCallback((_) => _open());
   }
 
-  void _demoEdges() => setState(() => _edges = widget.demo!.edges.value);
-
   @override
   void dispose() {
-    widget.demo?.edges.removeListener(_demoEdges);
     _stopCamera();
     _photo?.dispose();
     super.dispose();
@@ -147,57 +160,66 @@ class CardCapturePageState extends State<CardCapturePage> {
     final c = _controller;
     _controller = null;
     _cameraReady = false;
-    _worker?.close();
-    _worker = null;
-    _edges = CardEdges.none;
-    if (c == null) return;
+    final stopping = _stopEdges();
     // 先停 image stream 再關鏡頭（dispose 不會自己停）
-    if (c.value.isStreamingImages) {
-      c.stopImageStream().catchError((_) {}).whenComplete(c.dispose);
-    } else {
-      c.dispose();
-    }
+    if (c != null) stopping.catchError((_) {}).whenComplete(c.dispose);
   }
 
   // 開始即時找卡邊：鏡頭畫面經 image stream 送到背景 isolate，一次只處理一張，處理中的畫面直接丟掉
   Future<void> _startEdges(CameraController controller, int mine) async {
     try {
-      final worker = await EdgeWorker.start();
-      if (mine != _generation || !mounted || _controller != controller) {
-        worker.close();
+      final feed = await CameraEdgeFeed.start(controller, android: _android, region: (w, h) {
+        if (_box == Size.zero) return null;
+        final ps = controller.value.previewSize;
+        return shootRect(_box, w, h, _frame, previewAspect: ps == null ? null : ps.shortestSide / ps.longestSide);
+      });
+      if (mine != _generation || !mounted || _controller != controller || _shot) {
+        await feed.stop();
         return;
       }
-      _worker = worker;
-      _analysed = 0;
-      _rateSince = DateTime.now();
-      await controller.startImageStream((image) => _onFrame(controller, image));
+      _attachFeed(feed);
     } catch (error) {
       // 找不到邊不影響拍照：快門照舊可按
       debugPrint('[CardEdges] 無法開始找卡邊 $error');
     }
   }
 
-  void _onFrame(CameraController controller, CameraImage image) {
-    final worker = _worker;
-    if (worker == null || worker.busy || _controller != controller || _box == Size.zero) return;
-    final frame = previewFrameOf(image, sensorOrientation: controller.description.sensorOrientation, android: _android);
-    if (frame == null) return;
-    final ps = controller.value.previewSize;
-    final inner = shootRect(_box, frame.uprightW, frame.uprightH, _frame, previewAspect: ps == null ? null : ps.shortestSide / ps.longestSide);
-    worker.detect(frame, inner).then((edges) {
-      if (edges == null || !mounted || _controller != controller) return;
-      _analysed++;
-      final now = DateTime.now(), seconds = now.difference(_rateSince).inMilliseconds / 1000;
-      if (kDebugMode && seconds >= 5) {
-        debugPrint('[CardEdges] 每秒 ${(_analysed / seconds).toStringAsFixed(1)} 次，畫面 ${image.width}×${image.height}，$edges');
-        _analysed = 0;
-        _rateSince = now;
-      }
-      final before = _edges;
-      _edges = edges;
-      // 只在標示會變時重畫（清楚度每張都不同）
-      if (before.left != edges.left || before.top != edges.top || before.right != edges.right || before.bottom != edges.bottom || before.ready != edges.ready) setState(() {});
-    });
+  void _attachFeed(EdgeFeed feed) {
+    _feed = feed;
+    _feedSub = feed.edges.listen(_onEdges);
+  }
+
+  // 停止找邊和自動拍計時；正式流程同時停止 image stream
+  Future<void> _stopEdges() {
+    _hold?.cancel();
+    _hold = null;
+    _feedSub?.cancel();
+    _feedSub = null;
+    final feed = _feed;
+    _feed = null;
+    _edges = CardEdges.none;
+    return feed?.stop() ?? Future.value();
+  }
+
+  void _onEdges(CardEdges edges) {
+    if (!mounted || !camera || _shot) return;
+    final before = _edges;
+    _edges = edges;
+    // 只在標示會變時重畫（清楚度每張都不同）
+    if (before.left != edges.left || before.top != edges.top || before.right != edges.right || before.bottom != edges.bottom || before.ready != edges.ready) setState(() {});
+    // 自動拍：可以拍了（四邊對齊、不歪、清楚）連續維持 autoShotHold；中途有一張不是就重新計時
+    if (edges.ready) {
+      _hold ??= Timer(autoShotHold, _autoShoot);
+    } else {
+      _hold?.cancel();
+      _hold = null;
+    }
+  }
+
+  void _autoShoot() {
+    _hold = null;
+    if (!mounted || _shot || _busy || !camera || !_edges.ready) return;
+    shoot();
   }
 
   void _settle(String? result) {
@@ -209,11 +231,11 @@ class CardCapturePageState extends State<CardCapturePage> {
 
   void cancel() => _settle(null);
 
-  // 鏡頭一直沒有畫面（例如裝置沒有鏡頭時不回應）就按快門：改為用系統相機拍或從相冊選
+  // 快門和自動拍都走這裏。鏡頭一直沒有畫面（例如裝置沒有鏡頭時不回應）就按快門：改為用系統相機拍或從相冊選
   Future<void> shoot() async {
-    if (widget.demo != null) return;
+    final demo = widget.demo;
     final c = _controller;
-    if (!_cameraReady || c == null) {
+    if (demo == null && (!_cameraReady || c == null)) {
       setState(() {
         _stopCamera();
         camera = false;
@@ -221,20 +243,29 @@ class CardCapturePageState extends State<CardCapturePage> {
       return;
     }
     if (_busy) return;
+    if (demo != null && demo.takePicture == null) return;
     _busy = true;
+    // 拍一次後停止找邊（不會再自動拍）；拍照失敗時仍可按快門再拍
+    _shot = true;
+    await _stopEdges();
+    if (mounted) setState(() {});
     try {
-      final file = await c.takePicture();
-      final image = await _decode(await file.readAsBytes());
-      final preview = c.value.previewSize;
-      final rect = shootRect(_box, image.width, image.height, _frame, previewAspect: preview == null ? null : preview.shortestSide / preview.longestSide);
-      final data = await _crop(image, rect);
-      image.dispose();
-      _settle(data);
+      _settle(demo != null ? await demo.takePicture!() : await _takeAndCrop(c!));
     } catch (error) {
       debugPrint('[CardCapture] 拍照失敗 $error');
     } finally {
       _busy = false;
     }
+  }
+
+  Future<String> _takeAndCrop(CameraController c) async {
+    final file = await c.takePicture();
+    final image = await _decode(await file.readAsBytes());
+    final preview = c.value.previewSize;
+    final rect = shootRect(_box, image.width, image.height, _frame, previewAspect: preview == null ? null : preview.shortestSide / preview.longestSide);
+    final data = await _crop(image, rect);
+    image.dispose();
+    return data;
   }
 
   Future<ui.Image> _decode(Uint8List bytes) async {
@@ -355,7 +386,7 @@ class CardCapturePageState extends State<CardCapturePage> {
               style: white,
               child: Stack(children: [
                 Positioned.fill(child: _stage()),
-                Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: FramePainter(f, edges: camera ? _edges : CardEdges.none, style: widget.markStyle)))),
+                Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: FramePainter(f, edges: camera ? _edges : CardEdges.none)))),
                 // .top：標題置中，左邊 ✕
                 Positioned(
                   left: 0,
@@ -397,7 +428,7 @@ class CardCapturePageState extends State<CardCapturePage> {
                   right: CaptureStyle.hintSide,
                   top: f.bottom + CaptureStyle.hintBelow,
                   child: IgnorePointer(
-                    child: camera && widget.markStyle == EdgeMarkStyle.linesAndHint && _edges.ready
+                    child: camera && _edges.ready
                         ? Text(readyHint, key: const ValueKey('capture-ready'), textAlign: TextAlign.center, style: ts(CaptureStyle.readySize, weight: CaptureStyle.readyWeight, color: CaptureStyle.edgeOn, height: CaptureStyle.hintLine))
                         : Text(captureHint(camera: camera, picked: picked, side: _side), textAlign: TextAlign.center, style: ts(Fs.body, color: CaptureStyle.hint, height: CaptureStyle.hintLine)),
                   ),
@@ -529,12 +560,11 @@ class CardCapturePageState extends State<CardCapturePage> {
 }
 
 /// 框外變暗（box-shadow 0 0 0 2000px rgba(0,0,0,.58)，框內圓角 12）和四角白色 L 形（.corner：30×30、4px、外移 2px、外角圓角 12）。
-/// 2b：按 [style] 把對齊的框線或四角畫成綠色（[edges]）。
+/// 2b：對齊的框線畫成綠色，四邊都對齊時四角也轉綠（[edges]）。
 class FramePainter extends CustomPainter {
-  const FramePainter(this.frame, {this.edges = CardEdges.none, this.style = EdgeMarkStyle.linesAndHint});
+  const FramePainter(this.frame, {this.edges = CardEdges.none});
   final FrameBox frame;
   final CardEdges edges;
-  final EdgeMarkStyle style;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -551,15 +581,13 @@ class FramePainter extends CustomPainter {
     final white = Paint()..color = CaptureStyle.fg;
     final green = Paint()..color = CaptureStyle.edgeOn;
     final e = edges;
-    // 對齊的框線（樣式 lines／linesAndHint）：在兩個角之間接着角的線條畫一段綠線，和角的線一樣粗、一樣外移
-    if (style != EdgeMarkStyle.corners) {
-      if (e.top) canvas.drawRect(Rect.fromLTRB(f.left - o + s, f.top - o, f.right + o - s, f.top - o + b), green);
-      if (e.bottom) canvas.drawRect(Rect.fromLTRB(f.left - o + s, f.bottom + o - b, f.right + o - s, f.bottom + o), green);
-      if (e.left) canvas.drawRect(Rect.fromLTRB(f.left - o, f.top - o + s, f.left - o + b, f.bottom + o - s), green);
-      if (e.right) canvas.drawRect(Rect.fromLTRB(f.right + o - b, f.top - o + s, f.right + o, f.bottom + o - s), green);
-    }
-    // 角的顏色：樣式 corners 按相鄰兩邊；其餘樣式四邊都對齊時全部轉綠
-    Paint cornerPaint(bool a, bool c) => (style == EdgeMarkStyle.corners ? a && c : e.aligned) ? green : white;
+    // 對齊的框線：在兩個角之間接着角的線條畫一段綠線，和角的線一樣粗、一樣外移
+    if (e.top) canvas.drawRect(Rect.fromLTRB(f.left - o + s, f.top - o, f.right + o - s, f.top - o + b), green);
+    if (e.bottom) canvas.drawRect(Rect.fromLTRB(f.left - o + s, f.bottom + o - b, f.right + o - s, f.bottom + o), green);
+    if (e.left) canvas.drawRect(Rect.fromLTRB(f.left - o, f.top - o + s, f.left - o + b, f.bottom + o - s), green);
+    if (e.right) canvas.drawRect(Rect.fromLTRB(f.right + o - b, f.top - o + s, f.right + o, f.bottom + o - s), green);
+    // 四邊都對齊時四角也轉綠
+    final cornerPaint = e.aligned ? green : white;
     // CSS 邊框：外框圓角 12，內框圓角 12 - 4 = 8；沒有邊框的兩邊直切
     void corner(double left, double top, {required bool right, required bool bottom, required Paint paint}) {
       final outer = Rect.fromLTWH(left, top, s, s);
@@ -574,10 +602,10 @@ class FramePainter extends CustomPainter {
       canvas.drawPath(Path.combine(PathOperation.difference, Path()..addRRect(rounded(outer, r)), Path()..addRRect(rounded(inner, r - b))), paint);
     }
 
-    corner(f.left - o, f.top - o, right: false, bottom: false, paint: cornerPaint(e.left, e.top));
-    corner(f.right + o - s, f.top - o, right: true, bottom: false, paint: cornerPaint(e.right, e.top));
-    corner(f.left - o, f.bottom + o - s, right: false, bottom: true, paint: cornerPaint(e.left, e.bottom));
-    corner(f.right + o - s, f.bottom + o - s, right: true, bottom: true, paint: cornerPaint(e.right, e.bottom));
+    corner(f.left - o, f.top - o, right: false, bottom: false, paint: cornerPaint);
+    corner(f.right + o - s, f.top - o, right: true, bottom: false, paint: cornerPaint);
+    corner(f.left - o, f.bottom + o - s, right: false, bottom: true, paint: cornerPaint);
+    corner(f.right + o - s, f.bottom + o - s, right: true, bottom: true, paint: cornerPaint);
   }
 
   @override
@@ -586,11 +614,69 @@ class FramePainter extends CustomPainter {
       old.frame.top != frame.top ||
       old.frame.width != frame.width ||
       old.frame.height != frame.height ||
-      old.style != style ||
       old.edges.left != edges.left ||
       old.edges.top != edges.top ||
       old.edges.right != edges.right ||
       old.edges.bottom != edges.bottom;
+}
+
+/// 正式流程的找邊來源：相機 image stream 的畫面送到背景 isolate（[EdgeWorker]），一次只處理一張，處理中的畫面直接丟掉。
+/// [region] 回傳直向畫面座標的框內範圍（畫面還沒排好時回傳 null，該張不處理）。除錯版每 5 秒印出每秒找邊次數和最近結果。
+class CameraEdgeFeed implements EdgeFeed {
+  CameraEdgeFeed._(this._controller, this._worker, this._region, this._android);
+  final CameraController _controller;
+  final EdgeWorker _worker;
+  final SourceRect? Function(int uprightW, int uprightH) _region;
+  final bool _android;
+  final _out = StreamController<CardEdges>.broadcast();
+  bool _stopped = false;
+  int _analysed = 0;
+  DateTime _since = DateTime.now();
+
+  static Future<CameraEdgeFeed> start(CameraController controller, {required SourceRect? Function(int uprightW, int uprightH) region, required bool android}) async {
+    final worker = await EdgeWorker.start();
+    final feed = CameraEdgeFeed._(controller, worker, region, android);
+    try {
+      await controller.startImageStream(feed._onFrame);
+    } catch (_) {
+      worker.close();
+      rethrow;
+    }
+    return feed;
+  }
+
+  @override
+  Stream<CardEdges> get edges => _out.stream;
+
+  void _onFrame(CameraImage image) {
+    if (_stopped || _worker.busy) return;
+    final frame = previewFrameOf(image, sensorOrientation: _controller.description.sensorOrientation, android: _android);
+    if (frame == null) return;
+    final inner = _region(frame.uprightW, frame.uprightH);
+    if (inner == null) return;
+    _worker.detect(frame, inner).then((edges) {
+      if (edges == null || _stopped) return;
+      _analysed++;
+      final now = DateTime.now(), seconds = now.difference(_since).inMilliseconds / 1000;
+      if (kDebugMode && seconds >= 5) {
+        debugPrint('[CardEdges] 每秒 ${(_analysed / seconds).toStringAsFixed(1)} 次，畫面 ${image.width}×${image.height}，$edges');
+        _analysed = 0;
+        _since = now;
+      }
+      _out.add(edges);
+    });
+  }
+
+  @override
+  Future<void> stop() async {
+    if (_stopped) return;
+    _stopped = true;
+    _worker.close();
+    try {
+      if (_controller.value.isStreamingImages) await _controller.stopImageStream();
+    } catch (_) {}
+    await _out.close();
+  }
 }
 
 /// 相機 image stream 的一張畫面換成純資料（可送到背景 isolate）。

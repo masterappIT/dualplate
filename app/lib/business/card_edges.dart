@@ -52,6 +52,11 @@ const double liveMaxTilt = 3.0;
 /// 樣本是掃描檔不是預覽畫面，真手機預覽的數值 2d 要核對（除錯版會在記錄裏印出）。
 const double sharpThreshold = 150;
 
+/// 自動拍前「可以拍了」要連續維持多久（中途有一張不是就重新計時）。
+/// Android 模擬器上每秒找邊約 6–9.5 次，600 毫秒約等於連續 4–6 張都合格：手拿着卡掠過框、或偶然一張剛好對齊都不會拍；
+/// 銀行、證件類 App 的自動拍大多在 0.5–1 秒之間，再長用戶要一直舉着手機、手更易抖。真手機上的感覺 2d 核對。
+const Duration autoShotHold = Duration(milliseconds: 600);
+
 double _jsRound(double v) => (v + 0.5).floorToDouble(); // JS Math.round
 
 // ── 逐行照搬 card-face.js ──
