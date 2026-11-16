@@ -315,3 +315,75 @@ abstract final class KeyboardBarStyle {
   static const itemGap = 0.0;
   static const donePad = 10.0; // 「完成」左右內距：右邊離右 21.5
 }
+
+// ── 2a 拍批文卡（mobile/src/components/CardCapture.vue 的 <style scoped>、lib/pick-image.js 的說明卡）──
+// 對準框的位置按畫面計算（CardCapture.vue 的 layout()），不在這裏
+abstract final class CaptureStyle {
+  static const bg = Color(0xFF000000); // .capture background:#000
+  static const fg = Color(0xFFFFFFFF); // color:#fff
+  static const mask = Color(0x94000000); // .frame box-shadow 0 0 0 2000px rgba(0,0,0,.58)
+  static const frameRadius = 12.0;
+  static const cornerSize = 30.0; // .corner 30×30、border 4px #fff、外移 2px
+  static const cornerBorder = 4.0;
+  static const cornerOffset = 2.0;
+  static const frameSideMax = 560.0; // 框寬 min(畫面寬 - 40, 560)，高按 1015:645
+  static const frameInset = 40.0;
+  static const frameTopMin = 120.0; // 框頂最少離狀態列底 120，否則置中再上移 40
+  static const frameLift = 40.0;
+  static const topHeight = 64.0; // .top：高 64、字 17、粗 600
+  static const titleSize = 17.0;
+  static const titleWeight = FontWeight.w600;
+  static const closeLeft = 8.0; // .close：左 8、48×48、字 24、粗 300
+  static const closeSize = 48.0;
+  static const closeFont = 24.0;
+  static const closeWeight = FontWeight.w300;
+  static const sidesAbove = 48.0; // .sides 在框頂上方 48
+  static const sidesGap = 8.0;
+  static const sidePadH = 12.0; // .side：padding 4px 12px、圓角 --r-control、字 --fs-body、粗 500
+  static const sidePadV = 4.0;
+  static const sideWeight = FontWeight.w500;
+  static const sideOff = Color(0x29FFFFFF); // rgba(255,255,255,.16)
+  static const hintBelow = 18.0; // .hint 在框底下方 18；左右 24；行高 1.6
+  static const hintSide = 24.0;
+  static const hintLine = 1.6;
+  static const hint = Color(0xE0FFFFFF); // rgba(255,255,255,.88)
+  static const bottomHeight = 170.0; // .bottom：高 170、padding 0 32px 32px
+  static const bottomPadH = 32.0;
+  static const bottomPadB = 32.0;
+  static const albumWidth = 72.0; // .album：寬 72、間距 6、字 --fs-meta
+  static const albumGap = 6.0;
+  static const albumIcon = 36.0; // .album-icon：36×36、2px 白框、圓角 --r-card
+  static const albumIconBorder = 2.0;
+  static const shutter = 76.0; // .shutter：76 圓、4px 白框、5px 空隙、內圓白色
+  static const shutterBorder = 4.0;
+  static const shutterGap = 5.0;
+  static const buttonsBottom = 48.0; // .buttons：寬 calc(100% - 40px)、最多 560、底 48、間距 12
+  static const buttonsInset = 40.0;
+  static const buttonsGap = 12.0;
+  static const buttonHeight = 48.0; // .buttons button：高 48、字 16、粗 600、圓角 --r-control
+  static const buttonFont = 16.0;
+  static const buttonWeight = FontWeight.w600;
+  static const ghostBorder = Color(0xB3FFFFFF); // .ghost border 1px rgba(255,255,255,.7)
+}
+
+// 安卓申請權限時頂部的用途說明卡、被拒提示卡（pick-image.js showCard：plus.nativeObj.View 原生圖層）
+abstract final class PermCardStyle {
+  static const top = 8.0; // 狀態列高度 + 8
+  static const side = 12.0; // 左 12、寬 = 畫面寬 - 24
+  static const bg = Color(0xFFFFFFFF);
+  static const border = Color(0xFFD9E0DC);
+  static const radius = 12.0;
+  static const padH = 16.0; // 字左 16，字寬 = 卡寬 - 32
+  static const titleTop = 14.0; // 標題：頂 14、高 22、字 16 粗體 #14201B
+  static const titleHeight = 22.0;
+  static const titleSize = 16.0;
+  static const title = Color(0xFF14201B);
+  static const textTop = 40.0; // 內文：頂 40、字 14 #4A5852、lineSpacing 20%
+  static const textSize = 14.0;
+  static const text = Color(0xFF4A5852);
+  static const textLine = 1.2;
+  static const charWidth = 14.0; // 高度按字數估算：每字當 14 寬、每行 21 高，卡高 = 54 + 行數 × 21
+  static const lineHeight = 21.0;
+  static const baseHeight = 54.0;
+  static const deniedFor = Duration(seconds: 5); // 被拒提示約 5 秒後自動收起
+}

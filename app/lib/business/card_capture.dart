@@ -6,6 +6,8 @@
 // - 函數名、參數和回傳格式不可更改；要改先在報告寫明，由負責人決定。
 
 import 'package:flutter/widgets.dart';
+import '../shell/page_route.dart';
+import 'card_capture_page.dart';
 
 /// 框內卡面連框外一圈（每邊 6%）的固定輸出尺寸，和伺服器 api/src/card-face.js 一致。
 const int cardOutW = 2030, cardOutH = 1290;
@@ -18,7 +20,7 @@ final int cardFullH = (cardOutH * (1 + 2 * cardMargin)).round(); // 1445
 /// 回傳框內卡面的 JPEG data URL（`data:image/jpeg;base64,...`，2274×1445），
 /// 和現有 App `capture.open({ side })` 回傳的 `photo.data` 相同，可直接作為
 /// `/plate-assets/:id/card/:side` 的 `image` 送出。用戶取消、用手勢或返回鍵離開時回傳 null。
-Future<String?> openCardCapture(BuildContext context, {required String side}) async {
-  // 2a 合併前的佔位：當作取消。
-  return null;
-}
+///
+/// 和現有 App 一樣另開一頁全螢幕（蓋住導航列），從右邊滑入；iOS 可從左邊緣右滑返回，安卓返回鍵返回，都當作取消。
+Future<String?> openCardCapture(BuildContext context, {required String side}) =>
+    Navigator.of(context, rootNavigator: true).push<String?>(PopInRoute<String?>(page: PopInPage<String?>(child: CardCapturePage(side: side == 'back' ? 'back' : 'front'))));

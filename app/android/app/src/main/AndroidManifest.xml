@@ -1,4 +1,15 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- 拍批文卡和選相片（與現有 App 的 android/app/client/src/main/AndroidManifest.xml 相同）：
+         相機；讀相片（Android 13 起 READ_MEDIA_IMAGES，12 或以下讀儲存空間）。沒有相機的手機也可安裝。
+         相機套件自帶的錄音和寫儲存空間權限不需要（只拍相片），移除，和現有 App 一樣不出現在權限清單。 -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" tools:replace="android:required" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" tools:node="remove" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
     <application
         android:label="dualplate"
         android:name="${applicationName}"
