@@ -315,3 +315,92 @@ abstract final class KeyboardBarStyle {
   static const itemGap = 0.0;
   static const donePad = 10.0; // 「完成」左右內距：右邊離右 21.5
 }
+
+// ── 2c 牌照詳情頁（mobile/src/pages/plate-detail/plate-detail.vue、components/ApprovalCard.vue）──
+// 按鈕不可按（:disabled）：uni-button[disabled]:not([type]) 的灰底淡字蓋過 .primary／.btn-sm 的底色和字色，
+// 再加 App.vue 的 .primary[disabled]{opacity:.55}（1d 在登入頁核實同一規則）
+abstract final class UniDisabled {
+  static const bg = Color(0xFFF7F7F7);
+  static const text = Color(0x4D000000); // rgba(0,0,0,.3)
+}
+
+// <switch color="#0F5C4A">：App 端是網頁組件 uni-switch（@dcloudio/uni-components/style/switch.css）
+abstract final class UniSwitchStyle {
+  static const width = 52.0;
+  static const height = 32.0;
+  static const marginRight = 5.0;
+  static const off = Color(0xFFDFDFDF); // 邊框和底色
+  static const inner = Color(0xFFFDFDFD); // :before 50×30，選中時 scale(0)
+  static const knob = Color(0xFFFFFFFF); // :after 30×30
+  static const knobShadow = [BoxShadow(offset: Offset(0, 1), blurRadius: 3, color: Color(0x66000000))]; // 0 1px 3px rgba(0,0,0,.4)
+  static const travel = 20.0; // translateX(20px)
+  static const colorDuration = Duration(milliseconds: 100); // background-color .1s, border .1s
+  static const moveDuration = Duration(milliseconds: 300); // transform .3s（ease）
+  static const disabledOpacity = .7;
+}
+
+// uni.showLoading({ title, mask:true })：App 端原生等待框 plus.nativeUI.showWaiting，有圖示時 140×112，內距 10、字 16（uni-app-plus _showToast）
+abstract final class LoadingStyle {
+  static const width = 140.0;
+  static const height = 112.0;
+  static const spinner = 37.0; // iOS UIActivityIndicatorView large（MBProgressHUD）
+  static const spinnerColor = Color(0xFFFFFFFF);
+}
+
+// uni.previewImage：App 端原生圖片檢視器 plus.nativeUI.previewImage（indicator 'number'、loop false）
+abstract final class PreviewStyle {
+  static const bg = Color(0xFF000000);
+  static const indicator = Color(0xFFFFFFFF);
+  static const indicatorSize = 16.0;
+  static const fade = Duration(milliseconds: 250);
+  static const maxScale = 3.0;
+}
+
+// 牌照詳情頁各區塊（plate-detail.vue <style scoped>）
+abstract final class PlateDetailStyle {
+  static const notesHeight = 96.0; // .notes{height:96px}
+  static const plateMissingRatio = 440 / 140; // .plate-missing aspect-ratio
+  static const macauRatio = 460 / 100; // .physical-plate.macau aspect-ratio
+  static const macauBg = Color(0xFF050505);
+  static const macauText = Color(0xFFFFFFFF);
+  static const macauRadius = 2.0;
+  static const missingRadius = 4.0;
+  static const scrollDuration = Duration(milliseconds: 200); // uni.pageScrollTo duration:200
+  static const scrollDelay = Duration(milliseconds: 50);
+  static const stampDelay = Duration(milliseconds: 10);
+  static const crossToast = Duration(milliseconds: 2600);
+}
+
+// 批文卡（ApprovalCard.vue）：卡面比例 1013:643；字號、位置都是卡寬的百分比（cqw）
+abstract final class ApprovalCardStyle {
+  static const ratio = 1013 / 643;
+  static const radiusRpx = 13.0;
+  static const shadowYRpx = 3.0;
+  static const shadowBlurRpx = 10.0;
+  static const shadow = Color(0x301B3040); // #1b304030
+  static const faceBg = Color(0xFFEDF2F1);
+  static const perspective = 1200.0;
+  static const flip = Duration(milliseconds: 650);
+  static const flipCurve = Cubic(.22, .67, .22, 1);
+  static const title = Color(0xFF15191B);
+  static const label = Color(0xFF062F69);
+  static const value = Color(0xFF252525);
+  static const warning = Color(0xFF07386B);
+  static const lineHeight = 1.12;
+  // 卡面字型：CSS 是 'Songti SC','STSong','Noto Serif CJK SC',serif。
+  // iOS 沒有預裝宋體（iOS 18.4、26 模擬器的系統字型都沒有 Songti、STSong），現有 App 落到 serif：英文數字 Times、中文蘋方。
+  //   Flutter 版在 iOS 照這個結果畫（2c 在 iPhone 16 Pro Max 現有 App 截圖核實）。
+  // Android 很多手機沒有 Noto Serif CJK：打包它的子集 DualplateSong（Noto Serif SC，產生方法和授權見 tool/song_subset.py）。
+  static const iosLatin = 'Times New Roman';
+  static const iosHan = ['PingFang TC'];
+  static const androidSong = 'DualplateSong';
+  static const arial = 'Arial';
+  static const arialFallback = ['Helvetica Neue'];
+  // 翻面切換鈕（.flip-controls，詳情頁隱藏，新增牌照頁用）
+  static const ctrlBorder = Color(0xFFC4D5CD);
+  static const ctrlBg = Color(0xFFF5F8F6);
+  static const ctrlText = Color(0xFF345146);
+  static const ctrlOn = Color(0xFF295A48);
+  static const ctrlOnText = Color(0xFFFFFFFF);
+  static const hint = Color(0xFF668076);
+}
