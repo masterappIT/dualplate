@@ -343,8 +343,11 @@ class PlateDetailPageState extends State<PlateDetailPage> {
       forgetCardOriginal(p['id']);
       final updated = Map<String, dynamic>.from(await api('/plate-assets/${p['id']}') as Map);
       _set(() => plateDetail = {...plateDetail, '${p['id']}': updated});
+      hideLoading();
       toast('正本已保存，資料沒有改動');
     } catch (e) {
+      debugPrint('[PlateDetail] 只保存正本失敗 $e');
+      hideLoading();
       toast(e is ApiError && e.message.isNotEmpty ? e.message : '上傳失敗');
     }
   }
@@ -374,6 +377,9 @@ class PlateDetailPageState extends State<PlateDetailPage> {
       }
       toast('已辨識，請核對欄位');
     } catch (e) {
+      // 現有 App：catch 裏先 uni.hideLoading() 再提示；漏了會令等待框一直蓋住畫面
+      debugPrint('[PlateDetail] 上傳辨識失敗 $e');
+      hideLoading();
       toast(e is ApiError && e.message.isNotEmpty ? e.message : '上傳失敗');
     }
   }

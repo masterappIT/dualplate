@@ -10,6 +10,7 @@ import 'package:dualplate/pages/plate_detail/card_original.dart';
 import 'package:dualplate/pages/plate_detail/doc_photo.dart';
 import 'package:dualplate/pages/plate_detail/plate_detail_page.dart';
 import 'package:dualplate/ui/image_preview.dart';
+import 'package:dualplate/ui/loading.dart';
 import 'package:dualplate/ui/uni_switch.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -24,6 +25,7 @@ late List<http.Request> sent;
 late Map<String, dynamic> plate, summary;
 late List<dynamic> vehicles;
 Object? cardUploadReply;
+bool cardUploadFail = false;
 bool offline = false, missing = false, rentalOptionsFail = false;
 
 Map<String, dynamic> basePlate() => {
@@ -81,6 +83,7 @@ Future<http.Response> handle(http.Request r) async {
   if (path == '/vehicles/v1/documents' && m == 'GET') return reply({'documents': [license]});
   if (path == '/vehicles/v1/documents/license' && m == 'POST') return reply({'vehicleId': 'v1', 'documents': [], 'checks': [], 'applied': []});
   if (path.startsWith('/plate-assets/p1/card/') && m == 'POST') {
+    if (cardUploadFail) return reply({'error': '辨識失敗'}, 500);
     plate['cardImages'] = {...plate['cardImages'] as Map, path.split('/').last: true};
     return reply(cardUploadReply ?? {'ok': true});
   }
@@ -151,6 +154,7 @@ void main() {
       {'id': 'v1', 'customer_id': 'c1', 'route': '粵港', 'plate': 'HK1234', 'brand': 'Toyota', 'model': 'Alphard', 'type': '私家車', 'origin': '香港'},
     ];
     cardUploadReply = null;
+    cardUploadFail = false;
     offline = false;
     missing = false;
     rentalOptionsFail = false;
@@ -320,6 +324,48 @@ void main() {
       await settle(tester, 10);
       expect((jsonDecode(calls('POST', '/plate-assets/p1/card/back').single) as Map)['recognize'], false);
       expect(find.text('正本已保存，資料沒有改動'), findsOneWidget);
+      await finish(tester);
+    });
+
+    testWidgets('上傳辨識失敗：關掉「正在上傳辨識」並提示伺服器的錯誤', (tester) async {
+      plate['cardImages'] = {'front': true};
+      cardUploadFail = true;
+      await open(tester);
+      await tapText(tester, '批文卡');
+      await tapText(tester, '上傳新批文卡');
+      await pickSheet(tester, '正面');
+      await pickSheet(tester, '上傳並讀取內容');
+      await settle(tester, 10);
+      expect(find.text('辨識失敗'), findsOneWidget);
+      expect(loadingShown, isFalse);
+      expect(find.text('正在上傳辨識'), findsNothing);
+      await finish(tester);
+    });
+
+    testWidgets('只保存正本失敗：關掉「正在上傳」並提示伺服器的錯誤', (tester) async {
+      plate['cardImages'] = {'front': true};
+      cardUploadFail = true;
+      await open(tester);
+      await tapText(tester, '批文卡');
+      await tapText(tester, '上傳新批文卡');
+      await pickSheet(tester, '背面');
+      await pickSheet(tester, '只保存正本');
+      await settle(tester, 10);
+      expect(find.text('辨識失敗'), findsOneWidget);
+      expect(loadingShown, isFalse);
+      expect(find.text('正在上傳'), findsNothing);
+      await finish(tester);
+    });
+
+    testWidgets('只保存正本成功：關掉「正在上傳」', (tester) async {
+      plate['cardImages'] = {'front': true};
+      await open(tester);
+      await tapText(tester, '批文卡');
+      await tapText(tester, '上傳新批文卡');
+      await pickSheet(tester, '背面');
+      await pickSheet(tester, '只保存正本');
+      await settle(tester, 10);
+      expect(loadingShown, isFalse);
       await finish(tester);
     });
 
