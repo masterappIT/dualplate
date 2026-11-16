@@ -198,6 +198,7 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 - 共用接口：`app/lib/business/card_capture.dart`（負責人已放佔位）。2a 實作它；2c 只呼叫，不改。
 - 模擬器分配：2a 用 iPhone 17 Pro（iOS 26.0，`B5D9F7C6`）和 Android 模擬器；2c 用 iPhone 17 Pro Max（iOS 26.0，`98D84492`）。2c 的 Android 截圖由負責人合併後統一跑。現有 App 基準仍在 iPhone 16 Pro Max（`78302077`），Flutter 版不可裝在這台。
 - iOS 模擬器沒有鏡頭：2a 在 iOS 模擬器只能核對開不了鏡頭和相冊兩條路；鏡頭預覽在 Android 模擬器（虛擬鏡頭）看，真鏡頭到 2d 在真手機核對。
+- 2d 真手機（管理者 2026-11-16 決定）：用 iPhone。測試期間 Flutter 版臨時改用 Bundle ID `com.masterappinc.dualplate.trial`，和現有 App 同時裝在同一部 iPhone 上比較；只在 2d 的測試打包時改，不提交到 `main` 的正式設定。階段 5 發布一定用原來的 `com.masterappinc.dualplate`，舊版用戶才能直接升級。臨時 ID 要在公司開發者帳號（團隊 `YU6GT6HQJ8`）登記才能裝上真機，2d 開始前處理。
 
 ### 階段 3：其餘頁面（約 2–3 週）
 
