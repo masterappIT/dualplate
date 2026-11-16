@@ -1,6 +1,6 @@
 // 拍批文卡的計算部分（lib/business/card_stage.dart）：對準框位置、座標換算、截出的圖尺寸和位置。
 // 對照的數值來自 mobile/src/lib/card-stage.js、CardCapture.vue 的 layout() 和伺服器 api/src/card-face.js。
-// 最後一組用 api/test/fixtures/cards/ 的樣本做輸入（只在測試中讀取，不印出、不另存）；沒有樣本時略過。
+// 最後一組用 api/test/fixtures/cards/ 的樣本做輸入（只在測試中讀取，不印出、不另存）；沒有樣本時自動跳過並寫明原因。
 // 樣本放在別處時用環境變量 DP_CARD_FIXTURES 指明目錄。
 import 'dart:convert';
 import 'dart:io';
@@ -254,7 +254,8 @@ void main() {
   group('實卡樣本（api/test/fixtures/cards，只在測試中讀取）', () {
     final dir = Directory(Platform.environment['DP_CARD_FIXTURES'] ?? '../api/test/fixtures/cards');
     final files = dir.existsSync() ? (dir.listSync().whereType<File>().where((f) => f.path.endsWith('.png') || f.path.endsWith('.jpg')).toList()..sort((a, b) => a.path.compareTo(b.path))) : <File>[];
-    final skip = files.isEmpty ? '沒有實卡樣本' : null;
+    // 樣本被 .gitignore 排除，全新 checkout、CI 和 worktree 都沒有：找不到就跳過，不算失敗（尺寸和位置另由上面用程式生成的圖驗證）
+    final skip = files.isEmpty ? '找不到實卡樣本（${dir.path} 沒有 png／jpg；樣本不在 git 裏，可用 DP_CARD_FIXTURES 指明目錄）' : null;
 
     test('從相冊選樣本、不移動直接確認：截圖 2274×1445，框內是相片正中與框同比例的一塊', () {
       final image = img.decodeImage(files.first.readAsBytesSync())!;
