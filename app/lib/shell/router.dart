@@ -9,6 +9,7 @@ import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import '../core/api.dart';
 import '../pages/login/login_page.dart';
+import '../pages/plate_detail/plate_detail_page.dart';
 import '../ui/base.dart';
 import '../ui/dialogs.dart';
 import '../ui/sample.dart';
@@ -42,6 +43,15 @@ GoRouter buildRouter({String initialLocation = '/sample'}) {
       // 服務條款、申請使用在階段 3d 才做，先放只有標題的空頁（標題照 pages.json）
       GoRoute(path: '/terms', parentNavigatorKey: root, pageBuilder: (context, state) => PopInPage(key: state.pageKey, child: const AppPage(title: '服務條款及私隱聲明'))),
       GoRoute(path: '/signup', parentNavigatorKey: root, pageBuilder: (context, state) => PopInPage(key: state.pageKey, child: const AppPage(title: '申請使用'))),
+      // 牌照詳情（階段 2c）：/plate-detail?id=…（new=1 是登記現有批文卡的入口）。開發時：--dart-define=START=/plate-detail?id=<牌照 id>
+      GoRoute(
+        path: '/plate-detail',
+        parentNavigatorKey: root,
+        pageBuilder: (context, state) => PopInPage(key: state.pageKey, child: PlateDetailPage(id: state.uri.queryParameters['id'] ?? '', creating: state.uri.queryParameters['new'] == '1')),
+      ),
+      // 牌照詳情會打開的頁面，階段 3 才做：先放只有標題的空頁（標題照 pages.json）
+      for (final (path, title) in const [('/plate-create', '新增牌照'), ('/self-change', '自行辦理更新'), ('/requests', '申請辦理'), ('/request-detail', '辦理進度'), ('/plate-delete', '刪除牌照'), ('/rental-new', '新增出租'), ('/rental', '出租'), ('/scope', '委託內容')])
+        GoRoute(path: path, parentNavigatorKey: root, pageBuilder: (context, state) => PopInPage(key: state.pageKey, child: AppPage(title: title))),
     ],
   );
   AppNav.currentPath = () => router.routerDelegate.currentConfiguration.uri.path;

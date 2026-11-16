@@ -32,3 +32,11 @@ flutter:
   # 底部分頁圖示，與 mobile/src/static/ 的同名檔案相同
   assets:
     - assets/tabbar/
+    - assets/approval_card/
+  # 批文卡宋體子集（只在 Android 用；Noto Serif SC，OFL；產生方法見 tool/song_subset.py）
+  fonts:
+    - family: DualplateSong
+      fonts:
+        - asset: assets/fonts/DualplateSong-Regular.otf
+        - asset: assets/fonts/DualplateSong-Bold.otf
+          weight: 700
