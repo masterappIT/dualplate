@@ -19,7 +19,7 @@
 | `lib/shell/` | 導航列、底部分頁、換頁動畫、路由；新頁面在 `router.dart` 登記 |
 | `lib/core/` | API 連線和 401 處理、登入狀態、自管／托管用語和金額日期工具，對應 `mobile/src/lib/api.js` |
 | `lib/pages/` | 各頁面，一頁一個目錄（現有 `login/`、`plate_detail/`；開發時用 `--dart-define=START=/plate-detail?id=<牌照 id>` 直接打開詳情頁） |
-| `lib/business/card_capture*.dart`、`card_stage.dart`、`pick_image.dart` | 拍批文卡（全螢幕對準框、相冊拖動縮放、截出 2274×1445 JPEG）和 Android 權限說明 |
+| `lib/business/card_capture*.dart`、`card_stage.dart`、`card_edges.dart`、`pick_image.dart` | 拍批文卡（全螢幕對準框、即時找卡邊和自動拍、相冊拖動縮放、截出 2274×1445 JPEG）和 Android 權限說明 |
 | `assets/approval_card/`、`assets/fonts/` | 批文卡底圖（`tool/card_png.sh` 由原 SVG 轉成）；宋體子集（Noto Serif SC，OFL，`tool/song_subset.py` 產生，只在 Android 用） |
 | `lib/ui/keyboard_bar.dart` | iOS 鍵盤上方的「上一項／下一項／完成」工具列 |
 | `assets/tabbar/` | 底部分頁圖示，和 `mobile/src/static/` 同名檔案相同 |

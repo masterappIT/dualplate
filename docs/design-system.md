@@ -198,6 +198,7 @@ Sidebar（深綠實心） │ Topbar：麵包屑 ………… ⌘K 搜尋 · 今
 | `LoginInput` | `lib/pages/login/login_page.dart` | 登入頁 `.field`（高 48）；`lib/ui/base.dart` 的 `Field` 高 50，兩者是否統一待定 |
 | `ApprovalCard` | `lib/business/approval_card.dart` | `ApprovalCard.vue`（正反面、翻轉；受保護設計）；卡底圖 `assets/approval_card/`，宋體子集 `DualplateSong` 只在 Android 用 |
 | `openCardCapture`、`CardCapturePage` | `lib/business/card_capture.dart`、`card_capture_page.dart` | `CardCapture.vue`、`pages/card-capture`（全螢幕對準框）；計算和裁切在 `card_stage.dart`（`card-stage.js`） |
+| `CardEdges`、`detectCardEdges`、`EdgeWorker`、`FramePainter`（綠色框線） | `lib/business/card_edges.dart`、`card_capture_page.dart` | `api/src/card-face.js` 找邊方法（現有 App 沒有即時標示）；對齊的框線、四角和「可以拍了」用 `CaptureStyle.edgeOn`（= `C.onDeepOk`）、`readySize`、`readyWeight` |
 | `askPermission`、`notifyDenied`、`PermissionCard`、`pickPhoto` | `lib/business/pick_image.dart` | `lib/pick-image.js`（Android 權限用途說明卡） |
 | `showSelectorPicker`、`showDatePicker` | `lib/ui/pickers.dart` | `<picker>`（選項、日期）；登入頁區號選擇器仍在 `area_picker.dart` |
 | `UniSwitch` | `lib/ui/uni_switch.dart` | `<switch>` |
