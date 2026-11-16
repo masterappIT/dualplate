@@ -110,7 +110,7 @@
 | 階段 | 內容 | 完成標準 | 估計 | 狀態 |
 |---|---|---|---|---|
 | 1 | 骨架和登入 | 組件樣板和登入頁與現有 App 一比一；iOS、Android 都能登入，四個分頁正常 | 約 1 週 | 進行中，2026-11-15 暫停（見第九節） |
-| 2 | 掃描批文卡和牌照詳情（關卡） | 同一批實卡，Flutter 版讀對的欄數不低於現有 App；管理者決定繼續 | 約 1 週 | 進行中（2026-11-16 起，2a、2c 同時做） |
+| 2 | 掃描批文卡和牌照詳情（關卡） | 同一批實卡，Flutter 版讀對的欄數不低於現有 App；管理者決定繼續 | 約 1 週 | 2a、2c 已合併並推送；按管理者指示暫停，2b、2d 未開始 |
 | 3 | 其餘頁面（3a–3d 四批） | 第八節清單的頁面和組件全部一比一，三種帳號走過 | 2–3 週 | 未開始 |
 | 4 | App 專用功能 | 啟動畫面、首頁緩存、App 內更新、條款同意框、返回鍵全部和現在一樣 | 3–4 天 | 未開始 |
 | 5 | 發布 | iOS 1.1.0 通過審核上架；Android 新 APK 放上網站；真機從舊版升級成功 | 約 1 週 | 未開始 |
@@ -293,6 +293,15 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 | 2026-11-15 | 登入 | WhatsApp 按鈕在 App 裏只複製連結、提示「請在瀏覽器打開」，沒有打開 WhatsApp（`openLink`；Flutter 版照舊） | |
 | 2026-11-15 | 登入 | 號碼欄的 8 位上限把空格也算進去（`maxlength`；Flutter 版照舊） | |
 | 2026-11-15 | 登入 | 找不到用戶時，畫面顯示原始的程式錯誤文字（按原始碼推斷，未在現有 App 重現；Flutter 版照舊） | |
+| 2026-11-16 | 拍批文卡 | 模擬器上允許使用攝影機後，網頁得到空白鏡頭畫面，頁面停在「拍批文卡」，此時按快門會上傳黑色截圖（未按，以免改資料） | |
+| 2026-11-16 | 拍批文卡 | 相冊選擇器是 DCloud 自帶的，關閉按鈕的無障礙標籤是簡體「关闭」 | |
+| 2026-11-16 | 拍批文卡 | 左上 ✕ 現有 App 約 11pt、筆畫粗；Flutter 版約 16pt、筆畫細，認不出網頁用的字型，**未改**，請管理者決定 | |
+| 2026-11-16 | 牌照詳情 | iOS 上批文卡不是宋體：iOS 沒有 Songti SC／STSong，落到 serif（英文數字 Times、中文蘋方）。Flutter 版照舊；打包的宋體子集只在 Android 用 | |
+| 2026-11-16 | 牌照詳情 | 批文卡畫成 377 寬，比卡片內容區寬 3pt（CSS 推不出原因；Flutter 版照 CSS 為 374） | |
+| 2026-11-16 | 牌照詳情 | 到期項目只有「還沒有填日期」時，上面出現一張約 10pt 高的空白卡（按原始碼推斷，未在現有 App 重現） | |
+| 2026-11-16 | 牌照詳情 | 打開時 onLoad、onShow 各載入一次，同一批請求送兩次。Flutter 版只載一次，**沒有照做** | |
+| 2026-11-16 | 牌照詳情 | 切換 90 天過關開關時，「今天已過關」按鈕也變成「記錄中」（共用 crossingBusy；Flutter 版照舊） | |
+| 2026-11-16 | 牌照詳情 | 「已過關」印章蓋在提醒開關上（Flutter 版照舊） | |
 
 ## 八、代替清單（全部打勾才算可以代替）
 
@@ -304,8 +313,8 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 |---|---|---|---|
 | login | 登入 | 1 | 已做（1d，iOS 已和現有 App 並排對照）；選內地區號、空白送出、號碼不足 8 位三個狀態未和現有 App 對照；QR 碼放大未做 |
 | （外殼） | 底部四個分頁、頂部導航列 | 1 | 完成（1c，已和現有 App 錄影對照） |
-| plate-detail | 牌照詳情 | 2 | 未做 |
-| card-capture | 拍批文卡 | 2 | 未做 |
+| plate-detail | 牌照詳情 | 2 | 已合併，待 2d 核對（車輛證件選相片未接上，見第九節） |
+| card-capture | 拍批文卡 | 2 | 已合併，真鏡頭待 2d 核對 |
 | index | 首頁 | 3a | 未做 |
 | vehicles | 我的牌照 | 3a | 未做 |
 | companies | 我的公司 | 3a | 未做 |
@@ -340,8 +349,8 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 | 提示（toast） | 1 | 已寫（1a），未和現有 App 對照 |
 | MainlandPlate、HongKongPlate、MacauPlate | 1 | 完成（1b，已和現有 App 對照） |
 | PlateChip、DueDate、StampMark | 1 | 完成（1b，已和現有 App 對照；差異見進度記錄） |
-| ApprovalCard（顯示、翻轉） | 2 | 未做 |
-| CardCapture（原生相機、對準框、找卡邊、自動拍） | 2 | 未做 |
+| ApprovalCard（顯示、翻轉） | 2 | 已合併，待 2d 核對 |
+| CardCapture（原生相機、對準框、找卡邊、自動拍） | 2 | 相機、對準框、裁切已合併；找卡邊、自動拍屬 2b |
 | AdvisorCard、ContactCard、WelcomeGuide | 3a | ContactCard 已做（1d，登入頁用，未登入的公開版）；其餘未做 |
 | iOS 鍵盤上方工具列（WebView 系統畫的「上一項／下一項／完成」） | 1 | 已做（1d），未和現有 App 並排對照 |
 | CompanyEditor、SignaturePad | 3c | 未做 |
@@ -353,7 +362,7 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 | 登入狀態、401 處理、API | `lib/api.js` | 1 | 完成（1d，附單元測試；兩個平台都用審查帳號登入成功） |
 | 自管／托管用語、金額、日期、狀態顏色（附單元測試） | `lib/api.js` | 1 | 完成（1d，每個函數每種情況一個具名測試） |
 | 返回鍵先關彈窗 | `lib/back-close.js` | 1 | 完成（返回箭頭、Android 返回鍵先關彈窗；子頁 iOS 右滑連彈窗一起返回，和現有 App 一樣） |
-| 相機和相片權限、用途說明卡 | `lib/pick-image.js` | 2 | 未做 |
+| 相機和相片權限、用途說明卡 | `lib/pick-image.js` | 2 | 已合併，Android 相冊路徑未截圖 |
 | 口岸圖 | `lib/ports-canvas.js` | 3 | 已做（1d，登入頁用）；首頁用時再對照 |
 | iOS 雙牌合位啟動動畫、Android 靜態 M 雲 | `pages/launch`、`lib/launch.js` | 4 | 未做 |
 | 首頁緩存 | `homeCache` | 4 | 未做 |
@@ -456,3 +465,18 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
   - QR 碼點擊放大未做；`/terms`、`/signup` 是空白佔位頁。
 - 移植時發現登入頁五個現有問題，已記在第七節，Flutter 版照舊。
 - 用審查帳號登入時的四段錄影（1d 的 iOS 兩次、Android 一次，和管理者手動登入那次）畫面上看得到手機號碼，管理者決定刪除，已刪除；截圖和沒有登入的錄影保留。
+
+### 2026-11-16（階段 2a、2c 已合併；按管理者指示暫停）
+
+- 2a（`e582dd3`、`975782c`）和 2c（`4c63f3e`）各自在分支完成，負責人驗收後合併到 `main`（`0fa469b`、`d9d789d`）。兩批只在 `tokens.dart`（各自在末尾加樣式）和 `pubspec.yaml` 重疊，合併時兩邊全部保留。
+- 合併後：`flutter analyze` 無問題；`flutter test` 有樣本時 606 個全部通過，沒有樣本時（`DP_CARD_FIXTURES=/nonexistent`，等於 CI 和全新 checkout）603 個通過、3 個跳過；`flutter build ios --simulator --debug` 和 `flutter build apk --debug` 都成功。合併後沒有開模擬器重看畫面。
+- 2a：拍卡頁、相冊拖動縮放、截出 2274×1445 JPEG（品質 90），框內位置和伺服器找不到卡邊時取的範圍相差不到 1 像素；Android 權限說明照搬 `pick-image.js`。新套件 camera、image、image_picker、permission_handler（鎖 12.x，13.x 要 compileSdk 37）。
+  - 自行判斷：原生相機的預覽和拍出的相片比例可能不同，先把相片按預覽比例置中裁切，令截出的範圍等於畫面所見。要在 2d 真機核實（同時核實相片方向）。
+  - 看過：iOS（17 Pro）開不了鏡頭、相冊、縮放、確認、取消；Android 相機說明卡、虛擬鏡頭預覽、快門。沒看過：Android 相冊選後各狀態、現有 App 的 Android 權限說明卡並排、真鏡頭。
+  - 截圖 `/private/tmp/dualplate-flutter/2a/`；點擊工具已重建在 `/private/tmp/dualplate-uitest`（不在倉庫）。Android 模擬器上的現有 App 已被移除，裝回用 `android/emu-run.sh --skip-build`。
+- 2c：牌照詳情整頁和 `ApprovalCard`；本機 API（資料在 `/private/tmp/dp2c`）建空白自管、有資料自管、托管、和審查帳號同樣資料的鏡像客戶測試，正式後端沒有寫入。並排 17 組（`/private/tmp/dualplate-flutter/2c/pairs/`），頁首對齊，其餘差 ≤1–3pt。
+  - 宋體：Noto Serif SC（SIL OFL 1.1）子集，一般體 8942 字 2.9 MB、粗體 173 字 84 KB，產生方法 `app/tool/song_subset.py`。只在 Android 用（iOS 照現有 App 用 Times＋蘋方），但 iOS 安裝包也帶着這 3 MB。
+  - 差異：中文字寬約 1–3%（階段 1 已知）；批文卡寬 374 對 377；「簽發機關」一行低約 2pt；輸入框等寬數字（`.field.num`）未做。
+  - 未做：車輛證件選相片（`doc_photo.dart` 仍回傳 null 當取消，要接上 2a 的 `pickPhoto` 並照 `cardPhoto()` 壓縮）；看大圖長按保存；寫入流程未在現有 App 對照（正式後端不可改資料）；Android 截圖；8 個連結去的頁面只是佔位。
+- 新組件已登記在 `docs/design-system.md`「客戶端（Flutter）」和 `app/README.md`。
+- 按管理者指示（「2a和2c完成後合併然後推送就暫停」）：合併、推送後暫停，2b、2d 未開始。2d 用 iPhone、臨時 Bundle ID（見第四節）。

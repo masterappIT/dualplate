@@ -196,6 +196,14 @@ Sidebar（深綠實心） │ Topbar：麵包屑 ………… ⌘K 搜尋 · 今
 | `SvgImage`（`brandMark`、`whatsappIcon`、`wechatIcon`） | `lib/pages/login/svg_icon.dart` | `static/` 同名 SVG（只畫用到的路徑） |
 | `PortsCanvas` | `lib/pages/login/ports_canvas.dart` | `lib/ports-canvas.js`（口岸圖） |
 | `LoginInput` | `lib/pages/login/login_page.dart` | 登入頁 `.field`（高 48）；`lib/ui/base.dart` 的 `Field` 高 50，兩者是否統一待定 |
+| `ApprovalCard` | `lib/business/approval_card.dart` | `ApprovalCard.vue`（正反面、翻轉；受保護設計）；卡底圖 `assets/approval_card/`，宋體子集 `DualplateSong` 只在 Android 用 |
+| `openCardCapture`、`CardCapturePage` | `lib/business/card_capture.dart`、`card_capture_page.dart` | `CardCapture.vue`、`pages/card-capture`（全螢幕對準框）；計算和裁切在 `card_stage.dart`（`card-stage.js`） |
+| `askPermission`、`notifyDenied`、`PermissionCard`、`pickPhoto` | `lib/business/pick_image.dart` | `lib/pick-image.js`（Android 權限用途說明卡） |
+| `showSelectorPicker`、`showDatePicker` | `lib/ui/pickers.dart` | `<picker>`（選項、日期）；登入頁區號選擇器仍在 `area_picker.dart` |
+| `UniSwitch` | `lib/ui/uni_switch.dart` | `<switch>` |
+| `showLoading`、`hideLoading` | `lib/ui/loading.dart` | `uni.showLoading` |
+| `previewImages` | `lib/ui/image_preview.dart` | `uni.previewImage`（未做長按保存） |
+| 牌照詳情頁內組件（`Blk`、`DBtn`、`PickerBox`、`TextArea`、`StatusLabel`、`EditorBox`、`FoldHead` 等） | `lib/pages/plate_detail/plate_detail_widgets.dart` | 詳情頁的頁內樣式類別；階段 3 其他頁要用時搬到 `lib/ui/` |
 
 共用邏輯（`lib/core/`）：`api.dart`（`api`、`publicApi`、401 自動登出並打開登入頁、條款檢查）、`session.dart`（登入狀態、`isSelfManaged`）、`wording.dart`（自管／托管用語、`money`、`friendlyDate`、`daysLeft`、`phoneText`、`requestTone`、`clientStage` 等，對應 `lib/api.js` 同名函數）、`js.dart`（照 JavaScript 的真假值和字串轉換，讓移植的判斷結果一樣）。
 
