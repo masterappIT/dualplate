@@ -192,6 +192,9 @@
   /* 徽章等語言判斷後才填圖片地址；沒有地址時不佔位（不執行程式時改顯示 noscript 內的繁體徽章） */
   .badge img:not([src]) { display: none; }
 
+  /* 彈窗打開時收起客服按鈕，免得擋住彈窗底部的按鈕 */
+  body.modal-open [data-masterbox-chat], body.modal-open [data-masterbox-chat-preview] { display: none !important; }
+
   /* 彈窗共用：遮罩＋內容；打開時主內容設為 inert */
   .overlay { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
     background: rgba(11, 22, 18, .55); opacity: 0; transition: opacity .2s ease-out; }
@@ -443,7 +446,7 @@
       current = document.getElementById(id); last = document.activeElement
       current.hidden = false
       page.forEach(function (el) { el.inert = true })
-      document.body.style.overflow = 'hidden'
+      document.body.style.overflow = 'hidden'; document.body.classList.add('modal-open')
       requestAnimationFrame(function () { requestAnimationFrame(function () { if (current) current.classList.add('show') }) })
       current.querySelector('[data-close]').focus({ preventScroll: true })
     }
@@ -452,7 +455,7 @@
       var el = current; current = null
       el.classList.remove('show')
       page.forEach(function (p) { p.inert = false })
-      document.body.style.overflow = ''
+      document.body.style.overflow = ''; document.body.classList.remove('modal-open')
       setTimeout(function () { el.hidden = true }, reduce ? 0 : 200)
       if (last && last.focus) last.focus({ preventScroll: true })
     }
@@ -476,5 +479,8 @@
   // 分層圖片全部載入後才播合位動畫，免得一開頭就錯過
   window.addEventListener('load', function () { document.getElementById('icon').classList.add('play') })
 </script>
+<!-- 客服對話小工具（MasterBox）：右下角浮動按鈕，非同步載入，不影響頁面顯示。
+     頁尾文字位置不變，由按鈕遷就：頁尾兩行最高到離底 64（桌面），按鈕離底 76（data-offset-y，小工具另加 iPhone 底部安全區），捲到底也不擋字 -->
+<script src="https://masterboxapp.masterappinc.com/c/widget.js" data-link="DaZ-K0ltDZ--4uZd9hNXXYI_" data-offset-y="76" async></script>
 </body>
 </html>
