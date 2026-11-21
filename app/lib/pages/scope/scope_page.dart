@@ -61,11 +61,8 @@ class ScopePageState extends State<ScopePage> with PageShow {
     }
   }
 
-  // 返回本頁時由 PageShow 重新載入（onShow）。PageShow 只比較路徑：從 /scope?id=… 返回 /scope 時路徑沒變，它看不到，這裏自己載入
-  Future<void> go(String path) async {
-    await context.push(path);
-    if (mounted && Uri.parse(path).path == showPath) unawaited(load());
-  }
+  // 返回本頁時由 PageShow 重新載入（onShow；它連查詢參數一起比較，/scope?id=… 返回 /scope 也看得到）
+  void go(String path) => context.push(path);
 
   @override
   Widget build(BuildContext context) {
