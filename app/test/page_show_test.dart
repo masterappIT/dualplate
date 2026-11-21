@@ -7,8 +7,10 @@ import 'package:go_router/go_router.dart';
 final shows = <String, int>{};
 
 class _Probe extends StatefulWidget {
-  const _Probe(this.path);
+  const _Probe(this.path, {this.label});
   final String path;
+  // 計數用的名稱：同一路徑疊幾頁時用完整網址分開（預設是路徑）
+  final String? label;
   @override
   State<_Probe> createState() => _ProbeState();
 }
@@ -17,7 +19,7 @@ class _ProbeState extends State<_Probe> with PageShow {
   @override
   String get showPath => widget.path;
   @override
-  void onShow() => shows[widget.path] = (shows[widget.path] ?? 0) + 1;
+  void onShow() => shows[widget.label ?? widget.path] = (shows[widget.label ?? widget.path] ?? 0) + 1;
   @override
   Widget build(BuildContext context) => Text(widget.path, textDirection: TextDirection.ltr);
 }
@@ -35,6 +37,7 @@ GoRouter _router() {
     ),
     GoRoute(path: '/notifications', parentNavigatorKey: root, builder: (context, state) => const _Probe('/notifications')),
     GoRoute(path: '/plate-detail', parentNavigatorKey: root, builder: (context, state) => const _Probe('/plate-detail')),
+    GoRoute(path: '/scope', parentNavigatorKey: root, builder: (context, state) => _Probe('/scope', label: state.uri.toString())),
   ]);
 }
 
@@ -92,7 +95,7 @@ void main() {
       expect(shows['/index'], 2);
     });
 
-    testWidgets('從推入的頁面返回分頁時呼叫（go_router 返回後 uri 仍是那一頁，不能用 uri）', (tester) async {
+    testWidgets('從推入的頁面返回分頁時呼叫（go_router 的 push 不改 uri，不能用 uri）', (tester) async {
       final router = await _pump(tester);
       router.push('/notifications');
       await tester.pumpAndSettle();
@@ -127,6 +130,92 @@ void main() {
       router.pop();
       await tester.pumpAndSettle();
       expect(visiblePath(router.routerDelegate.currentConfiguration), '/index');
+    });
+  });
+
+  group('onShow：同一路徑不同查詢參數', () {
+    testWidgets('從 /scope?id=1 返回 /scope 時，/scope 呼叫', (tester) async {
+      final router = await _pump(tester);
+      router.push('/scope');
+      await tester.pumpAndSettle();
+      router.push('/scope?id=1');
+      await tester.pumpAndSettle();
+      router.pop();
+      await tester.pumpAndSettle();
+      expect([shows['/scope'], shows['/scope?id=1']], [2, 1]);
+    });
+
+    testWidgets('推入 /scope?id=1 時，底下的 /scope 不呼叫', (tester) async {
+      final router = await _pump(tester);
+      router.push('/scope');
+      await tester.pumpAndSettle();
+      router.push('/scope?id=1');
+      await tester.pumpAndSettle();
+      expect([shows['/scope'], shows['/scope?id=1']], [1, 1]);
+    });
+
+    testWidgets('/scope?id=1 上面再開 /scope?id=2，返回時只有 /scope?id=1 呼叫', (tester) async {
+      final router = await _pump(tester);
+      router.push('/scope?id=1');
+      await tester.pumpAndSettle();
+      router.push('/scope?id=2');
+      await tester.pumpAndSettle();
+      router.pop();
+      await tester.pumpAndSettle();
+      expect([shows['/scope?id=1'], shows['/scope?id=2'], shows['/index']], [2, 1, 1]);
+    });
+
+    testWidgets('分頁不會多載入：經兩層帶參數的頁面返回首頁，首頁只多呼叫一次', (tester) async {
+      final router = await _pump(tester);
+      router.push('/scope');
+      await tester.pumpAndSettle();
+      router.push('/scope?id=1');
+      await tester.pumpAndSettle();
+      router.pop();
+      await tester.pumpAndSettle();
+      router.pop();
+      await tester.pumpAndSettle();
+      expect([shows['/index'], shows['/vehicles']], [2, null]);
+    });
+
+    testWidgets('分頁不會多載入：切分頁來回，每次顯示只呼叫一次', (tester) async {
+      final router = await _pump(tester);
+      for (final p in ['/vehicles', '/index', '/vehicles', '/index']) {
+        router.go(p);
+        await tester.pumpAndSettle();
+      }
+      expect([shows['/index'], shows['/vehicles']], [3, 2]);
+    });
+
+    testWidgets('App 回到前景：只有最上面那頁呼叫（同一路徑底下那頁不呼叫）', (tester) async {
+      final router = await _pump(tester);
+      router.push('/scope');
+      await tester.pumpAndSettle();
+      router.push('/scope?id=1');
+      await tester.pumpAndSettle();
+      for (final s in [AppLifecycleState.inactive, AppLifecycleState.hidden, AppLifecycleState.paused, AppLifecycleState.hidden, AppLifecycleState.inactive, AppLifecycleState.resumed]) {
+        tester.binding.handleAppLifecycleStateChanged(s);
+      }
+      await tester.pump();
+      expect([shows['/scope'], shows['/scope?id=1'], shows['/index']], [1, 2, 1]);
+    });
+
+    testWidgets('visibleLocation：推入帶參數的頁面時包括查詢參數', (tester) async {
+      final router = await _pump(tester);
+      router.push('/scope?id=1');
+      await tester.pumpAndSettle();
+      expect([visibleLocation(router.routerDelegate.currentConfiguration), visiblePath(router.routerDelegate.currentConfiguration)], ['/scope?id=1', '/scope']);
+    });
+
+    testWidgets('visibleLocation：返回後是底下那頁的網址', (tester) async {
+      final router = await _pump(tester);
+      router.push('/scope');
+      await tester.pumpAndSettle();
+      router.push('/scope?id=1');
+      await tester.pumpAndSettle();
+      router.pop();
+      await tester.pumpAndSettle();
+      expect(visibleLocation(router.routerDelegate.currentConfiguration), '/scope');
     });
   });
 

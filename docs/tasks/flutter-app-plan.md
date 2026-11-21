@@ -494,7 +494,8 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 
 - 3a 合併（331da7c）：六頁和 AdvisorCard、WelcomeGuide、ContactCard 登入後版本；`flutter analyze` 無問題，`flutter test` 868 通過、6 跳過（負責人重跑）。三種帳號 59 組並排圖，負責人抽看首頁、牌照卡疊、「我的」、日期選擇器。
 - 共用檔改動：ApprovalCard 加可選卡面圓角陰影（預設不變）；ContactCard 加登入後版本；原生殼加「致電」通道（未用 url_launcher，避免新增依賴；真機未試）；login_test 3 處改用 demoTabs（斷言不變）。
-- 負責人決定（一比一）：日期選擇器改成現有 App 的 iOS 原生滾輪樣式；提示框尺寸圓角對齊現有 App；修 `AppNav.currentPath` 返回後網址不變的問題。交回 3a session 接着做。字寬差異（「·」、全形括號）屬字型排版，不追。
+- 負責人決定（一比一）：日期選擇器改成現有 App 的 iOS 原生滾輪樣式；提示框尺寸圓角對齊現有 App；修 `AppNav.currentPath` 返回後網址不變的問題。交回 3a session 接着做。
+- 3a 補修已合併：日期選擇器照現有 App 的 iOS 原生滾輪（只有「完成」、灰色圓角選中條、月日不補零，用 CupertinoPicker，未新增依賴）；提示框圓角 4、一行高 39；`AppNav.currentPath` 改用可見網址；`PageShow` 連查詢參數比較。`flutter test` 916 通過、6 跳過（負責人重跑）。字寬差異（「·」、全形括號）屬字型排版，不追。
 - 現有 App 本身的問題（照舊）：載入中沒有轉圈；載入失敗只有短提示、沒有重試，「我的」頁一律當托管顯示。
 
 ### 2026-11-21（階段 3 批准；3-0 預備完成）

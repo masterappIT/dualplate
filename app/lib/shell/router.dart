@@ -7,6 +7,7 @@
 // 打開中的確認框、選單先被關掉（等於點了框外），不離開頁面；鎖定提示框例外，和現有 App 一樣照常返回頁面（dialogs.dart）。
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
+import '../business/page_show.dart';
 import '../core/api.dart';
 import '../pages/billing/billing_page.dart';
 import '../pages/close_account/close_account_page.dart';
@@ -107,7 +108,8 @@ GoRouter buildRouter({String initialLocation = '/sample'}) {
         GoRoute(path: path, parentNavigatorKey: root, pageBuilder: (context, state) => PopInPage(key: state.pageKey, child: build(state.uri.queryParameters))),
     ],
   );
-  AppNav.currentPath = () => router.routerDelegate.currentConfiguration.uri.path;
+  // 目前看得見的頁面路徑。不用 currentConfiguration.uri：push 不改 uri，推入登入頁、條款頁後仍是底下的頁面（見 business/page_show.dart 的 visiblePath）
+  AppNav.currentPath = () => visiblePath(router.routerDelegate.currentConfiguration) ?? '';
   AppNav.push = (path) => router.push(path);
   AppNav.reLaunch = router.go;
   return router;
