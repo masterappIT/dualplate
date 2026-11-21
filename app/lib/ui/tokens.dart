@@ -130,14 +130,16 @@ abstract final class WotChoice {
 
 // 提示（uni.showToast({ title, icon: 'none' })）：App 端是原生等待框 plus.nativeUI.showWaiting，
 // uni-app-plus dist/uni.runtime.esm.js 傳 padding 10px、字 16px、不顯示 loading、modal:false（不擋操作）；
-// 其餘用 5+ API 預設：背景 rgba(0,0,0,.7)、白字、圓角 10px、置中。iOS 的等待框是 MBProgressHUD 改版：淡入淡出 0.3 秒，文字最寬為螢幕寬減 4 倍內距。
+// 其餘用 5+ API 預設：背景 rgba(0,0,0,.7)、白字、置中。iOS 的等待框是 MBProgressHUD 改版：淡入淡出 0.3 秒，文字最寬為螢幕寬減 4 倍內距。
+// 圓角和行高照現有 App 截圖量（3a 修正，16 Pro Max「伺服器暫時出錯」131×39pt）：圓角約 4pt（不是 5+ 文件寫的 10px）；
+// 文字是 UILabel 系統字 16pt，行高 19（16pt 系統字的 lineHeight 19.09），所以框高 19 + 2×10 = 39。
 abstract final class ToastStyle {
   static const bg = Color(0xB3000000); // rgba(0,0,0,.7)
   static const fg = Color(0xFFFFFFFF);
   static const fs = 16.0;
-  static const line = 1.4; // UILabel 用系統字型的自然行高（PingFang 約 1.4 倍）
+  static const line = 19 / 16; // UILabel 系統字 16pt 的行高 19
   static const padding = 10.0;
-  static const radius = 10.0;
+  static const radius = 4.0;
   static const fade = Duration(milliseconds: 300);
   static const duration = Duration(milliseconds: 1500); // uni.showToast 預設 duration 1500
 }
@@ -507,4 +509,40 @@ abstract final class VehiclesStyle {
   static const focusFromY = 24.0; // translateY(24px) scale(.94) → 0、1
   static const focusFromScale = .94;
   static const closeSize = 40.0; // .close-focus 40 圓、底 --muted-bg、字 --fs-title、ink-2
+}
+
+// 日期選擇器（<picker mode="date">）：現有 App 在 iOS 打開系統原生日期滾輪（UIDatePicker），數值照 16 Pro Max 截圖量（3a 修正）。
+// 底部面板：頂條 44（只有右邊「完成」，系統藍 17pt）＋滾輪 216，不另加底部安全區（滾輪伸到螢幕底，Home 條蓋在上面）；
+// 面板半透明，下面的頁面隱約透出；遮罩約 41% 黑。選中行是灰色圓角底條（左右各留 9、圓角 8，iOS quaternarySystemFill）。
+abstract final class DatePickerStyle {
+  static const mask = Color(0x68000000); // 頁面底色 247 → 146：rgba(0,0,0,.41)
+  static const toolbarHeight = 44.0;
+  static const wheelHeight = 216.0;
+  static const toolbarBg = Color(0xFDF7F8F7); // 頂條：截圖 247
+  static const wheelBg = Color(0xF3FFFFFF); // 滾輪：不模糊，95% 白；遮罩後的頁面 146 → 250，頁面文字隱約可見
+  static const blur = 20.0; // 頂條系統材質的模糊
+  static const done = Color(0xFF007AFF); // systemBlue
+  static const doneSize = 17.0;
+  static const doneRight = 20.0; // 「完成」右邊距
+  static const selection = Color(0x14747480); // quaternarySystemFill：底條 239～240
+  static const selectionHeight = 34.0;
+  static const selectionMargin = 9.0;
+  static const selectionRadius = 8.0;
+  static const font = 'CupertinoSystemText'; // 系統字的內文字形（數字比 .AppleSystemUIFont 在 20pt 時選的字形寬，照截圖）
+  static const fontSize = 20.0; // 對照截圖：22pt 時選中行字形比現有 App 大約 1.1 倍
+  static const text = Color(0xFF363637); // 截圖選中行最深 54
+  static const invalid = Color(0xFF999999); // 不存在的日子、範圍外（CupertinoColors.inactiveGray）
+  static const itemExtent = 34 / (2.35 / 2.1); // 行距：對照截圖，和現有 App 相同
+  static const magnification = 2.35 / 2.1; // 照 CupertinoDatePicker
+  static const squeeze = 1.25;
+  static const yearGap = 2.5; // 「2026 年」數字和「年」之間多出的空隙
+  // 三欄的位置（相對滾輪中線）和寬度：年份靠右、月日靠左，選中行放大後的位置對照截圖
+  static const yearLeft = -146.8;
+  static const yearWidth = 110.0;
+  static const monthLeft = -15.4;
+  static const monthWidth = 60.0;
+  static const dayLeft = 56.5;
+  static const dayWidth = 60.0;
+  static const columnPad = 10.0; // 每欄左右多留的空間（防止放大的選中行被欄邊裁掉）
+  static const duration = Duration(milliseconds: 250); // 由下滑上（未能從截圖量，照 iOS 鍵盤）
 }
