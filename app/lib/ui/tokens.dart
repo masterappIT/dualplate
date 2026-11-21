@@ -481,3 +481,30 @@ abstract final class ApprovalCardStyle {
   static const ctrlOnText = Color(0xFFFFFFFF);
   static const hint = Color(0xFF668076);
 }
+
+// ── 3a 首頁和瀏覽（mobile/src/pages/index、vehicles、notifications 和 components/WelcomeGuide.vue、AdvisorCard.vue 的 <style scoped>）──
+abstract final class HomeStyle {
+  static const white = Color(0xFFFFFFFF); // .hero-name、.badge text
+  static const tileRule = Color(0x33E3EFEA); // .status-tile+.status-tile border-left rgba(227,239,234,.2)
+  static const guideMask = Color(0x8C0B3B30); // .guide-mask rgba(11,59,48,.55)
+  static const unreadRing = Color(0xFFFFF4D0); // 通知未讀圓點 box-shadow 0 0 0 2px #FFF4D0
+}
+
+// 牌照頁的批文卡疊和單張預覽（vehicles.vue）
+abstract final class VehiclesStyle {
+  static const cardRevealRpx = 230.0; // 每張卡露出 230rpx
+  static const deckMinRpx = 490.0; // .card-deck min-height：490rpx + (張數 - 1) × 230rpx
+  static const deckTopRpx = 12.0; // .card-deck margin:12rpx 0 9rpx
+  static const deckBottomRpx = 9.0;
+  static const deckRadiusRpx = 12.0; // .deck-card :deep(.approval-face) 圓角 12rpx、陰影 0 4rpx 12rpx #1b4c3828
+  static const deckShadowYRpx = 4.0;
+  static const deckShadowBlurRpx = 12.0;
+  static const deckShadow = Color(0x281B4C38);
+  static const overlay = Color(0xB8071812); // .wallet-overlay rgba(7,24,18,.72)
+  static const overlayIn = Duration(milliseconds: 250); // overlay-in .25s ease
+  static const focusIn = Duration(milliseconds: 350); // focus-in .35s cubic-bezier(.22,.67,.22,1)
+  static const focusCurve = Cubic(.22, .67, .22, 1);
+  static const focusFromY = 24.0; // translateY(24px) scale(.94) → 0、1
+  static const focusFromScale = .94;
+  static const closeSize = 40.0; // .close-focus 40 圓、底 --muted-bg、字 --fs-title、ink-2
+}

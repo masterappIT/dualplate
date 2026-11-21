@@ -1,9 +1,12 @@
 // 聯絡方式卡：照搬 mobile/src/components/ContactCard.vue 的公開版本（登入頁的「忘記密碼？」和申請審批中）。
-// 只列出已設定的 WhatsApp／微信；都沒有設定時整張卡不顯示。App 內訊息（messages）要登入後才有，到階段 3a 連同組件搬到 lib/business/ 再做。
+// 只列出已設定的 WhatsApp／微信；都沒有設定時整張卡不顯示。
+// 3a 擴充登入後的版本（「我的」頁）：messages 為 true 時標題「聯絡我們」、加「在 app 內發訊息」，渠道沒有設定也顯示；public 為 false 時讀 /my/contact。
+// 預設值照登入頁的用法（公開、不顯示 App 內訊息），和 ContactCard.vue 的預設（messages、非公開）相反。
 // 現有 App 按渠道按鈕時不會打開 WhatsApp：openLink 在 App 端只複製連結並提示（api.js 只有網頁版才開新視窗），照舊。
 import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/api.dart';
 import '../../core/js.dart';
 import '../../core/wording.dart';
@@ -40,8 +43,11 @@ void openLink(BuildContext context, Object? url) {
 }
 
 class ContactCard extends StatefulWidget {
-  const ContactCard({super.key, this.title = ''});
+  const ContactCard({super.key, this.title = '', this.messages = false, this.public = true, this.bare = false});
   final String title;
+  final bool messages, public;
+  // bare：不帶外距（.contact margin-top 16、.card margin-bottom 12），由頁面按外距合併處理
+  final bool bare;
   @override
   State<ContactCard> createState() => _ContactCardState();
 }
@@ -53,14 +59,14 @@ class _ContactCardState extends State<ContactCard> {
   void initState() {
     super.initState();
     // 取不到就不顯示（照舊不提示錯誤）
-    publicApi('/public/contact').then((value) {
+    (widget.public ? publicApi('/public/contact') : api('/my/contact')).then((value) {
       if (mounted && value is Map) setState(() => contact = value);
     }, onError: (Object _) {});
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!hasChannel(contact)) return const SizedBox.shrink();
+    if (!widget.messages && !hasChannel(contact)) return const SizedBox.shrink();
     final c = contact;
     // .btn-sm.channel：撐滿、高 40、淺綠底綠字，標誌 20×20 右距 8；按下效果同 Btn
     Widget channel(SvgIcon icon, String text, VoidCallback onTap) => Pressable(
@@ -83,11 +89,14 @@ class _ContactCardState extends State<ContactCard> {
     ];
     // .card.contact：margin-top 16、內距 16（.card 的 margin-bottom 12 照舊）
     return Padding(
-      padding: const EdgeInsets.only(top: 16),
+      padding: EdgeInsets.only(top: widget.bare ? 0 : 16),
       child: CardBox(
+        margin: widget.bare ? EdgeInsets.zero : const EdgeInsets.only(bottom: 12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text(widget.title.isNotEmpty ? widget.title : '其他聯絡方式', style: ts(Fs.h, weight: w800, color: C.jadeDeep)),
-          Subtle(contactIntro(c, title: widget.title)),
+          Text(widget.title.isNotEmpty ? widget.title : (widget.messages ? '聯絡我們' : '其他聯絡方式'), style: ts(Fs.h, weight: w800, color: C.jadeDeep)),
+          Subtle(contactIntro(c, messages: widget.messages, title: widget.title)),
+          // .btn-line.contact-btn：撐滿、上距 12
+          if (widget.messages) Padding(padding: const EdgeInsets.only(top: 12), child: Btn('在 app 內發訊息', kind: BtnKind.line, expand: true, onTap: () => context.push('/messages'))),
           if (buttons.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 12),
