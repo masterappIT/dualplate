@@ -389,7 +389,8 @@ void main() {
       await settle(tester, 10);
       expect(find.text('港澳車牌由 HK1234 改為 XY99'), findsOneWidget);
       await tapText(tester, '辦了換車');
-      expect(find.text('自行辦理更新'), findsOneWidget);
+      // 3b 換上真正的自行辦理更新頁：導航列標題照 setNavigationBarTitle 是種類名稱（原佔位頁寫「自行辦理更新」）
+      expect(find.text('自行換車'), findsOneWidget);
       await finish(tester);
     });
 
@@ -553,7 +554,8 @@ void main() {
       expect(find.text('你自己辦好了甚麼？'), findsOneWidget);
       expect(find.text('口岸變更'), findsOneWidget);
       await pickSheet(tester, '續期');
-      expect(find.text('自行辦理更新'), findsOneWidget);
+      // 3b 換上真正的自行辦理更新頁：導航列標題照 setNavigationBarTitle 是種類名稱（原佔位頁寫「自行辦理更新」）
+      expect(find.text('自行續期'), findsOneWidget);
       await finish(tester);
     });
 

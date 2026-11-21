@@ -397,7 +397,8 @@ class _FieldState extends State<Field> {
         style: ts(Fs.h, height: 1.5),
         decoration: InputDecoration(
           isCollapsed: true,
-          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          // .field 是 border-box：最少高 48 已含上下框線。Container 會把 1px 框線加在 48 外面（共 50），所以上下各少 1（3b 2026-11-21 量現有 App 核實）
+          contentPadding: const EdgeInsets.symmetric(vertical: 11),
           border: InputBorder.none,
           hintText: widget.placeholder,
           hintStyle: ts(Fs.h, color: const Color(0xFF808080), height: 1.5),
