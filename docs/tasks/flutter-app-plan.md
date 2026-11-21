@@ -494,7 +494,8 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 
 - 管理者要求 3a、3b 先收尾，清理分支和開着的模擬器。
 - 已刪除：3a、3b 的 worktree 和本地分支（都已併入 main；遠端沒有這兩條分支）；3b 專用的兩台模擬器「iPhone 17 Pro Max 3b」和「iPhone 16 Pro Max 對照本機 3b」。所有模擬器已關閉。
-- 保留：iPhone 16 Pro Max（`78302077`，現有 App 登入審查帳號）和「iPhone 16 Pro Max 對照本機」（`361F2754`，3c 起輪流用）；`/private/tmp/dp3/` 的 3a、3b 測試資料和截圖（3b 對照以這些截圖為準）。
+- 保留：iPhone 16 Pro Max（`78302077`，現有 App 登入審查帳號）和「iPhone 16 Pro Max 對照本機」（`361F2754`，3c 起輪流用）。
+- 管理者再要求清理沒用的測試數據：已刪除 `/private/tmp/dp3/` 裏 3a、3b 的本機資料、截圖、建置產物和腳本，以及 `/private/tmp/dualplate-flutter/`、`dpdoc/` 和幾個記錄檔（約 1.2 GB）。只保留現有 App 的點擊工具 `/private/tmp/dp3/uitest/`（3c 要改用它）。3c 的本機資料由 `local_api.sh 3c` 重新建立。
 - 沒有 3a、3b 的本機伺服器仍在運行。
 
 ### 2026-11-21（3b 收尾合併）
