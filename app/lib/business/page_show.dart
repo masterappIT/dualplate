@@ -15,21 +15,24 @@ mixin PageShow<T extends StatefulWidget> on State<T> {
 
   GoRouter? _router;
   String? _last;
+  // 本頁第一次顯示時的完整網址（連查詢參數）。同一路徑可以疊幾頁（/scope 上面再開 /scope?id=…），
+  // 只看路徑會分不出是哪一頁，所以記下自己的網址來比較
+  String? _mine;
   late final AppLifecycleListener _life = AppLifecycleListener(onResume: () {
     if (mounted && pageVisible) onShow();
   });
 
-  String? get _path {
+  String? get _location {
     try {
       final config = _router?.routerDelegate.currentConfiguration;
-      return config == null ? null : visiblePath(config);
+      return config == null ? null : visibleLocation(config);
     } catch (_) {
       return null;
     }
   }
 
   // 本頁是不是正在顯示（沒有 go_router 時當作是）
-  bool get pageVisible => _router == null || _path == showPath;
+  bool get pageVisible => _router == null || _location == (_mine ?? showPath);
 
   @override
   void initState() {
@@ -37,7 +40,9 @@ mixin PageShow<T extends StatefulWidget> on State<T> {
     _life;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _last = _path;
+      final location = _location;
+      _mine = location != null && Uri.parse(location).path == showPath ? location : showPath;
+      _last = location;
       onShow();
     });
   }
@@ -53,11 +58,12 @@ mixin PageShow<T extends StatefulWidget> on State<T> {
   }
 
   void _check() {
-    final path = _path;
-    if (path == _last) return;
+    final location = _location;
+    if (location == _last) return;
     final was = _last;
-    _last = path;
-    if (mounted && path == showPath && was != showPath && was != null) onShow();
+    _last = location;
+    final mine = _mine;
+    if (mounted && mine != null && location == mine && was != mine && was != null) onShow();
   }
 
   @override
@@ -68,17 +74,24 @@ mixin PageShow<T extends StatefulWidget> on State<T> {
   }
 }
 
-// 畫面最上層的頁面路徑。不可用 currentConfiguration.uri：go_router 的 push 不改 uri（optionURLReflectsImperativeAPIs 預設關），
+// 畫面最上層的頁面網址（路徑加查詢參數）。不可用 currentConfiguration.uri：go_router 的 push 不改 uri（optionURLReflectsImperativeAPIs 預設關），
 // 推入 /notifications 後 uri 仍是底下的 /index，返回時 uri 沒有變化，聽不出「回到本頁」。
-// 所以沿最後一個 match 走到最深一層，取它的 matchedLocation（推入的頁面是 ImperativeRouteMatch，同樣有 matchedLocation）。
-String? visiblePath(RouteMatchList config) {
+// 所以沿最後一個 match 走到最深一層：推入的頁面是 ImperativeRouteMatch，它自己的 matches.uri 是推入時的完整網址；
+// 不是推入的（分頁、go 打開的頁面）就是 currentConfiguration.uri。
+String? visibleLocation(RouteMatchList config) {
   if (config.matches.isEmpty) return null;
   RouteMatchBase m = config.matches.last;
   while (m is ShellRouteMatch && m.matches.isNotEmpty) {
     m = m.matches.last;
   }
-  final location = m.matchedLocation;
-  return location.isEmpty ? config.uri.path : Uri.parse(location).path;
+  final uri = m is ImperativeRouteMatch ? m.matches.uri : config.uri;
+  return Uri(path: uri.path.isEmpty ? '/' : uri.path, query: uri.query.isEmpty ? null : uri.query).toString();
+}
+
+// 畫面最上層的頁面路徑（不含查詢參數）：AppNav.currentPath 用
+String? visiblePath(RouteMatchList config) {
+  final location = visibleLocation(config);
+  return location == null ? null : Uri.parse(location).path;
 }
 
 // 返回先關本頁的浮層：對應 lib/back-close.js 的 closeOnBack（使用導覽、批文卡預覽）。
