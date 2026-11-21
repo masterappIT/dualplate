@@ -6,6 +6,8 @@ import 'dart:convert';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
+import '../../business/num_text.dart';
+import '../../business/page_show.dart';
 import '../../business/plate_chip.dart';
 import '../../core/api.dart';
 import '../../core/js.dart';
@@ -29,27 +31,21 @@ class RequestDetailPage extends StatefulWidget {
   State<RequestDetailPage> createState() => RequestDetailPageState();
 }
 
-class RequestDetailPageState extends State<RequestDetailPage> {
+class RequestDetailPageState extends State<RequestDetailPage> with PageShow {
   late final String requestId = widget.query['id'] ?? '';
   final bool selfManaged = isSelfManaged();
   Map<String, dynamic>? item;
   List<dynamic> sources = [], files = [];
   bool uploading = false, showDetail = false;
-  late final AppLifecycleListener lifecycle = AppLifecycleListener(onResume: () {
-    if (item != null) load();
-  });
+  bool _loadedOnce = false;
 
   @override
-  void initState() {
-    super.initState();
-    lifecycle;
-    WidgetsBinding.instance.addPostFrameCallback((_) => load());
-  }
-
+  String get showPath => '/request-detail';
+  // onLoad 載入一次；之後的 onShow 已有資料才再載入
   @override
-  void dispose() {
-    lifecycle.dispose();
-    super.dispose();
+  void onShow() {
+    if (!_loadedOnce || item != null) load();
+    _loadedOnce = true;
   }
 
   void _set(VoidCallback fn) {
@@ -85,11 +81,8 @@ class RequestDetailPageState extends State<RequestDetailPage> {
     }
   }
 
-  // 子頁：返回時（onShow）已有資料就重新載入
-  Future<void> go(String path) async {
-    await context.push(path);
-    if (mounted && item != null) unawaited(load());
-  }
+  // 子頁：返回時由 PageShow 重新載入（onShow，已有資料才載入）
+  void go(String path) => context.push(path);
 
   void openSource(Object? url) {
     Clipboard.setData(ClipboardData(text: jsString(url))).then((_) => toast('官方連結已複製'));
@@ -180,7 +173,7 @@ class RequestDetailPageState extends State<RequestDetailPage> {
         Blk(
           Row(children: [
             Expanded(
-              child: Text.rich(TextSpan(text: '已交文件', children: [TextSpan(text: ' · ${files.length}', style: _num(ts(Fs.h, weight: w800, height: 1.4, color: C.jadeDeep)))]),
+              child: Text.rich(TextSpan(text: '已交文件', children: [TextSpan(text: ' · ${files.length}', style: numStyle(ts(Fs.h, weight: w800, height: 1.4, color: C.jadeDeep)))]),
                   style: ts(Fs.h, weight: w800, height: 1.4, color: C.jadeDeep)),
             ),
             if (upload && waiting.isEmpty) ...[const SizedBox(width: 12), LinkText('上傳文件 ›', onTap: () => chooseUpload(null))],
@@ -246,7 +239,7 @@ class RequestDetailPageState extends State<RequestDetailPage> {
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Pill(str(i['status']), tone: toneOf(requestTone(i['status']))),
           const SizedBox(width: 12),
-          Text('最近更新 ${friendlyDate(i['updated_at'])}', style: _num(ts(Fs.meta, color: C.ink2, height: 1.6))),
+          Text('最近更新 ${friendlyDate(i['updated_at'])}', style: numStyle(ts(Fs.meta, color: C.ink2, height: 1.6))),
         ]),
         Padding(padding: const EdgeInsets.only(top: 12), child: Text(nowStage(i), style: ts(Fs.h, weight: w800, height: 1.4))),
         Padding(padding: const EdgeInsets.only(top: 4), child: Text(nextText(i, selfManaged), style: ts(Fs.body, color: C.ink2))),
@@ -330,7 +323,7 @@ class RequestDetailPageState extends State<RequestDetailPage> {
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(str(at(x, 'detail')), style: ts(Fs.body)),
-                  Padding(padding: const EdgeInsets.only(top: 2), child: Text(friendlyDate(at(x, 'created_at')), style: _num(ts(Fs.meta, color: C.ink2)))),
+                  Padding(padding: const EdgeInsets.only(top: 2), child: Text(friendlyDate(at(x, 'created_at')), style: numStyle(ts(Fs.meta, color: C.ink2)))),
                 ]),
               ),
             ]),
@@ -383,8 +376,6 @@ class RequestDetailPageState extends State<RequestDetailPage> {
       ]);
 }
 
-TextStyle _num(TextStyle s) => s.copyWith(fontFeatures: const [FontFeature.tabularFigures()], letterSpacing: (s.fontSize ?? 14) * .04);
-
 // .section-head：標題＋右邊 .subtle.num（例如「4 步」）；外距由 Blocks 處理
 class SectionRowNum extends StatelessWidget {
   const SectionRowNum({super.key, required this.title, required this.trailing});
@@ -393,6 +384,6 @@ class SectionRowNum extends StatelessWidget {
   Widget build(BuildContext context) => Row(children: [
         Expanded(child: SectionTitle(title, bare: true)),
         const SizedBox(width: 12),
-        Text(trailing, style: _num(ts(Fs.meta, color: C.ink2, height: 1.6))),
+        Text(trailing, style: numStyle(ts(Fs.meta, color: C.ink2, height: 1.6))),
       ]);
 }

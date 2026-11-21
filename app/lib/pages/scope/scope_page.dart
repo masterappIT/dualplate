@@ -13,7 +13,8 @@ import '../../ui/toast.dart';
 import '../../ui/tokens.dart';
 import '../plate_detail/plate_detail_logic.dart' show at, listOf, str;
 import '../plate_detail/plate_detail_widgets.dart';
-import 'advisor_card_3a.dart';
+import '../../business/advisor_card.dart';
+import '../../business/page_show.dart';
 import 'scope_logic.dart';
 
 class ScopePage extends StatefulWidget {
@@ -23,26 +24,17 @@ class ScopePage extends StatefulWidget {
   State<ScopePage> createState() => ScopePageState();
 }
 
-class ScopePageState extends State<ScopePage> {
+class ScopePageState extends State<ScopePage> with PageShow {
   late final String only = widget.query['id'] ?? '';
   List<dynamic> sections = [];
   Map? advisor;
   bool loaded = false;
   String title = '委託內容';
-  late final AppLifecycleListener lifecycle = AppLifecycleListener(onResume: load);
 
   @override
-  void initState() {
-    super.initState();
-    lifecycle;
-    WidgetsBinding.instance.addPostFrameCallback((_) => load());
-  }
-
+  String get showPath => '/scope';
   @override
-  void dispose() {
-    lifecycle.dispose();
-    super.dispose();
-  }
+  void onShow() => load();
 
   void _set(VoidCallback fn) {
     if (mounted) setState(fn);
@@ -69,9 +61,10 @@ class ScopePageState extends State<ScopePage> {
     }
   }
 
+  // 返回本頁時由 PageShow 重新載入（onShow）。PageShow 只比較路徑：從 /scope?id=… 返回 /scope 時路徑沒變，它看不到，這裏自己載入
   Future<void> go(String path) async {
     await context.push(path);
-    if (mounted) unawaited(load());
+    if (mounted && Uri.parse(path).path == showPath) unawaited(load());
   }
 
   @override

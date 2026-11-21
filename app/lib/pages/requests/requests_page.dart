@@ -5,6 +5,8 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
+import '../../business/num_text.dart';
+import '../../business/page_show.dart';
 import '../../business/plate_chip.dart';
 import '../../core/api.dart';
 import '../../core/js.dart';
@@ -27,24 +29,20 @@ class RequestsPage extends StatefulWidget {
   State<RequestsPage> createState() => RequestsPageState();
 }
 
-class RequestsPageState extends State<RequestsPage> {
+class RequestsPageState extends State<RequestsPage> with PageShow {
   late final RequestsForm f = RequestsForm(selfManaged: isSelfManaged(), query: widget.query);
   final description = TextEditingController();
   bool submitting = false;
   Object? price;
   String _priceKey = '|粵港';
-  late final AppLifecycleListener lifecycle = AppLifecycleListener(onResume: load);
 
   @override
-  void initState() {
-    super.initState();
-    lifecycle;
-    WidgetsBinding.instance.addPostFrameCallback((_) => load());
-  }
+  String get showPath => '/requests';
+  @override
+  void onShow() => load();
 
   @override
   void dispose() {
-    lifecycle.dispose();
     description.dispose();
     super.dispose();
   }
@@ -87,10 +85,8 @@ class RequestsPageState extends State<RequestsPage> {
     }
   }
 
-  Future<void> go(String path) async {
-    await context.push(path);
-    if (mounted) unawaited(load());
-  }
+  // 返回本頁時由 PageShow 重新載入（onShow）
+  void go(String path) => context.push(path);
 
   Future<void> pickPlate() async {
     final i = await showSelectorPicker(context, f.plateNames, index: f.plateIndex);
@@ -128,7 +124,7 @@ class RequestsPageState extends State<RequestsPage> {
       if (locked == null && !f.fixedService)
         Blk(Segmented<String>(options: [for (final r in requestRoutes) (r, '$r服務')], value: f.route, onChanged: (r) => change(() => f.setRoute(r))), bottom: 12),
       Blk(CardBox(margin: EdgeInsets.zero, child: Blocks(_formBlocks())), bottom: 12),
-      Blk(SectionRow(title: '我的辦理記錄', trailing: Text('${f.requests.length} 項', style: _num(ts(Fs.meta, color: C.ink2, height: 1.6)))), top: 28, bottom: 12),
+      Blk(SectionRow(title: '我的辦理記錄', trailing: Text('${f.requests.length} 項', style: numStyle(ts(Fs.meta, color: C.ink2, height: 1.6)))), top: 28, bottom: 12),
       if (f.requests.isEmpty)
         Blk(CardBox(margin: EdgeInsets.zero, padding: EdgeInsets.zero, child: const Empty('還沒有辦理記錄，提交後可在這裏看進度。')), bottom: 12)
       else
@@ -222,20 +218,6 @@ class RequestsPageState extends State<RequestsPage> {
             ),
         ]),
       );
-}
-
-TextStyle _num(TextStyle s) => s.copyWith(fontFeatures: const [FontFeature.tabularFigures()], letterSpacing: (s.fontSize ?? 14) * .04);
-
-// .section-head 的內容（標題＋右邊），外距 28／12 由 Blocks 處理
-class SectionRow extends StatelessWidget {
-  const SectionRow({super.key, required this.title, this.trailing});
-  final String title;
-  final Widget? trailing;
-  @override
-  Widget build(BuildContext context) => Row(children: [
-        Expanded(child: SectionTitle(title, bare: true)),
-        if (trailing != null) ...[const SizedBox(width: 12), trailing!],
-      ]);
 }
 
 // <button class="primary" :loading :disabled>：送出中是 uni-button[disabled] 的灰底，文字前加 uni-button[loading] 的轉圈圖示（18px、右距 .34em）

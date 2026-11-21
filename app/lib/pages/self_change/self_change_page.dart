@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
+import '../../business/num_text.dart';
 import '../../business/card_capture.dart';
 import '../../core/api.dart';
 import '../../core/js.dart';
@@ -308,7 +309,7 @@ class SelfChangePageState extends State<SelfChangePage> {
       final r = f.renewal[code] ?? const RenewalDraft();
       final inner = <Blk>[
         _label(str(at(d, 'name'))),
-        Blk(Text.rich(TextSpan(text: '現在到期日：', children: [TextSpan(text: truthy(at(d, 'expiresOn')) ? jsString(at(d, 'expiresOn')) : '未有記錄', style: _num(ts(Fs.meta, color: C.ink2, height: 1.6)))]), style: ts(Fs.meta, color: C.ink2, height: 1.6))),
+        Blk(Text.rich(TextSpan(text: '現在到期日：', children: [TextSpan(text: truthy(at(d, 'expiresOn')) ? jsString(at(d, 'expiresOn')) : '未有記錄', style: numStyle(ts(Fs.meta, color: C.ink2, height: 1.6)))]), style: ts(Fs.meta, color: C.ink2, height: 1.6))),
         Blk(_switch(r.done, () => _set(() => f.setDone(code, true)), () => _set(() => f.setDone(code, false))), top: 8),
         if (r.done)
           Blk(
@@ -471,5 +472,3 @@ class SelfChangePageState extends State<SelfChangePage> {
         ],
       ];
 }
-
-TextStyle _num(TextStyle s) => s.copyWith(fontFeatures: const [FontFeature.tabularFigures()], letterSpacing: (s.fontSize ?? 14) * .04);
