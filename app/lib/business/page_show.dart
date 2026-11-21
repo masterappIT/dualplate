@@ -68,8 +68,8 @@ mixin PageShow<T extends StatefulWidget> on State<T> {
   }
 }
 
-// 畫面最上層的頁面路徑。不可用 currentConfiguration.uri：從推入的頁面返回時，若底下的路徑沒變，
-// go_router 只移走那一頁的 match，uri 仍是剛才那一頁（RouteMatchList.remove），例如由 /notifications 返回首頁後仍是 /notifications。
+// 畫面最上層的頁面路徑。不可用 currentConfiguration.uri：go_router 的 push 不改 uri（optionURLReflectsImperativeAPIs 預設關），
+// 推入 /notifications 後 uri 仍是底下的 /index，返回時 uri 沒有變化，聽不出「回到本頁」。
 // 所以沿最後一個 match 走到最深一層，取它的 matchedLocation（推入的頁面是 ImperativeRouteMatch，同樣有 matchedLocation）。
 String? visiblePath(RouteMatchList config) {
   if (config.matches.isEmpty) return null;

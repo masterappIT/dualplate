@@ -92,7 +92,7 @@ void main() {
       expect(shows['/index'], 2);
     });
 
-    testWidgets('從推入的頁面返回分頁時呼叫（go_router 返回後 uri 仍是那一頁，不能用 uri）', (tester) async {
+    testWidgets('從推入的頁面返回分頁時呼叫（go_router 的 push 不改 uri，不能用 uri）', (tester) async {
       final router = await _pump(tester);
       router.push('/notifications');
       await tester.pumpAndSettle();

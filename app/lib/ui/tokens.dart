@@ -130,14 +130,16 @@ abstract final class WotChoice {
 
 // 提示（uni.showToast({ title, icon: 'none' })）：App 端是原生等待框 plus.nativeUI.showWaiting，
 // uni-app-plus dist/uni.runtime.esm.js 傳 padding 10px、字 16px、不顯示 loading、modal:false（不擋操作）；
-// 其餘用 5+ API 預設：背景 rgba(0,0,0,.7)、白字、圓角 10px、置中。iOS 的等待框是 MBProgressHUD 改版：淡入淡出 0.3 秒，文字最寬為螢幕寬減 4 倍內距。
+// 其餘用 5+ API 預設：背景 rgba(0,0,0,.7)、白字、置中。iOS 的等待框是 MBProgressHUD 改版：淡入淡出 0.3 秒，文字最寬為螢幕寬減 4 倍內距。
+// 圓角和行高照現有 App 截圖量（3a 修正，16 Pro Max「伺服器暫時出錯」131×39pt）：圓角約 4pt（不是 5+ 文件寫的 10px）；
+// 文字是 UILabel 系統字 16pt，行高 19（16pt 系統字的 lineHeight 19.09），所以框高 19 + 2×10 = 39。
 abstract final class ToastStyle {
   static const bg = Color(0xB3000000); // rgba(0,0,0,.7)
   static const fg = Color(0xFFFFFFFF);
   static const fs = 16.0;
-  static const line = 1.4; // UILabel 用系統字型的自然行高（PingFang 約 1.4 倍）
+  static const line = 19 / 16; // UILabel 系統字 16pt 的行高 19
   static const padding = 10.0;
-  static const radius = 10.0;
+  static const radius = 4.0;
   static const fade = Duration(milliseconds: 300);
   static const duration = Duration(milliseconds: 1500); // uni.showToast 預設 duration 1500
 }

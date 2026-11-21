@@ -34,18 +34,26 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
   });
 
-  testWidgets('外觀：黑色 70% 底、圓角 10、內距 10、白字 16', (tester) async {
+  testWidgets('外觀：黑色 70% 底、圓角 4、內距 10、白字 16（3a 照現有 App 量）', (tester) async {
     final ctx = await pumpHost(tester);
     showToast(ctx, '已複製');
     await tester.pump();
     final c = tester.widget<Container>(box());
     final d = c.decoration! as BoxDecoration;
     expect(d.color, const Color(0xB3000000));
-    expect(d.borderRadius, BorderRadius.circular(10));
+    expect(d.borderRadius, BorderRadius.circular(4));
     expect(c.padding, const EdgeInsets.all(10));
     final t = tester.widget<Text>(find.text('已複製'));
     expect(t.style!.fontSize, 16);
     expect(t.style!.color, const Color(0xFFFFFFFF));
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('一行字的框高 39（行高 19 加上下內距 10，3a 照現有 App 量）', (tester) async {
+    final ctx = await pumpHost(tester);
+    showToast(ctx, '伺服器暫時出錯');
+    await tester.pump();
+    expect(tester.getSize(box()).height, 39);
     await tester.pump(const Duration(seconds: 3));
   });
 
