@@ -47,7 +47,8 @@ Future<void> openLogin(WidgetTester tester, {Map<String, Object> prefs = const {
   addTearDown(tester.view.reset);
   SharedPreferences.setMockInitialValues(Map.of(prefs));
   await Session.load();
-  await tester.pumpWidget(const DualplateApp(initialLocation: '/login'));
+  // 3a：首頁換成真頁面後會讀 API（這裏的假伺服器一律回 401，會再打開登入頁）；登入後到首頁的流程照外殼測試用 demoTabs
+  await tester.pumpWidget(const DualplateApp(initialLocation: '/login', demoTabs: true));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 50));
 }
@@ -518,7 +519,7 @@ void main() {
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
     Session.debugSet(token: 'old', user: {'id': 'u1'});
-    await tester.pumpWidget(const DualplateApp(initialLocation: '/index'));
+    await tester.pumpWidget(const DualplateApp(initialLocation: '/index', demoTabs: true));
     await tester.pump();
     try {
       await api('/my/overview');
@@ -533,7 +534,7 @@ void main() {
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
     Session.debugSet(token: 'old', user: {'id': 'u1'});
-    await tester.pumpWidget(const DualplateApp(initialLocation: '/index'));
+    await tester.pumpWidget(const DualplateApp(initialLocation: '/index', demoTabs: true));
     await tester.pump();
     AppNav.push('/login');
     await tester.pump();
