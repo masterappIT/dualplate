@@ -6,7 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Future<void> openTabs(WidgetTester tester) async {
-  await tester.pumpWidget(const DualplateApp(initialLocation: '/index'));
+  await tester.pumpWidget(const DualplateApp(initialLocation: '/index', demoTabs: true));
   await tester.pumpAndSettle();
 }
 

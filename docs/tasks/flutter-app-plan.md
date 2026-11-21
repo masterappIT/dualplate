@@ -111,7 +111,7 @@
 |---|---|---|---|---|
 | 1 | 骨架和登入 | 組件樣板和登入頁與現有 App 一比一；iOS、Android 都能登入，四個分頁正常 | 約 1 週 | 收尾（管理者 2026-11-17 決定）；1f 未做，留待讀卡調整時一併處理 |
 | 2 | 掃描批文卡和牌照詳情（關卡） | 同一批實卡，Flutter 版讀對的欄數不低於現有 App；管理者決定繼續 | 約 1 週 | 收尾（管理者 2026-11-17 決定）：2a–2c 已合併；2d 真機讀卡未過，問題見第九節；Flutter 其餘部分全部完成後再回來調整讀卡 |
-| 3 | 其餘頁面（3a–3d 四批） | 第八節清單的頁面和組件全部一比一，三種帳號走過 | 2–3 週 | 未開始 |
+| 3 | 其餘頁面（3-0 預備、3a–3d 四批、3e 收尾） | 第八節清單的頁面和組件全部一比一，三種帳號走過 | 2–3 週 | 進行中：管理者 2026-11-21 批准，逐批做（3a → 3b → 3c → 3d）；3-0 預備進行中 |
 | 4 | App 專用功能 | 啟動畫面、首頁緩存、App 內更新、條款同意框、返回鍵全部和現在一樣 | 3–4 天 | 未開始 |
 | 5 | 發布 | iOS 1.1.0 通過審核上架；Android 新 APK 放上網站；真機從舊版升級成功 | 約 1 週 | 未開始 |
 | 6 | 清理 | `mobile/` 不再有 App 專用代碼；舊 DCloud 專案移除 | 1–2 天（上線穩定約兩週後） | 未開始 |
@@ -202,14 +202,37 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 
 ### 階段 3：其餘頁面（約 2–3 週）
 
-分四批，每批做完給管理者看：
+搬第八節清單裏標「3a–3d」的 22 頁和 4 個組件（2026-11-21 按清單數過是 22 頁，原寫 20 頁有誤）（現有約 2,300 行）。每一頁都要用三種帳號走一遍：空白的自管客戶、有資料的自管客戶、托管客戶（管理者 10-19 的要求）。
 
-- **3a 首頁和瀏覽**：index、vehicles、companies、deadlines、me、notifications、AdvisorCard、ContactCard、WelcomeGuide。
-- **3b 牌照和辦理**：plate-create、plate-delete、self-change、requests、request-detail、scope。
-- **3c 出租和帳目**：rental、rental-new（含 SignaturePad 手寫簽名）、billing、reports、messages、profile、company-new、CompanyEditor。
-- **3d 帳號**：signup、terms、close-account。註銷會按 `docs/tasks/account-closure-retention-plan.md` 的進度決定送不送 `retain: true`。
+#### 階段 3 分批（負責人 2026-11-17 擬定；管理者 2026-11-21 批准，但**改為逐批做**）
 
-每一頁都要用三種帳號走一遍：空白的自管客戶、有資料的自管客戶、托管客戶（管理者 10-19 的要求）。
+管理者 2026-11-21 決定：下列三點按建議批准；另指示「做完 3a 才能開下一個 session」，所以第 2 點改為逐批：3a → 3b → 3c → 3d，前一批驗收合併後才開下一批。對照模擬器只需一份（每批輪流用同一份）。
+
+| 批次 | 內容 | 現有行數 | 做完給管理者看 | 依賴 |
+|---|---|---|---|---|
+| 3-0 預備（負責人做，**2026-11-21 完成**） | ① 22 頁各有佔位頁檔 `app/lib/pages/<頁>/<頁>_page.dart`，路由表已接好（查詢參數原樣交給頁面），各批只替換自己的頁面檔；② `app/tool/local_api.sh <批次>`：本機伺服器，每批一份資料（`/private/tmp/dp3/<批次>/`），三種帳號；③ 對照用模擬器「iPhone 16 Pro Max 對照本機」（`361F2754`）裝了連本機的現有 App，`app/tool/legacy_login.sh <電郵>` 直接登入 | — | 佔位路由提交；對照用模擬器能用三種帳號登入 | 無 |
+| 3a 首頁和瀏覽 | index、vehicles、companies、deadlines、me、notifications；AdvisorCard、WelcomeGuide（ContactCard 已在 1d 做） | 約 560 | 四個分頁和兩個子頁，三種帳號並排截圖 | 3-0 |
+| 3b 牌照和辦理 | plate-create、plate-delete、self-change、requests、request-detail、scope；另把 2c 遺留的車輛證件選相片接上（`doc_photo.dart` 改用 `pickPhoto`，照 `cardPhoto()` 壓縮） | 約 700 | 各頁三種帳號並排截圖，寫入流程逐步截圖，彈窗逐個點開 | 3-0 |
+| 3c 出租和帳目 | rental、rental-new（含 SignaturePad 手寫簽名）、billing、reports、messages、profile、company-new、CompanyEditor | 約 800 | 同上；手寫簽名另外錄影並排 | 3-0 |
+| 3d 帳號 | signup、terms、close-account | 約 230 | 同上 | 3a 合併後（從登入頁和「我的」進入） |
+| 3e 階段 3 收尾（負責人做） | Android 模擬器統一截圖（只跑一次）；三種帳號從首頁沿真正入口走完 22 頁；更新第八節 | — | 並排圖、差異清單、A–H 結果 | 3a–3d 合併 |
+
+做法：
+- 同階段 1、2：每批一個 session、一條分支（各自 worktree），負責人驗收後合併到 `main`；合併後不推送，等管理者指示。
+- 逐批做（管理者 2026-11-21：「做完 3a 才能開下一個 session」）：3a 驗收合併後才開 3b，3b 合併後開 3c，3c 合併後開 3d。3e 再從真正入口走完全部頁面。
+- 各批只改自己的檔案：新頁面、新組件放新檔案；`tokens.dart` 只在末尾加；本計劃文件、`app/README.md`、`docs/design-system.md` 由負責人合併時統一更新，各批把要登記的內容寫在報告裏。
+- 每批驗收：`flutter analyze` 無問題、`flutter test` 全部通過（沒有卡樣本時跳過的除外）；每頁正常、載入中、空白、出錯四個狀態，有自管／托管差別的兩種都截；彈窗、選單、鍵盤彈出逐個點開；和現有 App 並排、疊圖；按 `docs/visual-qa-checklist.md` 回答 A–H。發現現有 App 的問題記入第七節，Flutter 版照舊。
+- 本機測試資料：各批用自己那組帳號，不改別批的資料；不在正式後端寫入。Android 截圖由負責人在 3e 統一跑。
+- 1f 和讀卡照管理者 2026-11-17 決定，留到 Flutter 其餘部分全部完成後處理，不在階段 3 做。
+
+為甚麼要讓現有 App 改連本機：2c 時現有 App 連正式伺服器、只登入審查帳號，寫入流程和三種帳號都沒法在現有 App 對照。現有 App 的伺服器地址在打包時決定（`mobile/src/lib/api.js` 讀 `VITE_API_BASE_URL`），所以可以另外打包一個連本機伺服器的版本，兩邊用同一批帳號、同一份資料比較。
+
+批准結果（管理者 2026-11-21「三點都按建議批准」；第 2 點其後改為逐批）：
+1. **複製對照模擬器**（負責人建議批准）：把 iPhone 16 Pro Max（iOS 18.4，`78302077`）複製三份，給 3a、3b、3c 各用一份，裝上連本機伺服器的現有 App；原本那台保持登入審查帳號，不動。不批准的話只能在正式伺服器對照只讀頁面，寫入流程不對照（同 2c）。
+2. ~~三批同時開工~~：管理者其後指示逐批做，約多一週。
+3. **註銷頁**：「停用 30 天後刪除」（`docs/tasks/account-closure-retention-plan.md`）仍待批准，3d 先照現在的行為搬（不送 `retain: true`）；該計劃實施時網頁版和 Flutter 版一起改。
+
+模擬器分配（逐批做，各批輪流用同一組）：Flutter 版用 iPhone 17 Pro Max（iOS 26.0，`98D84492`，畫面尺寸和 16 Pro Max 相同）；現有 App 用 16 Pro Max 的複製品（3-0 建立）。Flutter 版不可裝在 `78302077` 或它的複製品上（Bundle ID 相同，會蓋掉現有 App）。
 
 ### 階段 4：App 專用功能（3–4 天）
 
@@ -465,6 +488,21 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
   - QR 碼點擊放大未做；`/terms`、`/signup` 是空白佔位頁。
 - 移植時發現登入頁五個現有問題，已記在第七節，Flutter 版照舊。
 - 用審查帳號登入時的四段錄影（1d 的 iOS 兩次、Android 一次，和管理者手動登入那次）畫面上看得到手機號碼，管理者決定刪除，已刪除；截圖和沒有登入的錄影保留。
+
+### 2026-11-21（階段 3 批准；3-0 預備完成）
+
+- 管理者「三點都按建議批准」；其後指示「做完 3a 才能開下一個 session」，所以改為逐批做：3a → 3b → 3c → 3d。
+- 3-0 完成：
+  - 佔位頁：22 頁各一個頁面檔，路由表接好（`_tabBuilders`、`_pageBuilders`）。外殼的換頁、返回測試原本靠首頁空頁上的示範按鈕，改用 `demoTabs`（`DualplateApp(demoTabs: true)`、樣板頁「打開外殼」），真正的首頁換上後這些測試不受影響。`flutter analyze` 無問題，`flutter test` 690 個全部通過。
+  - 本機伺服器：`app/tool/local_api.sh <批次>`，端口 4130。用 API 自帶示範資料（`DEMO_SEED=1`），再經管理端接口把陳先生轉為自管、新增空白自管客戶（`local_api_seed.mjs`）。三種帳號：`empty-self@demo.local`（空白自管）、`customer@demo.local`（陳先生，自管，2 個牌照）、`li@demo.local`（李先生，托管，8 個牌照、公司、出租、帳目），密碼都是 `CustomerDemo123!`。
+  - 對照用模擬器：把 iPhone 16 Pro Max（`78302077`）複製為「iPhone 16 Pro Max 對照本機」（`361F2754-4795-4DD7-9DBB-58CBAF4097C5`），裝上 `ios/sync-www.sh http://localhost:4130` 打包的現有 App。模擬器打字不可靠，所以寫了 `app/tool/legacy_login.sh <電郵>`：向本機伺服器登入，把 token 照 `saveSession` 寫進現有 App 的 uni 儲存再重開。三種帳號都已登入看過首頁（`/private/tmp/dp3/shots/`）。原機 `78302077` 沒有動。
+  - 點擊工具：11-17 收尾時已刪除（1b 的 XCUITest），3a 要自己重做（只用來點分頁和按鈕；登入用 `legacy_login.sh`，不用鍵盤）。
+
+### 2026-11-17（階段 3 分批擬定，未開工）
+
+- 管理者要求先把第三階段分批寫入計劃：見第四節「階段 3 分批」（3-0 預備、3a–3c 同時、3d、3e 收尾）。
+- 待管理者決定三點：複製對照模擬器並讓現有 App 改連本機伺服器；三批同時開工；註銷頁先照現在行為搬。
+- 沒有開工，沒有改程式碼，沒有開模擬器。
 
 ### 2026-11-17（階段 1、2 收尾）
 

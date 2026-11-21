@@ -20,7 +20,7 @@ void phone(WidgetTester tester) {
 
 Future<void> openTabs(WidgetTester tester) async {
   phone(tester);
-  await tester.pumpWidget(const DualplateApp(initialLocation: '/index'));
+  await tester.pumpWidget(const DualplateApp(initialLocation: '/index', demoTabs: true));
   await tester.pumpAndSettle();
 }
 

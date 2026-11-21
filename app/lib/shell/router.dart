@@ -8,8 +8,30 @@
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import '../core/api.dart';
+import '../pages/billing/billing_page.dart';
+import '../pages/close_account/close_account_page.dart';
+import '../pages/companies/companies_page.dart';
+import '../pages/company_new/company_new_page.dart';
+import '../pages/deadlines/deadlines_page.dart';
+import '../pages/index/index_page.dart';
 import '../pages/login/login_page.dart';
+import '../pages/me/me_page.dart';
+import '../pages/messages/messages_page.dart';
+import '../pages/notifications/notifications_page.dart';
+import '../pages/plate_create/plate_create_page.dart';
+import '../pages/plate_delete/plate_delete_page.dart';
 import '../pages/plate_detail/plate_detail_page.dart';
+import '../pages/profile/profile_page.dart';
+import '../pages/rental/rental_page.dart';
+import '../pages/rental_new/rental_new_page.dart';
+import '../pages/reports/reports_page.dart';
+import '../pages/request_detail/request_detail_page.dart';
+import '../pages/requests/requests_page.dart';
+import '../pages/scope/scope_page.dart';
+import '../pages/self_change/self_change_page.dart';
+import '../pages/signup/signup_page.dart';
+import '../pages/terms/terms_page.dart';
+import '../pages/vehicles/vehicles_page.dart';
 import '../ui/base.dart';
 import '../ui/dialogs.dart';
 import '../ui/sample.dart';
@@ -19,6 +41,41 @@ import 'tab_bar.dart';
 
 // 各分頁標題照 pages.json navigationBarTitleText
 const tabPages = [('/index', '車牌管家'), ('/vehicles', '我的牌照'), ('/companies', '我的公司'), ('/me', '我的')];
+
+// 分頁的真正頁面（階段 3a 實作）
+final Map<String, Widget Function()> _tabBuilders = {
+  '/index': () => const IndexPage(),
+  '/vehicles': () => const VehiclesPage(),
+  '/companies': () => const CompaniesPage(),
+  '/me': () => const MePage(),
+};
+
+// 開在分頁上面的頁面（階段 3a–3d 實作）。路徑照 pages.json 頁面名稱；查詢參數原樣交給頁面。
+// 3-0 全部先放佔位頁，各批只替換自己的頁面檔，不改這張表。
+final Map<String, Widget Function(Map<String, String> q)> _pageBuilders = {
+  '/deadlines': (q) => DeadlinesPage(query: q),
+  '/notifications': (q) => NotificationsPage(query: q),
+  '/plate-create': (q) => PlateCreatePage(query: q),
+  '/plate-delete': (q) => PlateDeletePage(query: q),
+  '/self-change': (q) => SelfChangePage(query: q),
+  '/requests': (q) => RequestsPage(query: q),
+  '/request-detail': (q) => RequestDetailPage(query: q),
+  '/scope': (q) => ScopePage(query: q),
+  '/rental': (q) => RentalPage(query: q),
+  '/rental-new': (q) => RentalNewPage(query: q),
+  '/billing': (q) => BillingPage(query: q),
+  '/reports': (q) => ReportsPage(query: q),
+  '/messages': (q) => MessagesPage(query: q),
+  '/profile': (q) => ProfilePage(query: q),
+  '/company-new': (q) => CompanyNewPage(query: q),
+  '/signup': (q) => SignupPage(query: q),
+  '/terms': (q) => TermsPage(query: q),
+  '/close-account': (q) => CloseAccountPage(query: q),
+};
+
+// 外殼示範：分頁顯示空頁，首頁放進入示範子頁的入口（只在開發時用：樣板頁「打開外殼」和 shell_test）。
+// 真正的分頁頁面要讀 API，外殼的換頁、返回測試不依賴它們。
+bool demoTabs = false;
 
 GoRouter buildRouter({String initialLocation = '/sample'}) {
   final root = GlobalKey<NavigatorState>(debugLabel: 'root');
@@ -33,25 +90,21 @@ GoRouter buildRouter({String initialLocation = '/sample'}) {
         branches: [
           for (final (path, title) in tabPages)
             StatefulShellBranch(routes: [
-              GoRoute(path: path, pageBuilder: (context, state) => NoTransitionPage(key: state.pageKey, child: TabPlaceholder(title: title, path: path))),
+              GoRoute(path: path, pageBuilder: (context, state) => NoTransitionPage(key: state.pageKey, child: demoTabs ? TabPlaceholder(title: title, path: path) : _tabBuilders[path]!())),
             ]),
         ],
       ),
       GoRoute(path: '/demo', parentNavigatorKey: root, pageBuilder: (context, state) => PopInPage(key: state.pageKey, child: const ShellDemoPage())),
       // 登入頁：沒有導航列（navigationStyle custom）。啟動時未登入直接打開；登入失效（401）時從當前頁面打開
       GoRoute(path: '/login', parentNavigatorKey: root, pageBuilder: (context, state) => PopInPage(key: state.pageKey, child: const LoginPage())),
-      // 服務條款、申請使用在階段 3d 才做，先放只有標題的空頁（標題照 pages.json）
-      GoRoute(path: '/terms', parentNavigatorKey: root, pageBuilder: (context, state) => PopInPage(key: state.pageKey, child: const AppPage(title: '服務條款及私隱聲明'))),
-      GoRoute(path: '/signup', parentNavigatorKey: root, pageBuilder: (context, state) => PopInPage(key: state.pageKey, child: const AppPage(title: '申請使用'))),
       // 牌照詳情（階段 2c）：/plate-detail?id=…（new=1 是登記現有批文卡的入口）。開發時：--dart-define=START=/plate-detail?id=<牌照 id>
       GoRoute(
         path: '/plate-detail',
         parentNavigatorKey: root,
         pageBuilder: (context, state) => PopInPage(key: state.pageKey, child: PlateDetailPage(id: state.uri.queryParameters['id'] ?? '', creating: state.uri.queryParameters['new'] == '1')),
       ),
-      // 牌照詳情會打開的頁面，階段 3 才做：先放只有標題的空頁（標題照 pages.json）
-      for (final (path, title) in const [('/plate-create', '新增牌照'), ('/self-change', '自行辦理更新'), ('/requests', '申請辦理'), ('/request-detail', '辦理進度'), ('/plate-delete', '刪除牌照'), ('/rental-new', '新增出租'), ('/rental', '出租'), ('/scope', '委託內容')])
-        GoRoute(path: path, parentNavigatorKey: root, pageBuilder: (context, state) => PopInPage(key: state.pageKey, child: AppPage(title: title))),
+      for (final MapEntry(key: path, value: build) in _pageBuilders.entries)
+        GoRoute(path: path, parentNavigatorKey: root, pageBuilder: (context, state) => PopInPage(key: state.pageKey, child: build(state.uri.queryParameters))),
     ],
   );
   AppNav.currentPath = () => router.routerDelegate.currentConfiguration.uri.path;
@@ -73,7 +126,7 @@ class _TabsRoute extends PopInRoute<void> {
   Duration get transitionDuration => Duration.zero;
 }
 
-// 分頁內容先放空頁（階段 3a 換成真正的頁面）；首頁暫時放進入示範子頁的入口，只在開發時用
+// 外殼示範用的分頁空頁（demoTabs）；首頁放進入示範子頁的入口，只在開發時用
 class TabPlaceholder extends StatelessWidget {
   const TabPlaceholder({super.key, required this.title, required this.path});
   final String title, path;

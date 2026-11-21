@@ -24,14 +24,22 @@ Future<void> main() async {
 String startLocation() => _devStart.isNotEmpty ? _devStart : signedIn ? '/index' : '/login';
 
 class DualplateApp extends StatefulWidget {
-  const DualplateApp({super.key, this.initialLocation = '/sample'});
+  const DualplateApp({super.key, this.initialLocation = '/sample', this.demoTabs = false});
   final String initialLocation;
+  // 分頁顯示外殼示範空頁（shell/router.dart demoTabs，只在測試外殼時用）
+  final bool demoTabs;
   @override
   State<DualplateApp> createState() => _DualplateAppState();
 }
 
 class _DualplateAppState extends State<DualplateApp> {
   late final GoRouter router = buildRouter(initialLocation: widget.initialLocation);
+
+  @override
+  void initState() {
+    super.initState();
+    demoTabs = widget.demoTabs;
+  }
 
   @override
   void dispose() {
