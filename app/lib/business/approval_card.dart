@@ -19,7 +19,7 @@ const approvalCardLabels = [
 ];
 
 class ApprovalCard extends StatefulWidget {
-  const ApprovalCard({super.key, required this.data, this.back = false, this.flipOnTap = true, this.tapLabel = '', this.showControls = true, this.onCardTap, this.onFlip});
+  const ApprovalCard({super.key, required this.data, this.back = false, this.flipOnTap = true, this.tapLabel = '', this.showControls = true, this.onCardTap, this.onFlip, this.face = const ApprovalFace()});
   final Map data;
   final bool back;
   final bool flipOnTap;
@@ -28,6 +28,8 @@ class ApprovalCard extends StatefulWidget {
   final bool showControls;
   final VoidCallback? onCardTap;
   final ValueChanged<bool>? onFlip;
+  // 卡面圓角和陰影：預設照 .approval-face；牌照頁的卡疊用 :deep(.approval-face) 另給（3a）
+  final ApprovalFace face;
 
   // validity(a,b)：兩個都有用「–」連起，日期的「-」換成「.」
   static String date(Object? value) => (value == null ? '' : '$value').replaceAll('-', '.');
@@ -105,7 +107,7 @@ class _ApprovalCardState extends State<ApprovalCard> with SingleTickerProviderSt
           aspectRatio: ApprovalCardStyle.ratio,
           child: AnimatedBuilder(
             animation: run,
-            builder: (context, _) => _FlipStage(turn: shown, front: _Face(back: false, data: widget.data, unit: unit), back: _Face(back: true, data: widget.data, unit: unit)),
+            builder: (context, _) => _FlipStage(turn: shown, front: _Face(back: false, data: widget.data, unit: unit, face: widget.face), back: _Face(back: true, data: widget.data, unit: unit, face: widget.face)),
           ),
         ),
       ),
@@ -121,6 +123,13 @@ class _ApprovalCardState extends State<ApprovalCard> with SingleTickerProviderSt
       }),
     ]);
   }
+}
+
+// .approval-face 的圓角和陰影（rpx）。預設 13rpx、0 3rpx 10rpx #1b304030
+class ApprovalFace {
+  const ApprovalFace({this.radiusRpx = ApprovalCardStyle.radiusRpx, this.shadowYRpx = ApprovalCardStyle.shadowYRpx, this.shadowBlurRpx = ApprovalCardStyle.shadowBlurRpx, this.shadow = ApprovalCardStyle.shadow});
+  final double radiusRpx, shadowYRpx, shadowBlurRpx;
+  final Color shadow;
 }
 
 // turn：0 正面、1 背面（180°）
@@ -143,18 +152,19 @@ class _FlipStage extends StatelessWidget {
 }
 
 class _Face extends StatelessWidget {
-  const _Face({required this.back, required this.data, required this.unit});
+  const _Face({required this.back, required this.data, required this.unit, required this.face});
   final bool back;
   final Map data;
   final double unit;
+  final ApprovalFace face;
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(ApprovalCardStyle.radiusRpx * unit);
+    final radius = BorderRadius.circular(face.radiusRpx * unit);
     return Container(
       decoration: BoxDecoration(
         color: ApprovalCardStyle.faceBg,
         borderRadius: radius,
-        boxShadow: [BoxShadow(offset: Offset(0, ApprovalCardStyle.shadowYRpx * unit), blurRadius: ApprovalCardStyle.shadowBlurRpx * unit, color: ApprovalCardStyle.shadow)],
+        boxShadow: [BoxShadow(offset: Offset(0, face.shadowYRpx * unit), blurRadius: face.shadowBlurRpx * unit, color: face.shadow)],
       ),
       child: ClipRRect(
         borderRadius: radius,
