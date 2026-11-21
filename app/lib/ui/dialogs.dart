@@ -131,7 +131,9 @@ class _AreaPopEntry extends PopEntry<Object?> {
   // 有彈窗時頁面不離開，改為關最上層彈窗（等於點了框外；鎖定提示框自己決定，見 _messageBox）
   @override
   void onPopInvokedWithResult(bool didPop, Object? result) {
-    if (!didPop) area._nav.currentState?.maybePop();
+    // 沒有彈窗時不動彈窗區的導航器：頁面自己用 PopScope 擋返回（例如新增牌照的「放棄這次錄入？」）時，
+    // 這裏也會被叫到，彈窗區只有底層頁面，對它 maybePop 會觸發 Flutter 的斷言（3b 2026-11-21 發現）
+    if (!didPop && area._open > 0) area._nav.currentState?.maybePop();
   }
 }
 
@@ -276,8 +278,8 @@ class ChoiceItem {
 
 DateTime _closedAt = DateTime.fromMillisecondsSinceEpoch(0);
 
-// 選項可以是 String 或 ChoiceItem
-Future<int> choose(BuildContext context, String title, List<Object> items) async {
+// 選項可以是 String 或 ChoiceItem；cancel 是關閉鍵文字（wd-action-sheet cancel-text，辦理進度頁寫「返回」）
+Future<int> choose(BuildContext context, String title, List<Object> items, {String cancel = '取消'}) async {
   // 上一個選單剛收起（例如連續兩層選單），等動畫完成再打開，避免畫面閃動
   final wait = 300 - DateTime.now().difference(_closedAt).inMilliseconds;
   if (wait > 0) await Future<void>.delayed(Duration(milliseconds: wait));
@@ -289,16 +291,16 @@ Future<int> choose(BuildContext context, String title, List<Object> items) async
     barrierColor: const Color(0x00000000),
     transitionDuration: _duration,
     reverseTransitionDuration: _duration,
-    pageBuilder: (context, animation, _) => _Sheet(animation: animation, title: title, items: list),
+    pageBuilder: (context, animation, _) => _Sheet(animation: animation, title: title, items: list, cancel: cancel),
   ));
   _closedAt = DateTime.now();
   return result ?? -1;
 }
 
 class _Sheet extends StatelessWidget {
-  const _Sheet({required this.animation, required this.title, required this.items});
+  const _Sheet({required this.animation, required this.title, required this.items, this.cancel = '取消'});
   final Animation<double> animation;
-  final String title;
+  final String title, cancel;
   final List<ChoiceItem> items;
   @override
   Widget build(BuildContext context) {
@@ -340,7 +342,7 @@ class _Sheet extends StatelessWidget {
                       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [for (var i = 0; i < items.length; i++) _Action(item: items[i], onTap: () => close(i))]),
                     ),
                   ),
-                  _Cancel(onTap: close),
+                  _Cancel(text: cancel, onTap: close),
                 ]),
               ),
             ),
@@ -400,8 +402,9 @@ class _ActionState extends State<_Action> {
 
 // 取消鍵：寬度扣去左右 16、下距 16、高 44、淺綠底綠字、16px 粗 700、圓角 4；按下時紙色底
 class _Cancel extends StatefulWidget {
-  const _Cancel({required this.onTap});
+  const _Cancel({required this.onTap, this.text = '取消'});
   final VoidCallback onTap;
+  final String text;
   @override
   State<_Cancel> createState() => _CancelState();
 }
@@ -418,7 +421,7 @@ class _CancelState extends State<_Cancel> {
           height: 44,
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           decoration: BoxDecoration(color: down ? C.paper : C.jadeSoft, borderRadius: BorderRadius.circular(R.control)),
-          child: Center(child: Text('取消', style: ts(Fs.h, weight: w700, color: C.jade, height: 1))),
+          child: Center(child: Text(widget.text, style: ts(Fs.h, weight: w700, color: C.jade, height: 1))),
         ),
       );
 }
