@@ -207,6 +207,78 @@ function locateFieldRectangles(side, lines) {
   return located
 }
 
+// 辨識程式常駐重用（2026-11-23，管理者批准加快辨識）：以前每次辨識都開一個新的，欄位中英文交替時來回換字庫，
+// 全部試讀一次一個。現在中文、英文各有一個常駐的辨識程式，兩者同時做；閒置一段時間後關閉，釋放記憶體。
+// 一次試讀（設定參數＋讀字）必須獨佔一個辨識程式，否則兩個請求同時用時參數會互相蓋掉。
+// 數量固定，同時有幾個人辨識也不會多開：在 768MB 上限的容器實測，舊做法兩人同時辨識會記憶體不足被重啟；
+// 這裏一中一英最高約 560MB。兩個中文辨識程式快一些，但最高約 710MB，加上伺服器本身太接近上限，所以不用。
+const WORKERS = { chi_sim: 1, eng: 1 }
+// 測試每個檔案是獨立程序，常駐的辨識程式會令程序不結束，所以測試時閒置一秒就關
+const IDLE_MS = process.env.NODE_ENV === 'test' ? 1000 : 5 * 60 * 1000
+const pools = {}
+
+function pool(language) {
+  if (!pools[language]) pools[language] = { slots: [], waiting: [], timer: null }
+  return pools[language]
+}
+
+async function acquire(language) {
+  const p = pool(language)
+  clearTimeout(p.timer)
+  let slot = p.slots.find(item => !item.busy)
+  if (!slot && p.slots.length < WORKERS[language]) {
+    slot = { busy: false, worker: createWorker(language, 1, { langPath: tessdataPath, gzip: false, cachePath: tessdataPath, cacheMethod: 'readOnly' }) }
+    p.slots.push(slot)
+  }
+  if (!slot) return new Promise(resolve => p.waiting.push(resolve))
+  slot.busy = true
+  try {
+    await slot.worker
+  } catch (error) {
+    p.slots.splice(p.slots.indexOf(slot), 1)
+    throw error
+  }
+  return slot
+}
+
+function release(language, slot) {
+  const p = pool(language)
+  const next = p.waiting.shift()
+  if (next) return next(slot)
+  slot.busy = false
+  if (p.slots.every(item => !item.busy)) p.timer = setTimeout(() => closeWorkers(language), IDLE_MS)
+}
+
+async function closeWorkers(language) {
+  const p = pool(language)
+  if (p.slots.some(item => item.busy) || p.waiting.length) return
+  const slots = p.slots.splice(0)
+  await Promise.all(slots.map(slot => slot.worker.then(worker => worker.terminate()).catch(() => {})))
+}
+
+async function withWorker(language, job) {
+  const slot = await acquire(language)
+  try {
+    return await job(await slot.worker)
+  } finally {
+    release(language, slot)
+  }
+}
+
+// 每個欄位只把那一小塊圖交給辨識程式（以前每次都交整張卡面再指定範圍，每次都要重新解碼整張圖）
+async function rawVariant(name, pipeline) {
+  const { data, info } = await pipeline.raw().toBuffer({ resolveWithObject: true })
+  return { name, scale: 2, data, info }
+}
+
+function cropVariant(variant, rectangle) {
+  const { width, height, channels } = variant.info
+  const left = clamp(Math.round(rectangle.left * variant.scale), 0, width - 1), top = clamp(Math.round(rectangle.top * variant.scale), 0, height - 1)
+  const crop = { left, top, width: clamp(Math.round(rectangle.width * variant.scale), 1, width - left), height: clamp(Math.round(rectangle.height * variant.scale), 1, height - top) }
+  // 註明 72 dpi（和以前整張卡面一樣）；沒有的話辨識程式每次都警告解像度無效
+  return sharp(variant.data, { raw: { width, height, channels } }).extract(crop).withMetadata({ density: 72 }).png({ compressionLevel: 1 }).toBuffer()
+}
+
 async function prepareVariants(image) {
   const source = await sharp(image).rotate().trim({ background: { r: 255, g: 255, b: 255, alpha: 1 }, threshold: 5 }).png().toBuffer()
   const rawSource = await sharp(image).rotate().png().toBuffer()
@@ -214,26 +286,35 @@ async function prepareVariants(image) {
     let pipeline = sharp(source).rotate(angle, { background: '#ffffff' }).trim({ background: '#ffffff', threshold: 5 }).resize({ width: TEMPLATE_WIDTH * 2, height: TEMPLATE_HEIGHT * 2, fit: 'fill' })
     if (enhanced) pipeline = pipeline.grayscale().normalise().linear(1.18, -18).sharpen({ sigma: 1.1 })
     if (threshold) pipeline = pipeline.grayscale().normalise().threshold(185)
-    return pipeline.png().toBuffer()
+    return pipeline
   }
-  const variants = []
-  variants.push({ name: 'raw', scale: 2, buffer: await sharp(rawSource).resize({ width: TEMPLATE_WIDTH * 2, height: TEMPLATE_HEIGHT * 2, fit: 'fill' }).png().toBuffer() })
-  for (const [name, angle] of [['enhanced', 0], ['deskew-left', -2], ['deskew-right', 2]]) variants.push({ name, scale: 2, buffer: await make(angle, true, false) })
-  variants.push({ name: 'threshold', scale: 2, buffer: await make(0, false, true) })
-  return variants
+  // 原圖另存一張 PNG 看版面；逐欄試讀用五種的像素
+  const rawResized = sharp(rawSource).resize({ width: TEMPLATE_WIDTH * 2, height: TEMPLATE_HEIGHT * 2, fit: 'fill' })
+  const layout = await rawResized.clone().png().toBuffer()
+  const variants = await Promise.all([
+    rawVariant('raw', rawResized.clone()),
+    ...[['enhanced', 0], ['deskew-left', -2], ['deskew-right', 2]].map(([name, angle]) => rawVariant(name, make(angle, true, false))),
+    rawVariant('threshold', make(0, false, true))
+  ])
+  return { layout, variants }
 }
 
-async function recognizeLayout(worker, variant) {
-  await worker.setParameters({ tessedit_pageseg_mode: '11', tessedit_char_whitelist: '' })
-  return worker.recognize(variant.buffer, {}, { text: true, blocks: true })
+// 辨識程式是重用的，參數要每次全部設定（preserve_interword_spaces 上一次可能設成 1）
+function recognizeLayout(image) {
+  return withWorker('chi_sim', async worker => {
+    await worker.setParameters({ tessedit_pageseg_mode: '11', tessedit_char_whitelist: '', preserve_interword_spaces: '0' })
+    return worker.recognize(image, {}, { text: true, blocks: true })
+  })
 }
 
-async function recognizeCandidate(worker, variant, field, rectangle, psm) {
+async function recognizeCandidate(variant, field, rectangle, psm) {
   const config = fieldConfig[field] || { language: 'chi_sim', whitelist: '', psm: '7' }
-  await worker.setParameters({ tessedit_pageseg_mode: psm || config.psm, tessedit_char_whitelist: config.whitelist, preserve_interword_spaces: '1' })
-  const scaled = Object.fromEntries(Object.entries(rectangle).map(([key, value]) => [key, Math.round(value * variant.scale)]))
-  const result = await worker.recognize(variant.buffer, { rectangle: scaled })
-  return { raw: result.data.text, confidence: confidenceValue(result.data.confidence) }
+  const image = await cropVariant(variant, rectangle)
+  return withWorker(config.language, async worker => {
+    await worker.setParameters({ tessedit_pageseg_mode: psm || config.psm, tessedit_char_whitelist: config.whitelist, preserve_interword_spaces: '1' })
+    const result = await worker.recognize(image)
+    return { raw: result.data.text, confidence: confidenceValue(result.data.confidence) }
+  })
 }
 
 function extractDriverNames(notes) {
@@ -318,50 +399,44 @@ function crossCheck(result, fieldStatus) {
 
 export async function recognizeCard(image, side, options = {}) {
   if (!rectangles[side]) throw new Error('無效的批文卡面')
-  const variants = await prepareVariants(image)
+  const { layout: layoutImage, variants } = await prepareVariants(image)
   const result = emptyCard()
   const fieldStatus = {}
-  const worker = await createWorker('chi_sim', 1, { langPath: tessdataPath, gzip: false, cachePath: tessdataPath, cacheMethod: 'readOnly' })
   const started = Date.now()
-  try {
-    const layout = await recognizeLayout(worker, variants[0])
-    if (options.debug) console.log('OCR LAYOUT', JSON.stringify(layout.data.text))
-    const layoutLines = linesFromBlocks(layout.data.blocks)
-    const located = locateFieldRectangles(side, layoutLines)
-    if (options.debug) console.log('OCR LOCATED', JSON.stringify(located), JSON.stringify(layoutLines.map(line => ({ text: line.text, bbox: line.bbox }))))
-    const fields = Object.keys(rectangles[side])
-    let language = 'chi_sim'
-    for (const field of fields) {
-      const fieldConfigValue = fieldConfig[field === 'validity' ? 'validFrom' : field] || { language: 'chi_sim' }
-      if (fieldConfigValue.language !== language) {
-        await worker.reinitialize(fieldConfigValue.language)
-        language = fieldConfigValue.language
+  const layout = await recognizeLayout(layoutImage)
+  if (options.debug) console.log('OCR LAYOUT', JSON.stringify(layout.data.text))
+  const layoutLines = linesFromBlocks(layout.data.blocks)
+  const located = locateFieldRectangles(side, layoutLines)
+  if (options.debug) console.log('OCR LOCATED', JSON.stringify(located), JSON.stringify(layoutLines.map(line => ({ text: line.text, bbox: line.bbox }))))
+  const fields = Object.keys(rectangles[side])
+  // 所有欄位的試讀一起排隊，中文、英文的辨識程式同時做；每欄的候選仍按原來的次序排
+  // 文字欄位用 8、6 兩種讀法：2026-11-23 用 50 個樣本（真實樣本、對準框和找卡邊的各種拍法、合成卡、管理者的實卡）比較，
+  // 去掉 7 每個樣本讀對的欄數都不變，試讀少約四分之一
+  const reads = await Promise.all(fields.map(field => {
+    const candidateField = field === 'validity' ? 'validFrom' : field
+    const modes = ['company', 'contractor', 'crossing', 'driver1', 'driver2', 'driver3', 'color', 'purpose', 'notes'].includes(candidateField) ? ['8', '6'] : [fieldConfig[candidateField]?.psm || '7']
+    return Promise.all(variants.flatMap(variant => modes.map(psm => recognizeCandidate(variant, candidateField, located[field], psm))))
+  }))
+  for (const [index, field] of fields.entries()) {
+    const candidateField = field === 'validity' ? 'validFrom' : field
+    const candidates = [...reads[index], ...layoutCandidates(field, layoutLines)]
+    if (options.debug) console.log('OCR DEBUG', side, field, located[field], candidates.map(candidate => ({ raw: candidate.raw, confidence: candidate.confidence })))
+    if (field === 'validity') {
+      const validity = makeValidityCandidates(candidates).sort((left, right) => right.confidence - left.confidence)[0]
+      if (validity) {
+        result.validFrom = validity.dates.validFrom
+        result.validTo = validity.dates.validTo
+        fieldStatus.validFrom = makeFieldStatus(validity.dates.validFrom, validity.confidence)
+        fieldStatus.validTo = makeFieldStatus(validity.dates.validTo, validity.confidence)
+      } else {
+        fieldStatus.validFrom = makeFieldStatus('', Math.max(0, ...candidates.map(candidate => candidate.confidence)))
+        fieldStatus.validTo = makeFieldStatus('', Math.max(0, ...candidates.map(candidate => candidate.confidence)))
       }
-      const candidates = []
-      const candidateField = field === 'validity' ? 'validFrom' : field
-      const modes = ['company', 'contractor', 'crossing', 'driver1', 'driver2', 'driver3', 'color', 'purpose', 'notes'].includes(candidateField) ? ['7', '8', '6'] : [fieldConfig[candidateField]?.psm || '7']
-      for (const variant of variants) for (const psm of modes) candidates.push(await recognizeCandidate(worker, variant, candidateField, located[field], psm))
-      candidates.push(...layoutCandidates(field, layoutLines))
-      if (options.debug) console.log('OCR DEBUG', side, field, located[field], candidates.map(candidate => ({ raw: candidate.raw, confidence: candidate.confidence })))
-      if (field === 'validity') {
-        const validity = makeValidityCandidates(candidates).sort((left, right) => right.confidence - left.confidence)[0]
-        if (validity) {
-          result.validFrom = validity.dates.validFrom
-          result.validTo = validity.dates.validTo
-          fieldStatus.validFrom = makeFieldStatus(validity.dates.validFrom, validity.confidence)
-          fieldStatus.validTo = makeFieldStatus(validity.dates.validTo, validity.confidence)
-        } else {
-          fieldStatus.validFrom = makeFieldStatus('', Math.max(0, ...candidates.map(candidate => candidate.confidence)))
-          fieldStatus.validTo = makeFieldStatus('', Math.max(0, ...candidates.map(candidate => candidate.confidence)))
-        }
-        continue
-      }
-      const chosen = chooseCandidate(field, candidates, options)
-      result[field] = correctTraditionalField(field, chosen.value)
-      fieldStatus[field] = makeFieldStatus(chosen.value, chosen.confidence)
+      continue
     }
-  } finally {
-    await worker.terminate()
+    const chosen = chooseCandidate(field, candidates, options)
+    result[field] = correctTraditionalField(field, chosen.value)
+    fieldStatus[field] = makeFieldStatus(chosen.value, chosen.confidence)
   }
   const driverNames = extractDriverNames(result.notes)
   if (driverNames.length) for (const [index, key] of ['driver1', 'driver2', 'driver3'].entries()) {
