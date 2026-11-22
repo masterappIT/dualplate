@@ -243,4 +243,13 @@ void main() {
       expect(f.body()['dueDay'], null);
     });
   });
+
+  // 計劃第七節管理者決定（2026-11-22）：結束日期不可早過起租日
+  group('結束日期早過起租日', () {
+    test('早一天', () => expect(endBeforeStart('2026-12-01', '2026-11-30'), true));
+    test('同一天不算', () => expect(endBeforeStart('2026-12-01', '2026-12-01'), false));
+    test('之後', () => expect(endBeforeStart('2026-12-01', '2027-01-01'), false));
+    test('沒有結束日期', () => expect(endBeforeStart('2026-12-01', ''), false));
+    test('沒有起租日', () => expect(endBeforeStart('', '2026-11-30'), false));
+  });
 }

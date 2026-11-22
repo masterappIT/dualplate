@@ -4,7 +4,7 @@
 // 組件樣板頁（/sample）只在開發時用 --dart-define=START=/sample 打開。
 // 頁面跳轉經 core/api.dart 的 AppNav（401 打開登入頁、條款頁），在這裏接上 GoRouter。
 // 返回時先關彈窗（mobile/src/lib/back-close.js）：Android 返回鍵由 go_router 先交給最上層導航器，
-// 打開中的確認框、選單先被關掉（等於點了框外），不離開頁面；鎖定提示框例外，和現有 App 一樣照常返回頁面（dialogs.dart）。
+// 打開中的確認框、選單先被關掉（等於點了框外），不離開頁面；鎖定提示框擋住返回，只能按確認鍵關（dialogs.dart）。
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import '../business/page_show.dart';

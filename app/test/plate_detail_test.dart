@@ -12,6 +12,9 @@ import 'package:dualplate/pages/plate_detail/plate_detail_page.dart';
 import 'package:dualplate/ui/image_preview.dart';
 import 'package:dualplate/ui/loading.dart';
 import 'package:dualplate/ui/uni_switch.dart';
+import 'package:dualplate/business/stamp_mark.dart';
+import 'package:dualplate/business/plates.dart' show MacauPlate;
+import 'package:dualplate/pages/plate_detail/plate_detail_widgets.dart' show DCard;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -497,6 +500,28 @@ void main() {
       expect(find.text('已過關'), findsOneWidget); // 印章
       await finish(tester);
     });
+
+    // 計劃第七節管理者決定（2026-11-22）
+    testWidgets('印章不蓋住提醒開關', (tester) async {
+      summary['crossing'] = {'enabled': true, 'days': 90, 'lastCrossedOn': '2026-10-01', 'nextDueOn': '2026-12-30'};
+      await open(tester);
+      await tapText(tester, '90 天過關');
+      await tapText(tester, '今天已過關');
+      final stamp = tester.getRect(find.byType(StampMark)), toggle = tester.getRect(find.byType(UniSwitch));
+      expect(stamp.overlaps(toggle), false);
+      await finish(tester);
+    });
+
+    testWidgets('切換開關時「今天已過關」不變成「記錄中」', (tester) async {
+      summary['crossing'] = {'enabled': true, 'days': 90, 'lastCrossedOn': '2026-10-01', 'nextDueOn': '2026-12-30'};
+      await open(tester);
+      await tapText(tester, '90 天過關');
+      await tester.tap(find.byType(UniSwitch));
+      await tester.pump();
+      expect([find.text('記錄中').evaluate().length, find.text('今天已過關').evaluate().length], [0, 1]);
+      await settle(tester);
+      await finish(tester);
+    });
   });
 
   group('到期項目', () {
@@ -516,6 +541,16 @@ void main() {
       await open(tester);
       await tapText(tester, '到期項目');
       expect(find.text('自行辦理'), findsOneWidget);
+      await finish(tester);
+    });
+
+    testWidgets('只有「還沒有填日期」：上面沒有空白卡', (tester) async {
+      summary['undated'] = [{'name': '驗車', 'ownerType': 'company', 'ownerLabel': '甲公司', 'fill': 'date'}];
+      await open(tester);
+      await tapText(tester, '到期項目');
+      expect(find.text('還沒有填日期'), findsOneWidget);
+      expect(find.text('半年內沒有到期項目。'), findsNothing);
+      expect(find.byType(DCard).evaluate().where((e) => e.size!.height < 20), isEmpty); // 空白卡約 10pt 高
       await finish(tester);
     });
 
@@ -649,13 +684,14 @@ void main() {
   });
 
   group('其他區塊', () {
-    testWidgets('粵澳：牌照資料用另寫的澳門牌，號碼加短橫', (tester) async {
+    testWidgets('粵澳：牌照資料用 MacauPlate，和登入頁的澳門牌一樣（第七節決定）', (tester) async {
       plate['route'] = '粵澳';
       plate['local_plate'] = 'MA1234';
       await open(tester);
       await tapText(tester, '牌照資料');
       expect(find.text('澳門號牌'), findsOneWidget);
-      expect(find.text('MA-12-34'), findsOneWidget);
+      expect(find.byType(MacauPlate), findsOneWidget);
+      expect(find.bySemanticsLabel('澳門車牌 MA-12-34'), findsOneWidget);
       await finish(tester);
     });
 

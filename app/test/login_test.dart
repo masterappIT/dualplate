@@ -3,6 +3,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:dualplate/core/api.dart';
+import 'package:dualplate/core/external.dart';
 import 'package:dualplate/core/session.dart';
 import 'package:dualplate/main.dart';
 import 'package:dualplate/pages/login/contact_card.dart';
@@ -232,7 +233,25 @@ void main() {
       expect([find.text('忘記密碼？').evaluate().length, find.text('連不上伺服器，請檢查網絡後再試').evaluate().length], [0, 0]);
     });
 
-    testWidgets('按 WhatsApp 複製連結並提示', (tester) async {
+    // 計劃第七節管理者決定（2026-11-22）：按 WhatsApp 直接打開；打不開才複製連結
+    testWidgets('按 WhatsApp 直接打開連結，不複製', (tester) async {
+      final opened = <Uri>[];
+      debugLaunchUrl = (uri) async {
+        opened.add(uri);
+        return true;
+      };
+      addTearDown(() => debugLaunchUrl = null);
+      await openLogin(tester);
+      await tester.ensureVisible(find.text('WhatsApp +853 6671 4829'));
+      await tester.tap(find.text('WhatsApp +853 6671 4829'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect([opened.map((u) => '$u').toList(), find.text('連結已複製，請在瀏覽器打開').evaluate().length], [['https://wa.me/85366714829'], 0]);
+    });
+
+    testWidgets('打不開 WhatsApp 時複製連結並提示', (tester) async {
+      debugLaunchUrl = (_) async => false;
+      addTearDown(() => debugLaunchUrl = null);
       String? copied;
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
         if (call.method == 'Clipboard.setData') copied = (call.arguments as Map)['text'] as String;
@@ -377,10 +396,56 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
     });
 
-    testWidgets('號碼前後的空白也算在 8 位之內（maxlength 照舊）', (tester) async {
+    // 計劃第七節管理者決定（2026-11-22）：8 位上限只算數字
+    testWidgets('號碼中的空格、短橫不算在 8 位之內', (tester) async {
       await openLogin(tester);
       await type(tester, 'login-phone', ' 1234 5678 ');
-      expect(tester.widget<EditableText>(inputOf('login-phone')).controller.text, ' 1234 56');
+      expect(tester.widget<EditableText>(inputOf('login-phone')).controller.text, ' 1234 5678 ');
+    });
+
+    testWidgets('有空格時超過 8 個數字，剪到第 8 個數字', (tester) async {
+      await openLogin(tester);
+      await type(tester, 'login-phone', '1234 56789');
+      expect(tester.widget<EditableText>(inputOf('login-phone')).controller.text, '1234 5678');
+    });
+
+    testWidgets('內地號碼上限 11 個數字', (tester) async {
+      await openLogin(tester, prefs: {'loginArea': '+86'});
+      await type(tester, 'login-phone', '138 1234 567890');
+      expect(tester.widget<EditableText>(inputOf('login-phone')).controller.text, '138 1234 5678');
+    });
+
+    testWidgets('登入中在密碼欄按「完成」不會再送一次', (tester) async {
+      serve(delay: const Duration(seconds: 1));
+      await openLogin(tester);
+      await type(tester, 'login-phone', '12345678');
+      await type(tester, 'login-password', 'pw');
+      await tapLogin(tester);
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.showKeyboard(inputOf('login-password'));
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump(const Duration(seconds: 1));
+      expect(sent.where((r) => r.url.path == '/api/login').length, 1);
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('伺服器沒有回傳 user：顯示「找不到這個帳號」，不顯示程式錯誤', (tester) async {
+      serve(login: {'token': 't'});
+      await openLogin(tester);
+      await type(tester, 'login-phone', '12345678');
+      await type(tester, 'login-password', 'pw');
+      await tapLogin(tester);
+      await tester.pump(const Duration(milliseconds: 100));
+      expect([find.text(loginNoUser).evaluate().length, find.textContaining('undefined').evaluate().length], [1, 0]);
+      await tester.pump(LoginStyle.shake);
+    });
+
+    testWidgets('電郵欄不自動大寫、用電郵鍵盤', (tester) async {
+      await openLogin(tester);
+      await tester.tap(find.text('電郵').first);
+      await tester.pump();
+      final f = tester.widget<EditableText>(inputOf('login-email'));
+      expect([f.textCapitalization, f.keyboardType, f.autocorrect], [TextCapitalization.none, TextInputType.emailAddress, false]);
     });
 
     testWidgets('手機登入送「區號＋號碼」，密碼不去空白', (tester) async {

@@ -77,10 +77,6 @@ String uploadedTitle(int ok, int failed) => ok > 0 ? '已上傳 $ok 份，$faile
 const cancelReasons = ['按錯了', '改變主意', '已自己辦好', '不說明原因'];
 Map<String, dynamic> cancelBody(int pick) => pick < 3 ? {'reason': cancelReasons[pick]} : {};
 
-// 現有 App 選 PDF 時的實際表現（2026-11-21 截圖）：App 端沒有 uni.chooseFile，提示 JavaScript 的錯誤原文。照舊（計劃第七節已記錄）
-const pdfErrorText =
-    'uni.chooseFile is not a function. (In \'uni.chooseFile({count:3,extension:[".pdf"],success:t=>{return l=t.tempFiles,e(l.map(e=>({name:e.name||"文件.pdf",path:e.path,size:e.size})));var l},fail:l=>/cancel/.test(l.errMsg||"")?e([]):t(new Error("未能選擇文件"))})\', \'uni.chooseFile\' is undefined)';
-
 String fileMark(Object? f) => at(f, 'mime') == 'application/pdf' ? 'PDF' : '相';
 
 String fileSub(Object? item, Object? f) => '${taskTitle(item, at(f, 'taskId'))}${friendlyDate(at(f, 'createdAt'))} · ${sizeText(at(f, 'size'))}';

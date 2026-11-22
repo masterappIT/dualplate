@@ -6,6 +6,7 @@ import 'package:dualplate/ui/image_preview.dart';
 import 'package:dualplate/ui/loading.dart';
 import 'package:dualplate/ui/pickers.dart';
 import 'package:dualplate/ui/uni_switch.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -33,6 +34,23 @@ void main() {
       expect(find.text('4400123456'), findsOneWidget);
       expect(find.text('測試有限公司'), findsOneWidget);
       expect(find.text('内地车牌号:'), findsNothing);
+    });
+
+    // 計劃第七節管理者決定（2026-11-22）：iOS 也用打包的宋體子集，缺字落到蘋方
+    testWidgets('iOS 卡面字型是打包的宋體', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await tester.pumpWidget(host(const ApprovalCard(data: card)));
+      final style = tester.widget<Text>(find.text('測試有限公司')).style!;
+      debugDefaultTargetPlatformOverride = null;
+      expect([style.fontFamily, style.fontFamilyFallback], ['DualplateSong', ['PingFang TC']]);
+    });
+
+    testWidgets('Android 卡面字型是打包的宋體', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      await tester.pumpWidget(host(const ApprovalCard(data: card)));
+      final style = tester.widget<Text>(find.text('測試有限公司')).style!;
+      debugDefaultTargetPlatformOverride = null;
+      expect(style.fontFamily, 'DualplateSong');
     });
 
     testWidgets('按 1013:643 的比例', (tester) async {

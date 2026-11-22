@@ -404,7 +404,11 @@ class CardCapturePageState extends State<CardCapturePage> {
                         key: const ValueKey('capture-close'),
                         behavior: HitTestBehavior.opaque,
                         onTap: cancel,
-                        child: Center(child: Text('✕', style: ts(CaptureStyle.closeFont, weight: CaptureStyle.closeWeight, color: CaptureStyle.fg, height: CaptureStyle.closeSize / CaptureStyle.closeFont))),
+                        child: Semantics(
+                          label: '關閉',
+                          button: true,
+                          child: const Center(child: SizedBox.square(dimension: CaptureStyle.closeMark, child: CustomPaint(painter: CloseMarkPainter()))),
+                        ),
                       ),
                     ),
                   ]),
@@ -716,4 +720,21 @@ PreviewFrame? previewFrameFrom({
     pixelStrides: [for (final p in planes) p.pixelStride ?? (format == FramePixels.bgra8888 ? 4 : 1)],
     rotation: rotation,
   );
+}
+
+// 左上 ✕：兩條圓頭粗線（照現有 App 畫面約 11pt、筆畫粗）
+class CloseMarkPainter extends CustomPainter {
+  const CloseMarkPainter();
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..color = CaptureStyle.fg
+      ..strokeWidth = CaptureStyle.closeStroke
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(Offset.zero, Offset(size.width, size.height), p);
+    canvas.drawLine(Offset(size.width, 0), Offset(0, size.height), p);
+  }
+
+  @override
+  bool shouldRepaint(CloseMarkPainter old) => false;
 }

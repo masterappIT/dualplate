@@ -91,3 +91,6 @@ class RentalNewForm {
     };
   }
 }
+
+// 結束日期早過起租日（兩個都是 YYYY-MM-DD 時才比較）
+bool endBeforeStart(String startsOn, String endsOn) => startsOn.isNotEmpty && endsOn.isNotEmpty && endsOn.compareTo(startsOn) < 0;

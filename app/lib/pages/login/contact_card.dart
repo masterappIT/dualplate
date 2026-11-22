@@ -2,7 +2,8 @@
 // 只列出已設定的 WhatsApp／微信；都沒有設定時整張卡不顯示。
 // 3a 擴充登入後的版本（「我的」頁）：messages 為 true 時標題「聯絡我們」、加「在 app 內發訊息」，渠道沒有設定也顯示；public 為 false 時讀 /my/contact。
 // 預設值照登入頁的用法（公開、不顯示 App 內訊息），和 ContactCard.vue 的預設（messages、非公開）相反。
-// 現有 App 按渠道按鈕時不會打開 WhatsApp：openLink 在 App 端只複製連結並提示（api.js 只有網頁版才開新視窗），照舊。
+// 現有 App 按渠道按鈕時不會打開 WhatsApp：openLink 在 App 端只複製連結並提示；Flutter 版直接打開（計劃第七節決定 2026-11-22）。
+import '../../core/external.dart';
 import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -36,10 +37,11 @@ void copyText(BuildContext context, Object? value, [String title = '已複製'])
   });
 }
 
-// api.js 的 openLink：App 端不能直接開外部網址，改為複製連結
-void openLink(BuildContext context, Object? url) {
+// api.js 的 openLink：現有 App 端只複製連結；計劃第七節決定（2026-11-22）改為直接打開（WhatsApp 連結會轉到 WhatsApp），打不開才複製連結
+Future<void> openLink(BuildContext context, Object? url) async {
   if (!truthy(url)) return;
-  copyText(context, url, '連結已複製，請在瀏覽器打開');
+  if (await launchExternal(jsString(url))) return;
+  if (context.mounted) copyText(context, url, '連結已複製，請在瀏覽器打開');
 }
 
 class ContactCard extends StatefulWidget {

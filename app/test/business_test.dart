@@ -127,9 +127,10 @@ void main() {
       expect(PlateChip.kindOf('hk1234'), PlateKind.hk);
       expect(PlateChip.kindOf('ABCDEFGHI'), PlateKind.unknown);
     });
-    test('空號碼顯示待補充；照原組件，「待」是漢字所以判斷為內地', () {
+    test('空號碼顯示待補充，判斷不了（第七節決定：不再當成內地）', () {
       expect(PlateChip.shownOf('  '), '待補充');
-      expect(PlateChip.kindOf(''), PlateKind.mainland);
+      expect(PlateChip.kindOf(''), PlateKind.unknown);
+      expect(PlateChip.kindOf('  '), PlateKind.unknown);
       expect(PlateChip.kindOf('', '香港'), PlateKind.hk);
     });
     testWidgets('內地 md：黑底白字 14、800', (t) async {
@@ -155,10 +156,10 @@ void main() {
       await t.pumpWidget(host(const PlateChip(plate: 'HK1234', region: '香港')));
       expect(t.widget<Text>(find.text('HK1234')).style!.color, PlateC.chipInk);
     });
-    testWidgets('沒有 region 的待補充照原組件顯示成內地黑底', (t) async {
+    testWidgets('沒有 region 的待補充用中性框', (t) async {
       await t.pumpWidget(host(const PlateChip()));
-      expect(t.widget<Text>(find.text('待補充')).style!.color, PlateC.chipWhite);
-      expect(find.bySemanticsLabel('內地車牌 待補充'), findsOneWidget);
+      expect(t.widget<Text>(find.text('待補充')).style!.color, C.ink3);
+      expect(find.bySemanticsLabel('車牌 待補充'), findsOneWidget);
     });
     testWidgets('判斷不了用中性框，字重 700', (t) async {
       await t.pumpWidget(host(const PlateChip(plate: 'AB1234', region: '其他')));
@@ -182,10 +183,17 @@ void main() {
       expect(DueDate.daysLeftOf('2026-11-25', 99, today), 99);
       expect(DueDate.daysLeftOf('', null, today), isNull);
     });
-    test('日期無法解析時照原組件顯示「還有 NaN 天」', () {
-      final left = DueDate.daysLeftOf('2026/11/25', null, today);
-      expect(DueDate.phraseOf(left), '還有 NaN 天');
-      expect(DueDate.toneOf('2026/11/25', left, ''), 'ok');
+    test('日期無法解析時當作還沒有填日期（第七節決定）', () {
+      expect(DueDate.daysLeftOf('2026/11/25', null, today), isNull);
+      expect(DueDate.shownDateOf('2026/11/25', null), '');
+      expect(DueDate.shownDateOf('2026/11/25', 3), '2026/11/25');
+      expect(DueDate.shownDateOf('2026-11-25', null), '2026-11-25');
+    });
+    testWidgets('日期無法解析時顯示待錄入、灰色、沒有天數', (t) async {
+      await t.pumpWidget(host(DueDate(date: '2026/11/25', today: today)));
+      expect(find.text('待錄入'), findsOneWidget);
+      expect(find.textContaining('NaN'), findsNothing);
+      expect(find.textContaining('還有'), findsNothing);
     });
     test('沒有 level 時自動判斷：逾期、30 天內、之後、沒有日期', () {
       expect(DueDate.toneOf('x', -1, ''), 'overdue');

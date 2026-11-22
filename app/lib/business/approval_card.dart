@@ -282,11 +282,11 @@ class _Face extends StatelessWidget {
     );
   }
 
-  // 卡面的「宋體」：見 tokens.dart 的 ApprovalCardStyle（iOS 照現有 App 落到 Times＋蘋方；Android 用打包的 Noto Serif SC 子集）
+  // 卡面的「宋體」：見 tokens.dart 的 ApprovalCardStyle（兩個平台都用打包的 Noto Serif SC 子集；iOS 缺字落到蘋方）
   static bool get _ios => defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.macOS;
-  static String get _serif => _ios ? ApprovalCardStyle.iosLatin : ApprovalCardStyle.androidSong;
-  static List<String> get _serifFallback => _ios ? ApprovalCardStyle.iosHan : const [];
-  // CSS 的字重配對：650、750 都先找更粗的字重——Times 用 Bold 700；蘋方最粗是 Semibold，Noto Serif SC 子集只有 Bold
+  static const _serif = ApprovalCardStyle.song;
+  static List<String> get _serifFallback => _ios ? ApprovalCardStyle.songFallbackIos : const [];
+  // CSS 的字重配對：650、750 都先找更粗的字重——Noto Serif SC 子集只有 Bold 700
   static const _w650 = FontWeight.w700;
   static const _w750 = FontWeight.w700;
 

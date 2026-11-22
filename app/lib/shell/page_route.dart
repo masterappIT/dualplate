@@ -203,10 +203,10 @@ class _BackSwipeState extends State<_BackSwipe> {
     if (widget.route.popGestureEnabled || _withDialog) _drag.addPointer(event);
   }
 
-  // 彈窗開着的頁面也照常右滑，彈窗跟着頁面滑走
+  // 彈窗開着的頁面也照常右滑，彈窗跟着頁面滑走；鎖定提示框開着時不可右滑（計劃第七節 2026-11-22）
   bool get _withDialog {
     final route = widget.route;
-    return !route.isFirst && route.animation!.isCompleted && DialogArea.openOn(route);
+    return !route.isFirst && route.animation!.isCompleted && DialogArea.openOn(route) && !DialogArea.lockedOn(route);
   }
 
   void _start(DragStartDetails _) {

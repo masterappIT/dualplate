@@ -20,10 +20,12 @@ class PlateChip extends StatelessWidget {
   // 香港（1–8 個英文字母、數字或空格）黃底黑字；判斷不了用中性框。
   static PlateKind kindOf(String plate, [String region = '']) {
     if (region.isNotEmpty) return const {'內地': PlateKind.mainland, '香港': PlateKind.hk, '澳門': PlateKind.mo}[region] ?? PlateKind.unknown;
+    // 第七節管理者決定（2026-11-22）：沒有號碼時用中性框，不再因「待補充」的「待」是漢字而當成內地牌
+    if (plate.trim().isEmpty) return PlateKind.unknown;
     final text = shownOf(plate).toUpperCase();
     if (RegExp('^[一-龥]').hasMatch(text)) return PlateKind.mainland;
     if (RegExp(r'^M[A-Z]?[-\s]?\d{2}[-\s]?\d{2}$').hasMatch(text)) return PlateKind.mo;
-    if (RegExp(r'^[A-Z0-9 ]{1,8}$').hasMatch(text) && text != '待補充') return PlateKind.hk;
+    if (RegExp(r'^[A-Z0-9 ]{1,8}$').hasMatch(text)) return PlateKind.hk;
     return PlateKind.unknown;
   }
 

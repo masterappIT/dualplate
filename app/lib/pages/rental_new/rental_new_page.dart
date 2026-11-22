@@ -93,12 +93,12 @@ class RentalNewPageState extends State<RentalNewPage> {
   Blk card(List<Blk> inner) => Blk(CardBox(margin: EdgeInsets.zero, child: Blocks(inner)), bottom: 12);
   Widget seg(List<(String, String)> options, String value, ValueChanged<String> onChanged) => Segmented<String>(options: options, value: value, onChanged: (v) => _set(() => onChanged(v)));
 
-  Blk date(String value, String empty, ValueChanged<String> onPicked) => Blk(PickerBox(
+  // start：最早可選的日期（計劃第七節決定 2026-11-22：結束日期最早只能選起租日；現有 App 不受限）
+  Blk date(String value, String empty, ValueChanged<String> onPicked, {String? start}) => Blk(PickerBox(
         text: value.isNotEmpty ? value : empty,
         gray: value.isEmpty,
         onTap: () async {
-          // 現有 App 的原生日期滾輪不受 :start 限制（3b 已核實），所以結束日期也不設下限
-          final v = await showDatePicker(context, value: value.isEmpty ? null : value);
+          final v = await showDatePicker(context, value: value.isEmpty ? null : value, start: start == null || start.isEmpty ? null : start);
           if (v != null) _set(() => onPicked(v));
         },
       ));
@@ -178,9 +178,13 @@ class RentalNewPageState extends State<RentalNewPage> {
       card([
         step('租期和租金'),
         label('起租日期（必填）'),
-        date(f.startsOn, '選擇日期', (v) => f.startsOn = v),
+        date(f.startsOn, '選擇日期', (v) {
+          f.startsOn = v;
+          // 起租日改到結束日期之後時，清掉結束日期，免得留下早過起租日的結束日期
+          if (endBeforeStart(f.startsOn, f.endsOn)) f.endsOn = '';
+        }),
         label('結束日期'),
-        date(f.endsOn, '未定，可不填', (v) => f.endsOn = v),
+        date(f.endsOn, '未定，可不填', (v) => f.endsOn = v, start: f.startsOn),
         label('租金（$currency，必填）'),
         input('rent', f.rent, '每期金額，例如 8000', (v) => f.rent = v, keyboard: const TextInputType.numberWithOptions(decimal: true)),
         label('收租週期'),

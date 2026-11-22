@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:dualplate/business/company_editor.dart';
 import 'package:dualplate/business/signature_pad.dart';
 import 'package:dualplate/core/api.dart';
+import 'package:dualplate/core/external.dart';
 import 'package:dualplate/core/session.dart';
 import 'package:dualplate/main.dart';
 import 'package:flutter/widgets.dart';
@@ -353,6 +354,64 @@ void main() {
       await tester.enterText(find.byType(EditableText).first, '新協議');
       await tapText(tester, '儲存修改');
       expect(lines(), [line('PUT', '/api/my/rentals/r1/agreement', {'body': '新協議'})]);
+    });
+
+    // 計劃第七節管理者決定（2026-11-22）：上傳 PDF、查看 PDF、用 WhatsApp 傳送都做成真的可用
+    testPage('上傳 PDF：選了 PDF 後 POST signed 帶檔案內容', (tester) async {
+      debugPickPdfs = () async => [(name: '協議.pdf', bytes: Uint8List.fromList([37, 80, 68, 70]), size: 4)];
+      addTearDown(() => debugPickPdfs = null);
+      routes = {'/api/my/rentals/r1': (200, rentalDetail()), 'POST /api/my/rentals/r1/signed': (200, {...rentalDetail(), 'signed': true})};
+      await open(tester, '/rental?id=r1');
+      await tapText(tester, '上傳 PDF');
+      expect([lines(), find.text('已上傳').evaluate().length], [
+        [line('POST', '/api/my/rentals/r1/signed', {'data': base64Encode([37, 80, 68, 70])})],
+        1,
+      ]);
+    });
+
+    testPage('上傳 PDF：沒有選就不送', (tester) async {
+      debugPickPdfs = () async => [];
+      addTearDown(() => debugPickPdfs = null);
+      routes = {'/api/my/rentals/r1': (200, rentalDetail())};
+      await open(tester, '/rental?id=r1');
+      await tapText(tester, '上傳 PDF');
+      expect(writes(), isEmpty);
+    });
+
+    testPage('查看 PDF 簽署本：用檢視器打開，不複製', (tester) async {
+      final pdf = Uint8List.fromList([37, 80, 68, 70, 45]);
+      Api.client = MockClient((r) async {
+        sent.add((r.method, r.url.path, null));
+        if (r.url.path == '/api/my/rentals/r1/signed') return http.Response.bytes(pdf, 200, headers: {'content-type': 'application/pdf'});
+        return http.Response(jsonEncode({...rentalDetail(), 'signed': true}), 200, headers: {'content-type': 'application/json; charset=utf-8'});
+      });
+      final opened = <(int, String)>[];
+      debugOpenPdf = (bytes, name) async {
+        opened.add((bytes.length, name));
+        return true;
+      };
+      addTearDown(() => debugOpenPdf = null);
+      await open(tester, '/rental?id=r1');
+      await tapText(tester, '已上傳，查看 ›');
+      expect(opened, [(5, '簽署本.pdf')]);
+    });
+
+    testPage('用 WhatsApp 傳送：直接打開 wa.me 連結', (tester) async {
+      final opened = <String>[];
+      debugLaunchUrl = (uri) async {
+        opened.add('$uri');
+        return true;
+      };
+      addTearDown(() => debugLaunchUrl = null);
+      routes = {
+        '/api/my/rentals/r1/signature-lessor': (404, {}),
+        '/api/my/rentals/r1': (200, rentalDetail(version: 1, signed: true)),
+        'POST /api/my/rentals/r1/send': (200, {...rentalDetail(version: 1, signed: true), 'link': {'url': 'https://x.test/r/2'}}),
+      };
+      await open(tester, '/rental?id=r1');
+      await tapText(tester, '重新發送連結');
+      await tapText(tester, '用 WhatsApp 傳送');
+      expect([opened.length, opened.single.startsWith('https://wa.me/?text=')], [1, true]);
     });
 
     testPage('取消出租：確認後 POST cancel', (tester) async {

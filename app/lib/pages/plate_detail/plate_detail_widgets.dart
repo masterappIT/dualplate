@@ -455,24 +455,6 @@ class _DashedBox extends CustomPainter {
   bool shouldRepaint(_DashedBox old) => false;
 }
 
-// 粵澳路線的澳門號牌：現有 App 沒有用 MacauPlate，另寫了 .physical-plate.macau（計劃第七節已記錄，照舊）
-class MacauBlock extends StatelessWidget {
-  const MacauBlock(this.text, {super.key});
-  final String text;
-  @override
-  Widget build(BuildContext context) => AspectRatio(
-        aspectRatio: PlateDetailStyle.macauRatio,
-        child: Container(
-          decoration: BoxDecoration(color: PlateDetailStyle.macauBg, borderRadius: BorderRadius.circular(PlateDetailStyle.macauRadius)),
-          alignment: Alignment.center,
-          child: Text(text,
-              softWrap: false,
-              overflow: TextOverflow.visible,
-              style: ts(Fs.title, weight: w800, color: PlateDetailStyle.macauText).copyWith(fontFamily: plateArialFont, fontFamilyFallback: plateArialFallback)),
-        ),
-      );
-}
-
 // .ticket-rule 本身佔 1px，上下 16 的外距交給 Blocks 和鄰近外距合併（base.dart 的 TicketRule 把 16 做成內距）
 class BareTicketRule extends StatelessWidget {
   const BareTicketRule({super.key});

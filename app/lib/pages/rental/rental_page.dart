@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import '../../core/external.dart';
 import '../../business/num_text.dart';
 import '../../business/page_show.dart';
 import '../../business/signature_pad.dart';
@@ -25,7 +26,6 @@ import '../../ui/tokens.dart';
 import '../login/contact_card.dart' show copyText, openLink;
 import '../plate_detail/doc_photo.dart' show pickPhotos, PhotoError;
 import '../plate_detail/plate_detail_widgets.dart' show Blk, Blocks, DBtn;
-import '../request_detail/request_detail_logic.dart' show pdfErrorText;
 import 'rental_logic.dart';
 
 // 私人圖片（簽名、簽署本）：照 api.js privateImage，帶登入 token 下載；回傳內容類型和內容
@@ -51,8 +51,6 @@ Future<PrivateFile> privateFile(String path) async {
   return (mime: r.headers['content-type'] ?? 'image/png', bytes: r.bodyBytes);
 }
 
-// 選 PDF：現有 App 沒有 uni.chooseFile，按「上傳 PDF」提示 JavaScript 的錯誤原文（同 3b 辦理進度，照舊）
-Future<List<({String name, Uint8List bytes, int size})>> Function(BuildContext context)? debugPickPdf;
 
 class RentalPage extends StatefulWidget {
   const RentalPage({super.key, this.query = const {}});
@@ -171,8 +169,8 @@ class RentalPageState extends State<RentalPage> with PageShow {
     try {
       final List<({String name, Uint8List bytes, int size})> files;
       if (kind == 'pdf') {
-        if (debugPickPdf == null) throw PhotoError(pdfErrorText);
-        files = await debugPickPdf!(context);
+        // 現有 App 沒有 uni.chooseFile，提示 JavaScript 的錯誤原文；Flutter 版真的選 PDF（計劃第七節決定 2026-11-22）
+        files = await pickPdfs();
       } else {
         files = await pickPhotos(context);
       }
@@ -183,7 +181,7 @@ class RentalPageState extends State<RentalPage> with PageShow {
       _set(() => r = fresh);
       toast('已上傳');
     } catch (e) {
-      toast(e is PhotoError ? e.message : err(e));
+      toast(e is PhotoError ? e.message : e is FileError ? e.message : err(e));
     } finally {
       _set(() => busy = false);
     }
@@ -194,7 +192,8 @@ class RentalPageState extends State<RentalPage> with PageShow {
       final f = await privateFile('/my/rentals/$rentalId/signed');
       if (!mounted) return;
       if (f.mime.startsWith('application/pdf')) {
-        openLink(context, 'data:${f.mime};base64,${base64Encode(f.bytes)}');
+        // 現有 App 只把整串 data URL 複製到剪貼簿；Flutter 版用手機自帶的檢視器打開（計劃第七節決定 2026-11-22）
+        if (!await openPdf(f.bytes, name: '簽署本.pdf')) toast('未能打開 PDF');
       } else {
         await previewImages(context, [f.bytes]);
       }

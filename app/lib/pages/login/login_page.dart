@@ -34,6 +34,24 @@ const areaCodes = [
   AreaCode('+86', '內地 +86', '11 位手機號碼', 11, r'^1\d{10}$'),
 ];
 
+// 伺服器沒有回傳 user 時的提示
+const loginNoUser = '找不到這個帳號，請檢查後再試';
+
+// 號碼欄上限只算數字，空格、短橫不算（第七節決定 2026-11-22：現有 App 的 maxlength 連空格也算）
+class DigitLimitFormatter extends TextInputFormatter {
+  DigitLimitFormatter(this.max);
+  final int max;
+  static int digitsIn(String text) => RegExp(r'\d').allMatches(text).length;
+  // 超出時剪到第 max 個數字為止（貼上一長串時和 maxlength 一樣截斷）
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    if (digitsIn(newValue.text) <= max) return newValue;
+    final end = RegExp(r'\d').allMatches(newValue.text).elementAt(max - 1).end;
+    final text = newValue.text.substring(0, end);
+    return TextEditingValue(text: text, selection: TextSelection.collapsed(offset: text.length));
+  }
+}
+
 int areaIndexOf(String? code) => areaCodes.indexWhere((a) => a.code == code).clamp(0, areaCodes.length - 1);
 
 // 送出前的檢查（login.vue 的 login() 前兩步）；沒問題回傳 null
@@ -117,6 +135,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   }
 
   Future<void> login() async {
+    // 計劃第七節管理者決定（2026-11-22）：登入中不再送（現有 App 在密碼欄按「完成」會再送一次）
+    if (loading) return;
     setState(() {
       error = '';
       application = null;
@@ -128,8 +148,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     try {
       final result = await api('/login', 'POST', {'login': phoneMode ? '${area.code}$digits' : email.text.trim(), 'password': password.text});
       final user = result is Map ? result['user'] : null;
-      // 伺服器沒有回傳 user 時，現有 App（iOS）顯示 JavaScriptCore 的錯誤原文
-      if (user is! Map) throw ApiError("undefined is not an object (evaluating 'result.user.role')");
+      // 伺服器沒有回傳 user 時，現有 App（iOS）顯示 JavaScriptCore 的錯誤原文；第七節決定改成看得懂的話（2026-11-22）
+      if (user is! Map) throw ApiError(loginNoUser);
       if (user['role'] != 'customer') throw ApiError('此帳號請使用管理端登入');
       enter(Map<String, dynamic>.from(result as Map));
     } on ApiError catch (e) {
@@ -269,7 +289,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                   ]),
                 ] else ...[
                   const FieldLabel('電郵'),
-                  LoginInput(key: const ValueKey('login-email'), controller: email, placeholder: 'name@example.com', invalid: error.isNotEmpty && email.text.trim().isEmpty),
+                  LoginInput(key: const ValueKey('login-email'), controller: email, placeholder: 'name@example.com', keyboardType: TextInputType.emailAddress, invalid: error.isNotEmpty && email.text.trim().isEmpty),
                 ],
                 const FieldLabel('密碼'),
                 LoginInput(
@@ -472,12 +492,12 @@ class _LoginInputState extends State<LoginInput> {
           obscureText: widget.obscure,
           obscuringCharacter: '●',
           keyboardType: widget.keyboardType,
-          // 網頁輸入框預設：首字母大寫、自動校正（密碼欄除外）；按鍵盤「完成」收起鍵盤，密碼欄另會登入
-          textCapitalization: widget.obscure || widget.keyboardType == TextInputType.phone ? TextCapitalization.none : TextCapitalization.sentences,
-          autocorrect: !widget.obscure,
-          enableSuggestions: !widget.obscure,
+          // 手機號碼、電郵、密碼都不自動大寫、不自動校正（第七節決定 2026-11-22：現有 App 電郵欄首字母會變大寫）；按鍵盤「完成」收起鍵盤，密碼欄另會登入
+          textCapitalization: TextCapitalization.none,
+          autocorrect: false,
+          enableSuggestions: !widget.obscure && widget.keyboardType != TextInputType.emailAddress,
           textInputAction: TextInputAction.done,
-          inputFormatters: widget.maxLength == null ? null : [LengthLimitingTextInputFormatter(widget.maxLength)],
+          inputFormatters: widget.maxLength == null ? null : [DigitLimitFormatter(widget.maxLength!)],
           onSubmitted: widget.onSubmitted,
           onTapOutside: (_) => focus.unfocus(),
           cursorColor: LoginStyle.caret,

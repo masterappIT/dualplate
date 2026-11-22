@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/external.dart';
 import '../../business/num_text.dart';
 import '../../business/page_show.dart';
 import '../../business/plate_chip.dart';
@@ -94,8 +95,8 @@ class RequestDetailPageState extends State<RequestDetailPage> with PageShow {
     if (tapIndex < 0 || !mounted) return;
     List<PickedFile> picked;
     try {
-      if (tapIndex != 0) throw PhotoError(pdfErrorText);
-      picked = await pickPhotos(context);
+      // 現有 App 選 PDF 時提示 JavaScript 的錯誤原文；Flutter 版真的選 PDF（計劃第七節決定 2026-11-22）
+      picked = tapIndex == 0 ? await pickPhotos(context) : await pickPdfs();
     } catch (e) {
       return toast('$e');
     }

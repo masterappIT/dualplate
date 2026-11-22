@@ -189,13 +189,35 @@ void main() {
     expect(find.text('車牌管家'), findsOneWidget);
   });
 
-  testWidgets('鎖定提示框開着時按導航列返回箭頭：提示框和子頁一起離開（和返回鍵一樣）', (tester) async {
+  // 計劃第七節管理者決定（2026-11-22）：鎖定提示框只能按確認鍵關，返回鍵、返回箭頭、iOS 右滑都不會離開
+  testWidgets('鎖定提示框開着時按導航列返回箭頭：提示框和子頁都留着', (tester) async {
     await openDemo(tester);
     await tester.tap(find.text('鎖定提示框'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('nav-back')));
     await tester.pumpAndSettle();
-    expect(find.text('必須更新'), findsNothing);
+    expect(find.text('必須更新'), findsOneWidget);
+    expect(find.text('示範子頁'), findsOneWidget);
+  });
+
+  testWidgets('鎖定提示框開着時按 Android 返回鍵：提示框和子頁都留着', (tester) async {
+    await openDemo(tester);
+    await tester.tap(find.text('鎖定提示框'));
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('必須更新'), findsOneWidget);
+    expect(find.text('示範子頁'), findsOneWidget);
+  });
+
+  testWidgets('鎖定提示框按確認鍵後，返回鍵照常離開子頁', (tester) async {
+    await openDemo(tester);
+    await tester.tap(find.text('鎖定提示框'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('更新'));
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
     expect(find.text('示範子頁'), findsNothing);
     expect(find.text('車牌管家'), findsOneWidget);
   });
@@ -278,16 +300,15 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('iOS 右滑：鎖定提示框打開時，子頁也連提示框一起返回', (tester) async {
+  testWidgets('iOS 右滑：鎖定提示框打開時，提示框和子頁都留着', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     await openDemo(tester);
     await tester.tap(find.text('鎖定提示框'));
     await tester.pumpAndSettle();
     await tester.dragFrom(const Offset(5, 300), const Offset(400, 0));
     await tester.pumpAndSettle();
-    expect(find.text('必須更新'), findsNothing);
-    expect(find.text('示範子頁'), findsNothing);
-    expect(find.text('車牌管家'), findsOneWidget);
+    expect(find.text('必須更新'), findsOneWidget);
+    expect(find.text('示範子頁'), findsOneWidget);
     debugDefaultTargetPlatformOverride = null;
   });
 

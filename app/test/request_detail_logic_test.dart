@@ -120,8 +120,4 @@ void main() {
     test('需重交', () => expect(attachmentText('需重交', false), '需要重交'));
     test('不認得的狀態：空白', () => expect(attachmentText('怪狀態', true), ''));
   });
-
-  test('選 PDF 的錯誤原文照舊（以 uni.chooseFile is not a function 開頭）', () {
-    expect(pdfErrorText, startsWith('uni.chooseFile is not a function.'));
-  });
 }

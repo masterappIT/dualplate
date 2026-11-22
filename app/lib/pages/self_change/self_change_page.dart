@@ -316,9 +316,9 @@ class SelfChangePageState extends State<SelfChangePage> {
             PickerBox(
               text: r.expiresOn.isNotEmpty ? '新到期日 ${r.expiresOn}' : '選擇新到期日',
               gray: r.expiresOn.isEmpty,
-              // 現有 App 寫了 :start="today"，但 App 的原生日期滾輪不受限，選得到今天以前，提交時才由伺服器拒絕；負責人 11-21 決定照舊，所以這裏不設下限
+              // 和現有 App 的 :start="today" 一樣最早只能選今天（計劃第七節決定 2026-11-22；現有 App 的原生日期滾輪不受限，提交時才由伺服器拒絕）
               onTap: () async {
-                final v = await pickDate(r.expiresOn.isEmpty ? null : r.expiresOn);
+                final v = await pickDate(r.expiresOn.isEmpty ? null : r.expiresOn, start: f.today);
                 if (v != null) _set(() => f.setRenewalDate(code, v));
               },
             ),

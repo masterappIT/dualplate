@@ -43,6 +43,9 @@ class DialogArea extends StatefulWidget {
   // 這個頁面有沒有打開中的彈窗（換頁手勢用）
   static bool openOn(ModalRoute<dynamic> route) => (_byRoute[route]?._open ?? 0) > 0;
 
+  // 這個頁面有沒有打開中的鎖定提示框（有的話不可右滑離開）
+  static bool lockedOn(ModalRoute<dynamic> route) => (_byRoute[route]?._locked ?? 0) > 0;
+
   @override
   State<DialogArea> createState() => _DialogAreaState();
 }
@@ -53,11 +56,12 @@ class _DialogAreaState extends State<DialogArea> {
   late final _observer = _AreaObserver(this);
   Route<dynamic>? _base;
   ModalRoute<dynamic>? _route;
-  int _open = 0;
+  int _open = 0, _locked = 0;
 
   void _count(Route<dynamic> route, int delta) {
     if (identical(route, _base)) return;
     _open += delta;
+    if (route.settings.name == _lockedRoute) _locked += delta;
     _entry.canPop.value = _open == 0;
   }
 
@@ -156,31 +160,25 @@ NavigatorState _host(BuildContext context) => DialogArea._of(context)?._nav.curr
 Future<String> ask(BuildContext context, {required String title, String msg = '', String ok = '確認', String cancel = '取消', bool danger = false}) =>
     _messageBox<String>(context, title: title, msg: msg, buttons: [(cancel, _BtnType.info, 'cancel'), (ok, danger ? _BtnType.error : _BtnType.primary, 'confirm')], dismissValue: 'modal', dismissible: true);
 
-// locked：只能按確認鍵（例如必須更新），點框外關不了；返回鍵照常返回頁面（和現有 App 一樣）
+// locked：只能按確認鍵（例如必須更新），點框外、返回鍵（iOS 右滑）都關不了
 Future<void> notice(BuildContext context, {required String title, String msg = '', String ok = '知道了', bool locked = false}) =>
     _messageBox<void>(context, title: title, msg: msg, buttons: [(ok, _BtnType.primary, null)], dismissValue: null, dismissible: !locked);
 
 enum _BtnType { primary, info, error }
 
+const _lockedRoute = 'locked-notice';
+
 Future<T> _messageBox<T>(BuildContext context, {required String title, required String msg, required List<(String, _BtnType, T)> buttons, required T dismissValue, required bool dismissible}) async {
   final result = await _host(context).push<T>(PageRouteBuilder<T>(
+    settings: RouteSettings(name: dismissible ? null : _lockedRoute),
     opaque: false,
     barrierDismissible: dismissible,
     barrierColor: const Color(0x00000000),
     transitionDuration: _duration,
     reverseTransitionDuration: _duration,
     pageBuilder: (context, animation, _) => PopScope(
+      // 鎖定的提示框擋住返回鍵（計劃第七節管理者決定 2026-11-22：現有 App 按返回鍵會離開頁面、繞過提示框）
       canPop: dismissible,
-      // 鎖定的提示框：點框外關不了；但返回鍵（iOS 右滑）和現有 App 一樣照常返回頁面——
-      // choice.js 沒有把鎖定提示框登記到 back-close.js，返回鍵直接離開頁面（負責人 2026-11-15 決定照舊，記入計劃第七節）
-      onPopInvokedWithResult: dismissible
-          ? null
-          : (didPop, _) {
-              if (didPop) return;
-              final router = Router.maybeOf(context)?.routerDelegate; // 關掉提示框後，再照常返回一次（等於再按一次返回鍵）
-              Navigator.of(context).pop(dismissValue);
-              if (router != null) Future.microtask(router.popRoute);
-            },
       child: _MessageBox<T>(animation: animation, title: title, msg: msg, buttons: buttons, onModal: dismissible ? () => Navigator.of(context).pop(dismissValue) : null),
     ),
   ));

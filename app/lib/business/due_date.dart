@@ -11,17 +11,20 @@ class DueDate extends StatelessWidget {
   final String level; // overdue、due、upcoming、ok、muted；空字串時按日期自動判斷
   final DateTime? today; // 只給測試用
 
-  // 照原組件：日期無法解析時 JS 得 NaN，各判斷都不成立，顯示「還有 NaN 天」、綠色（一比一照舊，記入報告）
-  static num? daysLeftOf(String date, int? days, [DateTime? now]) {
+  static bool validDate(String date) => RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(date) && DateTime.tryParse('${date}T00:00:00') != null;
+
+  // 第七節管理者決定（2026-11-22）：日期不是「年-月-日」又沒有伺服器天數時，當作還沒有填日期（原組件顯示綠色「還有 NaN 天」）
+  static String shownDateOf(String date, int? days) => days == null && date.isNotEmpty && !validDate(date) ? '' : date;
+
+  static int? daysLeftOf(String date, int? days, [DateTime? now]) {
     if (days != null) return days;
-    if (date.isEmpty) return null;
+    if (!validDate(date)) return null;
     final t = now ?? DateTime.now();
-    final d = DateTime.tryParse('${date}T00:00:00');
-    if (d == null || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(date)) return double.nan;
+    final d = DateTime.parse('${date}T00:00:00');
     return (d.difference(DateTime(t.year, t.month, t.day)).inMilliseconds / 86400000).round();
   }
 
-  static String phraseOf(num? left) => left == null ? '' : left < 0 ? '逾期 ${-left} 天' : left == 0 ? '今天到期' : '還有 ${left.isNaN ? 'NaN' : left} 天';
+  static String phraseOf(num? left) => left == null ? '' : left < 0 ? '逾期 ${-left} 天' : left == 0 ? '今天到期' : '還有 $left 天';
 
   static String toneOf(String date, num? left, String level) =>
       level.isNotEmpty ? level : date.isEmpty || left == null ? 'muted' : left < 0 ? 'overdue' : left <= 30 ? 'due' : 'ok';
@@ -31,6 +34,7 @@ class DueDate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final date = shownDateOf(this.date, days);
     final left = daysLeftOf(date, days, today), tone = toneOf(date, left, level), color = colorOf(tone);
     TextStyle style(double size, Color c, {double? spacing}) =>
         ts(size, weight: w700, color: c, height: cssLineHeight(size, 1.4), letterSpacing: spacing).copyWith(fontFamily: appSystemFont, fontFeatures: const [FontFeature.tabularFigures()]);

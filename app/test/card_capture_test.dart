@@ -174,6 +174,15 @@ void main() {
     expect(tester.getRect(find.byKey(const ValueKey('capture-close'))), const Rect.fromLTWH(8, 62 + 8, 48, 48));
   });
 
+  // 計劃第七節管理者決定（2026-11-22）：✕ 照現有 App 畫面約 11pt、筆畫粗，在 48×48 按鈕內置中
+  testIos('✕ 約 11pt、粗線，在按鈕正中', (tester) async {
+    await openPage(tester, () => CardCapturePage(side: 'front', cameras: slowCamera), []);
+    final mark = find.descendant(of: find.byKey(const ValueKey('capture-close')), matching: find.byWidgetPredicate((w) => w is CustomPaint && w.painter is CloseMarkPainter));
+    expect(tester.getRect(mark), Rect.fromCenter(center: const Offset(8 + 24, 62 + 8 + 24), width: 11, height: 11));
+    expect(CaptureStyle.closeStroke, greaterThanOrEqualTo(2));
+    expect(find.bySemanticsLabel('關閉'), findsOneWidget);
+  });
+
   testIos('開不了鏡頭：標題「對準批文卡」，下面「從相冊選／拍照」，沒有快門', (tester) async {
     await openPage(tester, () => const CardCapturePage(side: 'front', cameras: noCamera), []);
     await tester.pump();

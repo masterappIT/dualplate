@@ -57,7 +57,8 @@ class PlateDetailPageState extends State<PlateDetailPage> {
   Map<String, J> plateDetail = {};
   J summary = {};
   Object? rentalOptions;
-  bool crossingBusy = false, justCrossed = false, loaded = false, cardBack = false, allDeadlines = false;
+  // 計劃第七節決定（2026-11-22）：開關和「今天已過關」各自的送出中狀態（現有 App 共用 crossingBusy）
+  bool reminderBusy = false, crossingBusy = false, justCrossed = false, loaded = false, cardBack = false, allDeadlines = false;
   bool showEdit = false, savingFile = false, savingDriver = false, savingVehicle = false, registeringVehicle = false, nextBusy = false;
   Map<String, dynamic> fieldStatus = {};
   String editingCardId = '', editingDriverId = '', editingVehicleId = '', uploadingDoc = '';
@@ -219,8 +220,8 @@ class PlateDetailPageState extends State<PlateDetailPage> {
 
   // ── 90 天過關 ────────────────────────────────────────────────────────────────────
   Future<void> toggleReminder(bool on) async {
-    if (crossingBusy) return;
-    _set(() => crossingBusy = true);
+    if (reminderBusy || crossingBusy) return;
+    _set(() => reminderBusy = true);
     try {
       await api('/my/plates/$plateId/crossing-reminder', 'PUT', {'enabled': on});
       await reloadSummary(plateId);
@@ -228,12 +229,12 @@ class PlateDetailPageState extends State<PlateDetailPage> {
     } catch (e) {
       toast(errText(e));
     } finally {
-      _set(() => crossingBusy = false);
+      _set(() => reminderBusy = false);
     }
   }
 
   Future<void> markCrossed(String? date) async {
-    if (crossingBusy || date == null || date.isEmpty) return;
+    if (reminderBusy || crossingBusy || date == null || date.isEmpty) return;
     _set(() => crossingBusy = true);
     try {
       final result = await api('/my/plates/$plateId/crossings', 'POST', {'crossedOn': date});
@@ -862,8 +863,9 @@ class PlateDetailPageState extends State<PlateDetailPage> {
         right,
       ]));
     }
+    // 計劃第七節決定（2026-11-22）：只有「還沒有填日期」時不放上面的卡（現有 App 會留下一張約 10pt 高的空白卡）
     final blocks = <Blk>[
-      Blk(
+      if (list.isNotEmpty || undated.isEmpty) Blk(
         DCard(
           padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -920,7 +922,7 @@ class PlateDetailPageState extends State<PlateDetailPage> {
                 LineSub(enabled ? '每 ${truthy(at(c, 'days')) ? jsString(at(c, 'days')) : 90} 天須過關一次，期限前提醒你' : '車輛不常過關時可開啟，我們會在期限前提醒你'),
               ]),
             ),
-            UniSwitch(checked: enabled, disabled: crossingBusy, onChanged: toggleReminder),
+            UniSwitch(checked: enabled, disabled: reminderBusy, onChanged: toggleReminder),
           ]),
           if (enabled) ...[
             const TicketRule(),
@@ -938,9 +940,9 @@ class PlateDetailPageState extends State<PlateDetailPage> {
           ],
         ]),
       ),
-      // .crossing-stamp：卡片右上角（right 16、top -12），不擋點擊
+      // 印章蓋在卡片右下角（right 16、bottom -12），不擋點擊；計劃第七節決定（2026-11-22）：現有 App 的 .crossing-stamp 在右上角，蓋住提醒開關
       if (enabled && justCrossed)
-        Positioned(right: 16, top: -12, child: IgnorePointer(child: StampMark(key: ValueKey('stamp-$stampSeq'), text: '已過關', tone: 'jade', play: true))),
+        Positioned(right: 16, bottom: -12, child: IgnorePointer(child: StampMark(key: ValueKey('stamp-$stampSeq'), text: '已過關', tone: 'jade', play: true))),
     ]);
     return [Blk(card, top: 12, bottom: 12)];
   }
@@ -1315,7 +1317,8 @@ class PlateDetailPageState extends State<PlateDetailPage> {
                     ? const PlateMissing()
                     : route == '粵港'
                         ? Center(child: HongKongPlate(plate: jsString(local), width: 300))
-                        : MacauBlock(formatMacau(local)),
+                        // 第七節管理者決定（2026-11-22）：粵澳路線也用 MacauPlate，和登入頁的澳門牌一樣
+                        : Center(child: MacauPlate(plate: jsString(local), width: 300)),
               ),
             ]),
             const SizedBox(height: 16),

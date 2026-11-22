@@ -335,10 +335,11 @@ abstract final class CaptureStyle {
   static const topHeight = 64.0; // .top：高 64、字 17、粗 600
   static const titleSize = 17.0;
   static const titleWeight = FontWeight.w600;
-  static const closeLeft = 8.0; // .close：左 8、48×48、字 24、粗 300
+  static const closeLeft = 8.0; // .close：左 8、48×48（可按範圍）
   static const closeSize = 48.0;
-  static const closeFont = 24.0;
-  static const closeWeight = FontWeight.w300;
+  // ✕ 的樣子照現有 App 畫面（約 11pt、筆畫粗；CSS 寫字 24、粗 300，但 WebView 實際畫出來的不是這樣）。計劃第七節管理者決定 2026-11-22
+  static const closeMark = 11.0;
+  static const closeStroke = 2.2;
   static const sidesAbove = 48.0; // .sides 在框頂上方 48
   static const sidesGap = 8.0;
   static const sidePadH = 12.0; // .side：padding 4px 12px、圓角 --r-control、字 --fs-body、粗 500
@@ -439,10 +440,6 @@ abstract final class PreviewStyle {
 abstract final class PlateDetailStyle {
   static const notesHeight = 96.0; // .notes{height:96px}
   static const plateMissingRatio = 440 / 140; // .plate-missing aspect-ratio
-  static const macauRatio = 460 / 100; // .physical-plate.macau aspect-ratio
-  static const macauBg = Color(0xFF050505);
-  static const macauText = Color(0xFFFFFFFF);
-  static const macauRadius = 2.0;
   static const missingRadius = 4.0;
   static const scrollDuration = Duration(milliseconds: 200); // uni.pageScrollTo duration:200
   static const scrollDelay = Duration(milliseconds: 50);
@@ -468,11 +465,10 @@ abstract final class ApprovalCardStyle {
   static const lineHeight = 1.12;
   // 卡面字型：CSS 是 'Songti SC','STSong','Noto Serif CJK SC',serif。
   // iOS 沒有預裝宋體（iOS 18.4、26 模擬器的系統字型都沒有 Songti、STSong），現有 App 落到 serif：英文數字 Times、中文蘋方。
-  //   Flutter 版在 iOS 照這個結果畫（2c 在 iPhone 16 Pro Max 現有 App 截圖核實）。
-  // Android 很多手機沒有 Noto Serif CJK：打包它的子集 DualplateSong（Noto Serif SC，產生方法和授權見 tool/song_subset.py）。
-  static const iosLatin = 'Times New Roman';
-  static const iosHan = ['PingFang TC'];
-  static const androidSong = 'DualplateSong';
+  // Android 很多手機沒有 Noto Serif CJK。兩邊都用打包的子集 DualplateSong（Noto Serif SC，產生方法和授權見 tool/song_subset.py），
+  //   計劃第七節管理者決定（2026-11-22）：iOS 也用，兩個平台的批文卡都像真卡；子集裏沒有的字，iOS 落到蘋方。
+  static const song = 'DualplateSong';
+  static const songFallbackIos = ['PingFang TC'];
   static const arial = 'Arial';
   static const arialFallback = ['Helvetica Neue'];
   // 翻面切換鈕（.flip-controls，詳情頁隱藏，新增牌照頁用）

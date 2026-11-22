@@ -280,15 +280,15 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('Android 返回鍵：鎖定提示框打開時，提示框和子頁一起關掉（和現有 App 一樣）', (tester) async {
+  // 計劃第七節管理者決定（2026-11-22）：鎖定提示框擋住返回鍵（現有 App 會連子頁一起關掉，可以繞過）
+  testWidgets('Android 返回鍵：鎖定提示框打開時，提示框和子頁都留着', (tester) async {
     await openDemo(tester);
     await tester.tap(find.text('鎖定提示框'));
     await tester.pumpAndSettle();
     expect(find.text('必須更新'), findsOneWidget);
     await pressBack(tester);
-    expect(find.text('必須更新'), findsNothing);
-    expect(find.text('示範子頁'), findsNothing);
-    expect(find.text('車牌管家'), findsOneWidget);
+    expect(find.text('必須更新'), findsOneWidget);
+    expect(find.text('示範子頁'), findsOneWidget);
   });
 
   testWidgets('鎖定提示框點框外仍關不了', (tester) async {
