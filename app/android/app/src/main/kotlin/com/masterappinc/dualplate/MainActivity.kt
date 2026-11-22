@@ -5,7 +5,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Process
-import android.widget.Toast
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -24,12 +23,7 @@ class MainActivity : FlutterActivity() {
                     startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + (call.arguments as? String ?: ""))))
                     result.success(null)
                 }
-                // 分頁按返回鍵「再按一次退出應用」（lib/shell/back_quit.dart）：系統提示，同 plus.nativeUI.toast
-                "toast" -> {
-                    Toast.makeText(this, call.arguments as? String ?: "", Toast.LENGTH_SHORT).show()
-                    result.success(null)
-                }
-                // 2 秒內再按返回鍵：關掉畫面（plus.runtime.quit），程序可能留着
+                // 分頁按返回鍵「再按一次退出應用」後 2 秒內再按（lib/shell/back_quit.dart）：關掉畫面（plus.runtime.quit），程序可能留着
                 "quit" -> {
                     result.success(null)
                     finish()
@@ -39,15 +33,6 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                     finishAffinity()
                     Process.killProcess(Process.myPid())
-                }
-                // 條款同意框裏的連結：交給系統瀏覽器
-                "openUrl" -> {
-                    try {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(call.arguments as? String ?: "")))
-                    } catch (e: RuntimeException) {
-                        // 沒有瀏覽器：不做甚麼
-                    }
-                    result.success(null)
                 }
                 // App 內更新（lib/business/app_update.dart，照 mobile/src/lib/app-update.js）
                 "versionCode" -> result.success(installedVersion())

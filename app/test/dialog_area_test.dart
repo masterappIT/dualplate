@@ -252,6 +252,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('tab-0')));
     await tester.pump();
     expect(find.text('有變動？'), findsOneWidget); // 首頁的選單仍開着
+    await tester.pump(const Duration(seconds: 3)); // 分頁上的返回鍵出了「再按一次退出應用」提示（App 自己的提示，2 秒），等它關掉
   });
 
   testWidgets('沒有彈窗區的頁面（組件樣板頁）彈窗仍蓋整個畫面', (tester) async {

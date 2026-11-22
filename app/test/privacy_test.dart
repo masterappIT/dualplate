@@ -2,9 +2,11 @@
 // 文字逐字對照 mobile/src/androidPrivacy.json；同意狀態按 version 記下。一個情況一個測試。
 import 'dart:convert';
 import 'dart:io';
+import 'package:dualplate/core/external.dart' show debugLaunchUrl;
 import 'package:dualplate/core/privacy.dart';
 import 'package:dualplate/core/session.dart';
 import 'package:dualplate/shell/launch_view.dart';
+import 'package:flutter/gestures.dart' show TapGestureRecognizer;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -32,6 +34,15 @@ Future<void> start([Map<String, Object> prefs = const {}]) async {
   FlutterSecureStorage.setMockInitialValues({});
   SharedPreferences.setMockInitialValues(Map.of(prefs));
   await Session.load();
+}
+
+Future<List<String>> show(WidgetTester tester, PrivacyPrompt prompt, List<String> taps) async {
+  final pressed = <String>[];
+  await tester.pumpWidget(Directionality(
+    textDirection: TextDirection.ltr,
+    child: PrivacyDialog(prompt: prompt, onAccept: () => pressed.add('accept'), onRefuse: () => pressed.add('refuse'), onLink: pressed.add),
+  ));
+  return pressed;
 }
 
 void main() {
@@ -87,21 +98,7 @@ void main() {
     });
   });
 
-  group('按鈕字', () {
-    test('安卓按鈕全部大寫：退出 App → 退出 APP', () => expect(buttonText('退出 App'), '退出 APP'));
-    test('中文不變', () => expect(buttonText('同意並繼續'), '同意並繼續'));
-  });
-
   group('同意框畫面', () {
-    Future<List<String>> show(WidgetTester tester, PrivacyPrompt prompt, List<String> taps) async {
-      final pressed = <String>[];
-      await tester.pumpWidget(Directionality(
-        textDirection: TextDirection.ltr,
-        child: PrivacyDialog(prompt: prompt, onAccept: () => pressed.add('accept'), onRefuse: () => pressed.add('refuse'), onLink: pressed.add),
-      ));
-      return pressed;
-    }
-
     testWidgets('第一個框：標題和兩個按鈕', (tester) async {
       await show(tester, privacyFirst, []);
       expect(find.text('服務條款及私隱聲明'), findsOneWidget);
@@ -126,15 +123,73 @@ void main() {
       expect(find.byWidgetPredicate((w) => w is ColoredBox && w.color.toARGB32() == 0xFF041813), findsOneWidget);
     });
 
-    testWidgets('再問一次：後面是深灰 #141414', (tester) async {
+    testWidgets('再問一次：後面和第一次一樣是變暗的深綠 #041813', (tester) async {
       await show(tester, privacySecond, []);
-      expect(find.byWidgetPredicate((w) => w is ColoredBox && w.color.toARGB32() == 0xFF141414), findsOneWidget);
+      expect(find.byWidgetPredicate((w) => w is ColoredBox && w.color.toARGB32() == 0xFF041813), findsOneWidget);
     });
 
-    testWidgets('再問一次：退出鍵顯示大寫', (tester) async {
+    testWidgets('再問一次：不再是深灰 #141414', (tester) async {
+      await show(tester, privacySecond, []);
+      expect(find.byWidgetPredicate((w) => w is ColoredBox && w.color.toARGB32() == 0xFF141414), findsNothing);
+    });
+
+    testWidgets('再問一次：標題', (tester) async {
       await show(tester, privacySecond, []);
       expect(find.text('需要你的同意'), findsOneWidget);
-      expect(find.text('退出 APP'), findsOneWidget);
+    });
+
+    testWidgets('再問一次：退出鍵照條款原文「退出 App」', (tester) async {
+      await show(tester, privacySecond, []);
+      expect(find.text('退出 App'), findsOneWidget);
+    });
+
+    testWidgets('再問一次：退出鍵不轉成大寫「退出 APP」', (tester) async {
+      await show(tester, privacySecond, []);
+      expect(find.text('退出 APP'), findsNothing);
+    });
+
+    testWidgets('再問一次：按退出 App', (tester) async {
+      final pressed = await show(tester, privacySecond, []);
+      await tester.tap(find.text('退出 App'));
+      expect(pressed, ['refuse']);
+    });
+  });
+
+  group('條款連結', () {
+    tearDown(() => debugLaunchUrl = null);
+
+    test('交給系統瀏覽器打開（launchExternal）', () async {
+      final opened = <Uri>[];
+      debugLaunchUrl = (uri) async {
+        opened.add(uri);
+        return true;
+      };
+      PrivacyDialog.openLink('https://dualplate.masterappinc.com/#/pages/terms/terms');
+      await Future<void>.delayed(Duration.zero);
+      expect(opened, [Uri.parse('https://dualplate.masterappinc.com/#/pages/terms/terms')]);
+    });
+
+    test('打不開時不報錯', () async {
+      debugLaunchUrl = (uri) async => false;
+      PrivacyDialog.openLink('https://dualplate.masterappinc.com/#/pages/terms/terms');
+      await Future<void>.delayed(Duration.zero);
+    });
+
+    testWidgets('框裏的連結：點了交給 onLink', (tester) async {
+      final pressed = await show(tester, privacyFirst, []);
+      final link = privacyFirst.message.expand((l) => l).firstWhere((s) => s.link != null);
+      final text = tester.widget<RichText>(find.byType(RichText).at(1));
+      var hit = false;
+      text.text.visitChildren((span) {
+        if (span is TextSpan && span.text == link.text) {
+          (span.recognizer as TapGestureRecognizer).onTap!();
+          hit = true;
+          return false;
+        }
+        return true;
+      });
+      expect(hit, isTrue);
+      expect(pressed, [link.link]);
     });
   });
 }
