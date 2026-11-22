@@ -5,7 +5,7 @@
 // .primary/.secondary/.btn-sm/.btn-line → Btn、.field-label → FieldLabel、.field → Field、.empty → Empty、.kv → Kv、
 // .deep → CardBox(deep: true)、.kicker → Kicker、.guilloche → Guilloche、.ticket-rule → TicketRule、.warn-card → CardBox(warn: true)
 import 'package:flutter/material.dart' show Material, MaterialType, TextField, InputDecoration, InputBorder, TextSelectionThemeData;
-import 'package:flutter/services.dart' show TextInputAction;
+import 'package:flutter/services.dart' show TextInputAction, LengthLimitingTextInputFormatter;
 import 'package:flutter/widgets.dart';
 import 'tokens.dart';
 
@@ -346,7 +346,7 @@ class FieldLabel extends StatelessWidget {
 
 // .field：白底、細線、圓角 4、最少高 48、內距 12、字 16；聚焦時綠框加 3px 牌照黃光暈 rgba(242,194,48,.45)
 class Field extends StatefulWidget {
-  const Field({super.key, this.controller, this.placeholder, this.obscure = false, this.keyboardType, this.maxLines = 1, this.onChanged, this.onSubmitted, this.enabled = true, this.focusNode, this.textInputAction, this.autofillHints});
+  const Field({super.key, this.controller, this.placeholder, this.obscure = false, this.keyboardType, this.maxLines = 1, this.onChanged, this.onSubmitted, this.enabled = true, this.focusNode, this.textInputAction, this.autofillHints, this.maxLength});
   final TextEditingController? controller;
   final String? placeholder;
   final bool obscure, enabled;
@@ -356,6 +356,8 @@ class Field extends StatefulWidget {
   final FocusNode? focusNode;
   final TextInputAction? textInputAction;
   final Iterable<String>? autofillHints;
+  // maxlength：超出的字打不進去（不提示）；3c 加，預設不限
+  final int? maxLength;
   @override
   State<Field> createState() => _FieldState();
 }
@@ -390,6 +392,7 @@ class _FieldState extends State<Field> {
         keyboardType: widget.keyboardType,
         textInputAction: widget.textInputAction,
         autofillHints: widget.autofillHints,
+        inputFormatters: widget.maxLength == null ? null : [LengthLimitingTextInputFormatter(widget.maxLength)],
         maxLines: widget.obscure ? 1 : widget.maxLines,
         onChanged: widget.onChanged,
         onSubmitted: widget.onSubmitted,

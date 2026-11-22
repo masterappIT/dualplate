@@ -75,6 +75,12 @@ abstract final class Session {
     _write(() async => _prefs?.setString('serviceMode', _mode!));
   }
 
+  // 只改 user（我的資料改了顯示名稱：uni.setStorageSync('user', { ...getUser(), name })），token 和自管／托管不變
+  static void updateUser(Map<String, dynamic> user) {
+    _user = user;
+    _write(() async => _prefs?.setString('user', jsonEncode(user)));
+  }
+
   // 登入頁記住上次選的區號
   static void rememberLoginArea(String code) {
     _loginArea = code;

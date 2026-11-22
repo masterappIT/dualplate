@@ -4,7 +4,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
+import 'business/company_editor.dart';
 import 'core/session.dart';
+import 'pages/companies/companies_page.dart';
 import 'shell/router.dart';
 import 'ui/base.dart';
 import 'ui/tokens.dart';
@@ -13,6 +15,8 @@ const _devStart = String.fromEnvironment('START');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // 「我的公司」的修改公司資料表單（階段 3c）；測試直接建 DualplateApp 時不經這裏，3a 的佔位測試照舊
+  CompaniesPage.editor = CompanyEditor.builder;
   try {
     await Session.load();
   } catch (_) {
