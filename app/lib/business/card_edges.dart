@@ -66,11 +66,11 @@ double _jsRound(double v) => (v + 0.5).floorToDouble(); // JS Math.round
 
 // ── 逐行照搬 card-face.js ──
 
-/// card-face.js analyse() 的結果：每點是不是卡（[mask]）和背景色
+/// card-face.js analyse() 的結果：每點是不是卡（[mask] 找邊用；[solid] 檢查邊內是不是卡用，門檻寬一點）和背景色
 class EdgeMap {
-  EdgeMap(this.w, this.h, this.mask, this.background);
+  EdgeMap(this.w, this.h, this.mask, this.solid, this.background);
   final int w, h;
-  final Uint8List mask;
+  final Uint8List mask, solid;
   final List<int> background;
 }
 
@@ -106,11 +106,16 @@ EdgeMap analyseEdges(Uint8List rgb, int w, int h) {
   ringDistances.sort();
   final noise = ringDistances[(samples.length * 0.9).floor()];
   final threshold = math.max(40.0, noise * 1.5);
-  final mask = Uint8List(w * h);
+  // solid：「邊內是不是卡」用背景雜訊本身做門檻（card-face.js 2026-11-23）。大理石紋桌面雜訊大，門檻 1.5 倍時
+  // 卡上的字和陰影都不算卡，找對了的卡邊因邊內只有 87% 是卡被丟掉；白卡放淺色桌面差不到 40，仍然不過
+  final loose = math.max(40.0, noise);
+  final mask = Uint8List(w * h), solid = Uint8List(w * h);
   for (var i = 0; i < w * h; i++) {
-    mask[i] = distance(i * 3) > threshold ? 1 : 0;
+    final d = distance(i * 3);
+    mask[i] = d > threshold ? 1 : 0;
+    solid[i] = d > loose ? 1 : 0;
   }
-  return EdgeMap(w, h, mask, background);
+  return EdgeMap(w, h, mask, solid, background);
 }
 
 /// card-face.js profile()：某一段行（[vertical]）或列裏，每一列（或行）屬於卡的比例
@@ -262,7 +267,7 @@ CardEdges detectCardEdges(Uint8List rgb, int w, int h) {
     var inside = 0;
     for (var y = found.top!; y <= found.bottom!; y++) {
       for (var x = found.left!; x <= found.right!; x++) {
-        inside += map.mask[y * w + x];
+        inside += map.solid[y * w + x];
       }
     }
     final area = (found.right! - found.left! + 1) * (found.bottom! - found.top! + 1);
