@@ -430,7 +430,8 @@ class _Controls extends StatelessWidget {
       SizedBox(width: 8 * unit),
       btn('背面', back, true),
       const Spacer(),
-      Text('點擊卡面翻轉', style: ts(12 * unit, color: ApprovalCardStyle.hint)),
+      // 原組件 12rpx（約 6–7pt）太小看不見（管理者 2026-11-23），改用 App 的小字字號
+      Text('點擊卡面翻轉', style: ts(Fs.cap, color: ApprovalCardStyle.hint)),
     ]);
   }
 }

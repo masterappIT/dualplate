@@ -408,8 +408,9 @@ function chooseCandidate(field, candidates, context) {
     const tails = valid.filter(candidate => head(candidate.value).length === winnerHead.length).map(candidate => ({ words: candidate.value.slice(winnerHead.length).split(' '), confidence: candidate.confidence })).filter(peer => peer.words.length === tailWords.length)
     const votedTail = tailWords.map((word, index) => vote([word], tails.map(peer => ({ text: [peer.words[index]], confidence: peer.confidence })))).join(' ')
     const voted = vote(winnerHead, heads) + votedTail
-    // 拼出來的名稱沒有一次試讀完整讀到，可能仍有錯字，標為待核對
-    if (validateCardField(field, voted, context)) return { value: voted, confidence: valid.some(candidate => candidate.value === voted) ? valid[0].confidence : Math.min(valid[0].confidence, 69) }
+    // 投票結果不是選中的那次讀法（拼出來的，或是另一次把握度較低的讀法）時，可能仍有錯字，標為待核對：
+    // 2026-11-23「制品」的「品」每次讀成不同的字，投出「间」，借了另一次讀法的把握度被標為正常
+    if (validateCardField(field, voted, context)) return { value: voted, confidence: voted === winner ? valid[0].confidence : Math.min(valid[0].confidence, 69) }
   }
   if (valid[0]) return { value: valid[0].value, confidence: valid[0].confidence }
   return { value: '', confidence: Math.max(0, ...candidates.map(candidate => candidate.confidence)) }

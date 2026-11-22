@@ -48,6 +48,9 @@ class PlateCreatePageState extends State<PlateCreatePage> {
   Map<String, String> images = {};
   Map<String, Uint8List> previews = {};
   bool busy = false, showFields = false, leaving = false;
+  // 模擬批文卡顯示哪一面：拍哪一面就翻到哪一面，辨識結果填進去時看得到（管理者 2026-11-23：拍背面時畫面停在正面，
+  // 背面辨識完不知道）；用戶自己點卡面或正面／背面鈕翻轉時跟着記下
+  bool cardBack = false;
   Object? link = const {'groupId': null, 'groupName': '', 'companies': [], 'groups': []};
   final ctl = {for (final (key, _) in cardFields) key: TextEditingController()};
   Timer? linkTimer;
@@ -117,8 +120,11 @@ class PlateCreatePageState extends State<PlateCreatePage> {
     if (busy) return;
     final photo = await PlateCreatePage.capture(context, side: side);
     if (photo == null || !mounted) return;
-    _set(() => busy = true);
-    showLoading(context, '正在辨識批文卡…');
+    _set(() {
+      busy = true;
+      cardBack = side == 'back';
+    });
+    showLoading(context, side == 'back' ? '正在辨識背面…' : '正在辨識正面…');
     final clock = Stopwatch()..start();
     try {
       _set(() {
@@ -144,7 +150,7 @@ class PlateCreatePageState extends State<PlateCreatePage> {
         final status = at(recognized, 'fieldStatus');
         fieldStatus = {...fieldStatus, if (status is Map) ...status.map((k, v) => MapEntry('$k', v))};
       });
-      toast('已辨識，請確認編號');
+      toast(side == 'back' ? '已辨識背面，請核對資料' : '已辨識正面，請確認編號');
     } catch (e) {
       cardLog('recognize create $side failed ${clock.elapsedMilliseconds}ms $e');
       toast(e is ApiError && e.message.isNotEmpty ? e.message : '上傳失敗');
@@ -264,7 +270,7 @@ class PlateCreatePageState extends State<PlateCreatePage> {
   List<Blk> _previewBlocks(bool hasPhoto) => [
         _stepTitle('第一步：拍下批文卡'),
         Blk(const Subtle('正面和背面各一張，光線充足、四角入鏡，辨識最準。')),
-        Blk(ApprovalCard(data: draft), top: 12),
+        Blk(ApprovalCard(data: draft, back: cardBack, onFlip: (back) => cardBack = back), top: 12),
         Blk(
           Row(children: [
             Expanded(child: DBtn(images['front'] != null ? '✓ 已拍正面' : '拍正面', kind: BtnKind.small, enabled: !busy, onTap: () => pickCard('front'))),

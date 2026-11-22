@@ -2,6 +2,7 @@
 // 伺服器用 MockClient 代替（不連正式網站）。畫面按 iPhone 17 Pro Max：440×956。
 import 'dart:convert';
 import 'package:dualplate/business/approval_card.dart';
+import 'package:dualplate/business/card_capture.dart';
 import 'package:dualplate/business/page_show.dart';
 import 'package:dualplate/business/welcome_guide.dart';
 import 'package:dualplate/core/api.dart';
@@ -134,6 +135,7 @@ Future<http.Response> handle(http.Request r) async {
   if (path == '/my/fees') return reply({'outstanding': fees.isEmpty ? {} : {'HKD': 100}, 'items': fees});
   if (path == '/my/contact') return reply(contact);
   if (path == '/my/dates') return reply({'ok': true});
+  if (path == '/card-recognize') return reply({'cardData': {'cardNumber': '1088123'}, 'fieldStatus': {}});
   return reply({'error': '沒有這個接口'}, 404);
 }
 
@@ -819,6 +821,35 @@ void main() {
     testWidgets('打開分頁時沒有登入：打開登入頁', (tester) async {
       await open(tester, '/me', user: false);
       expect(find.byType(LoginPage), findsOneWidget);
+    });
+  });
+
+  // 管理者 2026-11-23：拍背面時畫面停在正面，背面辨識完不知道；「點擊卡面翻轉」字太小
+  group('新增牌照拍卡', () {
+    setUp(() => PlateCreatePage.capture = (context, {required side}) async => 'data:image/jpeg;base64,AAAA');
+    tearDown(() => PlateCreatePage.capture = openCardCapture);
+    ApprovalCard card(WidgetTester tester) => tester.widget<ApprovalCard>(find.byType(ApprovalCard));
+
+    testWidgets('拍背面時模擬卡翻到背面，辨識完提示是背面', (tester) async {
+      await open(tester, '/plate-create', mode: '自管');
+      expect(card(tester).back, false);
+      await tapText(tester, '拍背面');
+      expect([card(tester).back, textContaining('已辨識背面，請核對資料').evaluate().isNotEmpty], [true, true]);
+      await finish(tester);
+    });
+
+    testWidgets('再拍正面時翻回正面，提示是正面', (tester) async {
+      await open(tester, '/plate-create', mode: '自管');
+      await tapText(tester, '拍背面');
+      await finish(tester);
+      await tapText(tester, '拍正面');
+      expect([card(tester).back, textContaining('已辨識正面，請確認編號').evaluate().isNotEmpty], [false, true]);
+      await finish(tester);
+    });
+
+    testWidgets('「點擊卡面翻轉」用 App 的小字字號', (tester) async {
+      await open(tester, '/plate-create', mode: '自管');
+      expect(tester.widget<Text>(find.text('點擊卡面翻轉')).style?.fontSize, 12);
     });
   });
 }

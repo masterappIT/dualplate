@@ -200,6 +200,16 @@ test('商號：投票拼出沒有一次讀到的名稱時標為待核對', () =>
   assert.ok(chosen.confidence < 70)
 })
 
+test('內承單位：投票結果是另一次把握度較低的讀法時標為待核對', () => {
+  // 2026-11-23 實拍：「品」讀成间、品、草…，投出「间」，和把握度最高的一次（草）不同
+  const reads = [['蝇成包装制间（深圳）有限公司', 60], ['晶威包装制品（深圳）有限公司', 79], ['晶威包装制草（深圳）有限公司', 80], ['晶威包装制间（深圳）有限公司', 67]].map(([raw, confidence]) => ({ raw, confidence }))
+  const chosen = chooseCardCandidate('contractor', reads, {})
+  assert.equal(chosen.value, '晶威包装制间（深圳）有限公司')
+  assert.ok(chosen.confidence < 70)
+  const same = [['晶威包装制品（深圳）有限公司', 80], ['晶威包装制品（深圳）有限公司', 75], ['晶威包装制草（深圳）有限公司', 70]].map(([raw, confidence]) => ({ raw, confidence }))
+  assert.ok(chooseCardCandidate('contractor', same, {}).confidence >= 70, '投票結果就是選中的讀法時維持把握度')
+})
+
 test('商號：英文名轉行時接上第二行，至少兩次讀到一樣才接', () => {
   const first = { value: '大明实业有限公司（DAMING INDUSTRIAL CO', confidence: 80 }
   const reads = ['., LIMITED)          ,\n', '., LIMITED )\n', '. LIMITED)\n', '-, LIMITED)     If\n', ' LIMITED) , -.  ae\n'].map(raw => ({ raw, confidence: 50 }))
