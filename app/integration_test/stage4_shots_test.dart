@@ -13,6 +13,7 @@ import 'package:dualplate/core/session.dart';
 import 'package:dualplate/main.dart';
 import 'package:dualplate/pages/login/login_page.dart';
 import 'package:dualplate/shell/launch_view.dart';
+import 'package:dualplate/shell/system_bars.dart' show setupSystemBars;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -72,6 +73,7 @@ void main() {
       await tester.pumpWidget(LaunchGate(key: ValueKey('launch${n++}'), app: (next) => DualplateApp(initialLocation: next)));
     }
 
+    await setupSystemBars(); // 和 main() 一樣
     Api.client = _VersionProxy();
     await UpdatePlatform.load(); // 和 main() 一樣讀已安裝的版本
     final prefs = await SharedPreferences.getInstance();

@@ -17,6 +17,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import '../core/external.dart' show launchExternal;
 import '../core/launch.dart';
 import '../core/privacy.dart';
 import '../pages/login/svg_icon.dart' show SvgImage, brandMark;
@@ -80,9 +81,9 @@ class _LaunchCoverState extends State<LaunchCover> {
 // 安卓：條款同意框（DCloud 私隱同意框 template 的樣子，數值按 2026-11-22 Android 17 模擬器現有 App 截圖量得）
 
 abstract final class PrivacyStyle {
-  static const dim = Color(0x99000000); // 系統對話框的變暗 0.6（截圖：深綠變成 #041813）
-  // 按「不同意」後再問一次時，後面不再是深綠，是深灰 #141414（截圖量得）
-  static const secondBackdrop = Color(0xFF141414);
+  // 系統對話框的變暗 0.6（截圖：深綠變成 #041813）。按「不同意」後再問一次也用這個深翠綠
+  //（現有 App 再問時是深灰 #141414，管理者 2026-11-23 決定兩次一樣）
+  static const dim = Color(0x99000000);
   static const width = 320.0;
   static const radius = 12.0; // androidPrivacy.json styles.borderRadius
   static const title = Color(0xFF14201B); // styles.title.color
@@ -125,10 +126,10 @@ class PrivacyDialog extends StatelessWidget {
           onTap: onTap,
           child: SizedBox(
             height: PrivacyStyle.buttonHeight,
-            child: Center(child: Text(buttonText(text), style: style(PrivacyStyle.buttonSize, color, weight: FontWeight.w500))),
+            child: Center(child: Text(text, style: style(PrivacyStyle.buttonSize, color, weight: FontWeight.w500))),
           ),
         );
-    final backdrop = identical(prompt, privacySecond) ? PrivacyStyle.secondBackdrop : blendOver(PrivacyStyle.dim, C.jadeDeep);
+    final backdrop = blendOver(PrivacyStyle.dim, C.jadeDeep);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: pageStyle(SystemUiOverlayStyle.light, backdrop),
       child: ColoredBox(
@@ -159,8 +160,8 @@ class PrivacyDialog extends StatelessWidget {
     );
   }
 
-  // 連結：現有 App 用 DCloud 自帶的網頁視窗（hrefLoader default）打開網站的條款頁；這裏交給系統瀏覽器（不加網頁套件）
-  static void openLink(String url) => _channel.invokeMethod<void>('openUrl', url).catchError((Object _) {});
+  // 連結：現有 App 用 DCloud 自帶的網頁視窗（hrefLoader default）打開網站的條款頁；這裏交給系統瀏覽器（core/external.dart，不加網頁套件）；打不開就不做甚麼
+  static void openLink(String url) => launchExternal(url);
 }
 
 // ---------------------------------------------------------------------------------------------------

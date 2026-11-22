@@ -57,6 +57,3 @@ const privacySecond = PrivacyPrompt(
 bool privacyNeeded() => Session.readString(_agreedKey) != privacyVersion;
 
 void privacyAgreed() => Session.writeString(_agreedKey, privacyVersion);
-
-// 按鈕上的字：DCloud 的按鈕是安卓 Button，預設全部大寫（「退出 App」顯示成「退出 APP」，2026-11-22 在 Android 17 模擬器現有 App 截圖核實）
-String buttonText(String text) => text.toUpperCase();

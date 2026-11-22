@@ -14,6 +14,7 @@ import 'package:dualplate/main.dart';
 import 'package:dualplate/business/company_editor.dart';
 import 'package:dualplate/pages/companies/companies_page.dart';
 import 'package:dualplate/shell/nav_bar.dart';
+import 'package:dualplate/shell/system_bars.dart' show setupSystemBars;
 import 'package:flutter/material.dart' show TextField;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -40,6 +41,7 @@ void main() {
     Future<void> wait(int ms) => tester.pump(Duration(milliseconds: ms));
     // 和 main() 一樣接上修改公司資料表單
     CompaniesPage.editor = CompanyEditor.builder;
+    await setupSystemBars(); // 和 main() 一樣：安卓延伸到導航列後面（階段 4 起，底部色條由頁面自己畫）
     final cmd = File('$dir/cmd'), done = File('$dir/done');
     Directory(dir).createSync(recursive: true);
     done.writeAsStringSync('ready\n');

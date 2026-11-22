@@ -18,8 +18,4 @@ abstract final class BackGate {
 
   // 這一頁有沒有開着的彈窗或浮層
   static bool blocked(ModalRoute<dynamic> route) => _gates[route]?.any((gate) => !gate.value) ?? false;
-
-  // 鎖定提示框（dialogs.dart notice locked）在分頁或第一頁按返回鍵時：現有 App 的鎖定提示框沒有登記到 back-close.js，
-  // 返回鍵直接交給頁面，分頁和第一頁就是「再按一次退出」（shell/back_quit.dart 設定）
-  static void Function()? rootBack;
 }
