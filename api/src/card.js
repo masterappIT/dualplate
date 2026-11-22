@@ -132,8 +132,17 @@ export function normalizeCardField(key, value) {
   if (key === 'validFrom' || key === 'validTo') return normalizeDate(text)
   // OCR spaces out Chinese characters; spaces between them carry no meaning.
   // 「(6722)」的左括號常讀成「\」
-  if (key === 'notes') return text.replace(/[\\/](?=\s*\d{4}\s*[)）])/g, '(').replace(/，/g, ',').replace(/(?<=[\u3400-\u9fff])\s+(?=[\u3400-\u9fff])/g, '').replace(/\s*([:：,，()（）])\s*/g, '$1').replace(/^注[,，:：]?/, '')
+  if (key === 'notes') return fixDriverLabels(text.replace(/[\\/](?=\s*\d{4}\s*[)）])/g, '(').replace(/，/g, ',').replace(/(?<=[\u3400-\u9fff])\s+(?=[\u3400-\u9fff])/g, '').replace(/\s*([:：,，()（）])\s*/g, '$1').replace(/^注[,，:：]?/, ''))
   return text
+}
+
+// 備註裏「主司机:」「副司机:」是卡上的固定字，讀錯一個字時改回（2026-11-23 讀完整的兩次都把「主司机」讀成「主习机」「主避机」，
+// 因此沒被採用）。第一段是主司机，逗號後是副司机；三個字裏至少兩個對上才改
+function fixDriverLabels(text) {
+  return text.replace(/(^[^\u3400-\u9fff]*|[,，])([\u3400-\u9fff]{3})(?=[:：])/g, (all, lead, word) => {
+    const want = /[,，]/.test(lead) ? '副司机' : '主司机', other = want === '主司机' ? '副' : '主'
+    return word[0] !== other && [...word].filter((char, index) => char === want[index]).length >= 2 ? lead + want : all
+  })
 }
 
 export const normalize = normalizeCardField
@@ -335,18 +344,20 @@ async function recognizeCandidate(variant, field, rectangle, psm) {
   })
 }
 
+// 備註裏按次序的駕駛人名字。姓氏讀錯（例：「梁」讀成「深」）的名字也保留在原位置，否則後面的名字會對錯駕駛人
 function extractDriverNames(notes) {
-  const names = []
   const pattern = /(?:主|副)?\s*司\s*机\s*[:：]?\s*([\u3400-\u9fff]{2,4})/g
-  for (const match of String(notes || '').matchAll(pattern)) if (!names.includes(match[1]) && surnames.has(match[1][0])) names.push(match[1])
-  return names
+  return [...String(notes || '').matchAll(pattern)].map(match => match[1])
 }
 
-// 駕駛人名字：逐欄讀到的（2–4 個中文字，姓氏不對也算一票）和每次讀備註時同一位置的名字（只用由「主司机」開始的讀法，
+// 駕駛人名字：逐欄讀到的（2–4 個中文字，姓氏不對也算一票）和每次讀備註時同一位置的名字（只用格式合格、由「主司机」開始的讀法，
 // 位置才對得上）一起按把握度逐字投票：備註字小常錯一兩個字，逐欄有時又讀不到（2026-11-23 真卡第三位副司機）。
-// 備註裏沒有這個位置的名字就不投票，回傳空字串
+// 第一個字只在常見姓氏之間投票（2026-11-23 備註兩次都把「梁」讀成「深」）。備註裏沒有這個位置的名字就不投票，回傳空字串
 function voteDriverName(index, fieldReads, notesReads) {
-  const fromNotes = notesReads.filter(read => /主\s*司\s*机/.test(read.raw)).map(read => ({ text: extractDriverNames(normalizeCardField('notes', read.raw))[index], confidence: read.confidence })).filter(read => read.text)
+  const fromNotes = notesReads.map(read => {
+    const text = normalizeCardField('notes', read.raw), at = text.indexOf('主司机')
+    return at >= 0 && validateCardField('notes', text.slice(at)) ? { text: extractDriverNames(text.slice(at))[index], confidence: read.confidence } : {}
+  }).filter(read => read.text)
   if (!fromNotes.length) return ''
   const pool = [...fieldReads.map(read => ({ text: normalizeCardField('driver1', read.raw), confidence: read.confidence })).filter(read => /^[\u3400-\u9fff]{2,4}$/.test(read.text)), ...fromNotes]
   const weight = new Map()
@@ -355,7 +366,8 @@ function voteDriverName(index, fieldReads, notesReads) {
   const peers = pool.filter(read => read.text.length === length)
   const voted = Array.from({ length }, (_, position) => {
     const tally = new Map()
-    for (const peer of peers) tally.set(peer.text[position], (tally.get(peer.text[position]) || 0) + Math.max(1, peer.confidence))
+    const voters = position === 0 && peers.some(peer => surnames.has(peer.text[0])) ? peers.filter(peer => surnames.has(peer.text[0])) : peers
+    for (const peer of voters) tally.set(peer.text[position], (tally.get(peer.text[position]) || 0) + Math.max(1, peer.confidence))
     return [...tally.entries()].sort((a, b) => b[1] - a[1])[0][0]
   }).join('')
   return validateCardField('driver1', voted) ? voted : ''
@@ -416,6 +428,36 @@ function joinCompanySecondLine(chosen, reads) {
   return { value: `${chosen.value}${join}${best[0]}）`, confidence: Math.min(chosen.confidence, 69) }
 }
 
+// 選中的備註沒讀完（沒有「。」）時，若另一次合格的讀法前面一字不差、而且讀到「。」，用那次較完整的讀法
+function completeNotes(chosen, candidates) {
+  if (!chosen.value || /。$/.test(chosen.value)) return chosen
+  const longer = candidates.map(candidate => ({ value: normalizeCardField('notes', candidate.raw), confidence: candidate.confidence }))
+    .filter(candidate => candidate.value.length > chosen.value.length && candidate.value.startsWith(chosen.value) && /。$/.test(candidate.value) && validateCardField('notes', candidate.value))
+    .sort((left, right) => right.confidence - left.confidence)
+  return longer[0] ? { value: longer[0].value, confidence: Math.min(chosen.confidence, longer[0].confidence) } : chosen
+}
+
+// 內承單位通常是同一品牌的內地公司（例：晶威实业 / 晶威包装制品）。開頭四個字裏某個字每次讀法都不同（選中的字不到一半票），
+// 而旁邊的字和商號一樣、商號這個位置的字也有讀法讀到過，就用商號的字；結果標為待核對（2026-11-23「晶」讀成曲、品、日、蝇…）
+function borrowCompanyChars(chosen, candidates, company, context) {
+  const head = value => (value.match(/^[\u3400-\u9fff]+/) || [''])[0]
+  const own = head(chosen.value), brand = head(company || '')
+  if (!own || !brand) return chosen
+  const peers = candidates.map(candidate => ({ text: head(normalizeCardField('contractor', candidate.raw)), confidence: Math.max(1, candidate.confidence) })).filter(peer => peer.text.length === own.length)
+  const total = peers.reduce((sum, peer) => sum + peer.confidence, 0)
+  let value = chosen.value
+  for (let index = 0; index < Math.min(own.length, brand.length, 4); index++) {
+    if (own[index] === brand[index]) continue
+    const besideAgrees = (index > 0 && own[index - 1] === brand[index - 1]) || (index + 1 < Math.min(own.length, brand.length) && own[index + 1] === brand[index + 1])
+    const mine = peers.filter(peer => peer.text[index] === own[index]).reduce((sum, peer) => sum + peer.confidence, 0)
+    if (besideAgrees && mine < total / 2 && peers.some(peer => peer.text[index] === brand[index])) value = value.slice(0, index) + brand[index] + value.slice(index + 1)
+  }
+  if (value === chosen.value || !validateCardField('contractor', value, context)) return chosen
+  return { value, confidence: Math.min(chosen.confidence, 69) }
+}
+
+export const completeCardNotes = completeNotes
+export const borrowCardCompanyChars = borrowCompanyChars
 export const chooseCardCandidate = chooseCandidate
 export const joinCardCompanyLine = joinCompanySecondLine
 
@@ -466,7 +508,12 @@ function crossCheck(result, fieldStatus) {
   const flag = key => { if (fieldStatus[key]?.status === 'ok') fieldStatus[key] = { ...fieldStatus[key], status: 'uncertain' } }
   for (const key of ['cardNumber', 'serial']) if (fieldStatus[key]?.value && fieldStatus[key].confidence < 90) flag(key)
   const current = result.currentApproval, previous = result.previousApproval
-  if (current && previous && (current === previous || current.slice(0, 4) <= previous.slice(0, 4))) { flag('currentApproval'); flag('previousApproval') }
+  // 現批文要比原批文晚：年份較大，或同一年號碼較大（2026-11-23 管理者：同一年內變更駕駛人，兩個批文都是同一年）
+  const order = value => (value.match(/^(\d{4})第(\d+)/) || []).slice(1).map(Number)
+  if (current && previous) {
+    const [currentYear, currentNumber] = order(current), [previousYear, previousNumber] = order(previous)
+    if (!(currentYear > previousYear || (currentYear === previousYear && currentNumber > previousNumber))) { flag('currentApproval'); flag('previousApproval') }
+  }
   for (const key of ['driver1', 'driver2', 'driver3']) if (fieldStatus[key]?.value && fieldStatus[key].confidence < 80) flag(key)
   // A single wrong digit in an approval number still passes the format check, so only very
   // confident reads count as checked; an earlier approval without a current one is suspicious.
@@ -520,7 +567,9 @@ export async function recognizeCard(image, side, options = {}) {
       }
       continue
     }
-    const chosen = field === 'company' ? joinCompanySecondLine(chooseCandidate(field, candidates, options), moreReads) : chooseCandidate(field, candidates, options)
+    let chosen = field === 'company' ? joinCompanySecondLine(chooseCandidate(field, candidates, options), moreReads) : chooseCandidate(field, candidates, options)
+    if (field === 'notes') chosen = completeNotes(chosen, candidates)
+    if (field === 'contractor') chosen = borrowCompanyChars(chosen, candidates, fieldStatus.company?.value, options)
     result[field] = correctTraditionalField(field, chosen.value)
     fieldStatus[field] = makeFieldStatus(chosen.value, chosen.confidence)
   }
@@ -528,14 +577,16 @@ export async function recognizeCard(image, side, options = {}) {
   // 備註以「。」結尾才算讀完整；沒讀到第二行時，備註裏沒有的駕駛人保留逐欄讀到的名字（標為待核對），不要清掉
   const notesComplete = /。$/.test(result.notes)
   if (driverNames.length) for (const [index, key] of ['driver1', 'driver2', 'driver3'].entries()) {
-    if (!driverNames[index] && !notesComplete && result[key]) {
+    const notesName = driverNames[index]
+    const corrected = notesName ? voteDriverName(index, seen[key] || [], seen.notes || []) || (validateCardField('driver1', notesName) ? notesName : '') : ''
+    // 備註沒讀完、或備註裏這位置的名字不合格又投不出票時，保留逐欄讀到的名字，標為待核對
+    if (!corrected && result[key] && (notesName || !notesComplete)) {
       fieldStatus[key] = { ...fieldStatus[key], status: 'uncertain', confidence: Math.min(fieldStatus[key]?.confidence || 0, 79) }
       continue
     }
-    const corrected = driverNames[index] ? voteDriverName(index, seen[key] || [], seen.notes || []) || driverNames[index] : ''
     // 備註裏的名字也換成投票結果（備註的字小，常錯一兩個字）
-    if (corrected && corrected !== driverNames[index] && corrected.length === driverNames[index].length) result.notes = result.notes.replace(driverNames[index], corrected)
-    const agreed = driverAgreed(corrected, result[key], driverNames[index])
+    if (corrected && corrected !== notesName && corrected.length === notesName.length) result.notes = result.notes.replace(notesName, corrected)
+    const agreed = driverAgreed(corrected, result[key], notesName)
     result[key] = corrected
     fieldStatus[key] = corrected ? { value: corrected, status: agreed ? 'ok' : 'uncertain', confidence: agreed ? Math.max(fieldStatus[key]?.confidence || 0, 80) : Math.min(fieldStatus[key]?.confidence || 55, 79) } : makeFieldStatus('', fieldStatus[key]?.confidence || 0)
   }
@@ -546,4 +597,5 @@ export async function recognizeCard(image, side, options = {}) {
   return { cardData: cleanCard(result), fieldStatus }
 }
 
+export const cardCrossCheck = crossCheck
 export const cardRectangles = rectangles

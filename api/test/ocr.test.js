@@ -5,8 +5,11 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 import {
+  borrowCardCompanyChars,
+  cardCrossCheck,
   cardDriverAgreed,
   cardFields,
+  completeCardNotes,
   chooseCardCandidate,
   voteCardDriverName,
   extractValidityDates,
@@ -246,6 +249,54 @@ test('駕駛人：逐欄多次讀錯、備註讀對時，投票結果只和逐�
   assert.equal(cardDriverAgreed('刘子豪', '刘子衰', '刘子豪'), false)
   assert.equal(cardDriverAgreed('刘子豪', '刘子豪', '刘子豪'), true)
   assert.equal(cardDriverAgreed('', '', ''), false)
+})
+
+test('備註：「主司机」「副司机」讀錯一個字時改回', () => {
+  assert.equal(normalizeCardField('notes', '主习机:李小明(1234),副司机:王大文(5678)。'), '主司机:李小明(1234),副司机:王大文(5678)。')
+  assert.equal(normalizeCardField('notes', '主避机:李小明(1234),副司札:王大文(5678)。'), '主司机:李小明(1234),副司机:王大文(5678)。')
+  assert.equal(normalizeCardField('notes', '副司机:王大文(5678)。'), '副司机:王大文(5678)。', '只讀到第二行時不改成主司机')
+  assert.equal(normalizeCardField('notes', '主司机:李小明(1234),主司机:王大文(5678)。'), '主司机:李小明(1234),主司机:王大文(5678)。', '逗號後的主司机不改')
+})
+
+test('駕駛人：備註裏姓氏讀錯的名字仍佔原位置，第一個字只在常見姓氏之間投票', () => {
+  const field = [['梁灿万', 67], ['未太龙', 34]].map(([raw, confidence]) => ({ raw, confidence }))
+  const notes = [['主习机:李小明(1234),副司机:王大文(4707),副司机:深灿龙(6722)。', 79], ['主避机:李小明(1234),副司机:王大文(4707),副司机:深灿龙(6722)。', 71]].map(([raw, confidence]) => ({ raw, confidence }))
+  assert.equal(voteCardDriverName(2, field, notes), '梁灿龙')
+  assert.equal(voteCardDriverName(1, [], notes), '王大文')
+})
+
+test('備註：選中的讀法沒讀完時，用前面一字不差而且讀完的讀法', () => {
+  const chosen = { value: '主司机:李小明(1234),副司机:王大文(4707),', confidence: 85 }
+  const full = { raw: '主司机:李小明(1234),副司机:王大文(4707),副司机:梁小龙(6722)。', confidence: 79 }
+  assert.deepEqual(completeCardNotes(chosen, [full]), { value: full.raw, confidence: 79 })
+  assert.deepEqual(completeCardNotes(chosen, [{ raw: '主司机:李小朋(1234),副司机:王大文(4707),副司机:梁小龙(6722)。', confidence: 90 }]), chosen, '前面有字不同不用')
+  const done = { value: '主司机:李小明(1234)。', confidence: 85 }
+  assert.deepEqual(completeCardNotes(done, [full]), done, '已讀完不改')
+})
+
+test('內承單位：品牌字每次讀法都不同時用商號的字，標為待核對', () => {
+  const reads = [['曲威包装制品（深圳）有限公司', 68], ['晶威包装制品（深圳）有限公司', 66], ['品威包装制品（深圳）有限公司', 67], ['日威包装制品（深圳）有限公司', 73], ['二威包装制品（深圳）有限公司', 53]].map(([raw, confidence]) => ({ raw, confidence }))
+  const chosen = { value: '日威包装制品（深圳）有限公司', confidence: 73 }
+  const borrowed = borrowCardCompanyChars(chosen, reads, '晶威实业有限公司（JINGWEI INDUSTRIAL CO., LIMITED）', {})
+  assert.equal(borrowed.value, '晶威包装制品（深圳）有限公司')
+  assert.ok(borrowed.confidence < 70)
+  const agreed = ['日威包装制品（深圳）有限公司', '日威包装制品（深圳）有限公司', '晶威包装制品（深圳）有限公司'].map(raw => ({ raw, confidence: 70 }))
+  assert.deepEqual(borrowCardCompanyChars(chosen, agreed, '晶威实业有限公司', {}), chosen, '過半讀法一致時不改')
+  assert.deepEqual(borrowCardCompanyChars(chosen, reads.filter(read => !read.raw.startsWith('晶')), '晶威实业有限公司', {}), chosen, '沒有讀法讀到商號的字時不改')
+  assert.deepEqual(borrowCardCompanyChars(chosen, reads, '大明实业有限公司', {}), chosen, '旁邊的字和商號不一樣時不改')
+})
+
+test('批文號：同一年時現批文號碼較大不標待核對，否則兩個都標', () => {
+  const check = (current, previous) => {
+    const fieldStatus = { currentApproval: { value: current, status: 'ok', confidence: 95 }, previousApproval: { value: previous, status: 'ok', confidence: 95 } }
+    cardCrossCheck({ currentApproval: current, previousApproval: previous }, fieldStatus)
+    return [fieldStatus.currentApproval.status, fieldStatus.previousApproval.status]
+  }
+  assert.deepEqual(check('2026第0765525号', '2026第0757732号'), ['ok', 'ok'])
+  assert.deepEqual(check('2026第0757732号', '2026第0765525号'), ['uncertain', 'uncertain'])
+  assert.deepEqual(check('2026第0765525号', '2026第0765525号'), ['uncertain', 'uncertain'])
+  assert.deepEqual(check('2025第0633333号', '2024第0444444号'), ['ok', 'ok'])
+  assert.deepEqual(check('2024第0633333号', '2025第0444444号'), ['uncertain', 'uncertain'])
 })
 
 test('請予辦理：卡上的分號讀成逗號時仍認得', () => {
