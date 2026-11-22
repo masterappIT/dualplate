@@ -180,10 +180,22 @@ void main() {
       expect(e.right, isFalse);
     });
 
-    test('卡邊離框線不到容許距離（框內寬 3%）仍算對齊', () {
+    test('卡邊在框線以內 3%（框內寬）仍算對齊', () {
       final d = 0.03 * (1 - 2 * k);
+      final e = detect(scene(left: k + d, right: 1 - k - d, top: k + d, bottom: 1 - k - d));
+      expect(e.aligned, isTrue);
+    });
+
+    test('卡邊超出框線 0.5%（框內寬）仍算對齊', () {
+      final d = 0.005 * (1 - 2 * k);
       final e = detect(scene(left: k - d, right: 1 - k + d, top: k - d, bottom: 1 - k + d));
       expect(e.aligned, isTrue);
+    });
+
+    test('卡邊超出框線 3%（框內寬）不算對齊（階段 5b：框外背景不夠，伺服器找錯邊）', () {
+      final d = 0.03 * (1 - 2 * k);
+      final e = detect(scene(left: k - d, right: 1 - k + d, top: k - d, bottom: 1 - k + d));
+      expect([e.left, e.top, e.right, e.bottom], [false, false, false, false]);
     });
 
     test('卡邊離框線超過容許距離（框內寬 5%）不算對齊', () {

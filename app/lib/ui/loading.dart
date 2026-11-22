@@ -102,6 +102,13 @@ class _LoadingViewState extends State<_LoadingView> with TickerProviderStateMixi
   }
 }
 
+/// 第 i 條短線的位置（12 點鐘起順時針）：位置固定不動
+double spinnerAngle(int i) => i * math.pi * 2 / 12 - math.pi / 2;
+
+/// 第 i 條短線在第 step 格的深淺：最深的一條每格順時針前進一條，後面的越來越淡。
+/// 階段 5b 修正：原本位置和深淺一起轉，每格畫出來的圖案相同，轉圈看起來不動（管理者真機發現）。
+double spinnerAlpha(int i, int step) => ((12 - ((step - i) % 12 + 12) % 12) / 12).clamp(.25, 1.0);
+
 // iOS 系統轉圈（UIActivityIndicatorView）：12 條短線，每 1/12 秒前進一格，越後面越淡
 class _Spinner extends CustomPainter {
   _Spinner(this.spin) : super(repaint: spin);
@@ -114,9 +121,8 @@ class _Spinner extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeWidth = r * .2;
     for (var i = 0; i < 12; i++) {
-      final a = (i - step) * math.pi * 2 / 12 - math.pi / 2;
-      final alpha = ((12 - ((i - step) % 12 + 12) % 12) / 12).clamp(.25, 1.0);
-      paint.color = LoadingStyle.spinnerColor.withValues(alpha: alpha);
+      final a = spinnerAngle(i);
+      paint.color = LoadingStyle.spinnerColor.withValues(alpha: spinnerAlpha(i, step));
       final d = Offset(math.cos(a), math.sin(a));
       canvas.drawLine(c + d * r * .5, c + d * r * .9, paint);
     }
