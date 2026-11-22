@@ -17,6 +17,7 @@ import '../shell/system_bars.dart';
 import '../ui/toast.dart';
 import '../ui/tokens.dart';
 import 'card_edges.dart';
+import 'card_log.dart';
 import 'card_stage.dart';
 import 'pick_image.dart';
 
@@ -133,8 +134,12 @@ class CardCapturePageState extends State<CardCapturePage> {
       if (list.isEmpty) throw CameraException('nocamera', '沒有鏡頭');
       final back = list.firstWhere((c) => c.lensDirection == CameraLensDirection.back, orElse: () => list.first);
       // 找邊用的畫面格式：Android YUV420、iOS BGRA（card_edges.dart sampleMargin 兩種都會讀）
-      controller = CameraController(back, ResolutionPreset.max, enableAudio: false, imageFormatGroup: _android ? ImageFormatGroup.yuv420 : ImageFormatGroup.bgra8888);
+      // 解像度：原本用 max，14 Pro Max 每張預覽畫面太大，找邊跟不上（階段 5b）
+      final preset = ResolutionPreset.values.firstWhere((p) => p.name == cardPreset, orElse: () => ResolutionPreset.ultraHigh);
+      controller = CameraController(back, preset, enableAudio: false, imageFormatGroup: _android ? ImageFormatGroup.yuv420 : ImageFormatGroup.bgra8888);
+      final opening = Stopwatch()..start();
       await controller.initialize();
+      cardLog('camera ${back.name} lens=${back.lensType.name} preset=${preset.name} preview=${controller.value.previewSize} open=${opening.elapsedMilliseconds}ms cameras=${list.map((c) => '${c.lensDirection.name}/${c.lensType.name}').join(',')}');
       // 鏡頭開得太慢、期間已關閉或改用相片：關掉這次的鏡頭，不動畫面
       if (mine != _generation || !mounted) {
         await controller.dispose();
@@ -152,6 +157,7 @@ class CardCapturePageState extends State<CardCapturePage> {
       await controller?.dispose();
       if (mine != _generation || !mounted) return;
       debugPrint('[CardCapture] 無法開啟鏡頭 $error');
+      cardLog('camera error $error');
       setState(() => camera = false);
     }
   }
@@ -260,11 +266,16 @@ class CardCapturePageState extends State<CardCapturePage> {
   }
 
   Future<String> _takeAndCrop(CameraController c) async {
+    final clock = Stopwatch()..start();
     final file = await c.takePicture();
+    final taken = clock.elapsedMilliseconds;
     final image = await _decode(await file.readAsBytes());
+    final decoded = clock.elapsedMilliseconds;
     final preview = c.value.previewSize;
     final rect = shootRect(_box, image.width, image.height, _frame, previewAspect: preview == null ? null : preview.shortestSide / preview.longestSide);
     final data = await _crop(image, rect);
+    cardLog('shoot $_side photo=${image.width}x${image.height} take=${taken}ms decode=${decoded - taken}ms crop=${clock.elapsedMilliseconds - decoded}ms rect=$rect jpeg=${data.length}');
+    cardLogImage(_side, data);
     image.dispose();
     return data;
   }
@@ -636,7 +647,7 @@ class CameraEdgeFeed implements EdgeFeed {
   final bool _android;
   final _out = StreamController<CardEdges>.broadcast();
   bool _stopped = false;
-  int _analysed = 0;
+  int _analysed = 0, _frames = 0, _detectMs = 0;
   DateTime _since = DateTime.now();
 
   static Future<CameraEdgeFeed> start(CameraController controller, {required SourceRect? Function(int uprightW, int uprightH) region, required bool android}) async {
@@ -655,18 +666,24 @@ class CameraEdgeFeed implements EdgeFeed {
   Stream<CardEdges> get edges => _out.stream;
 
   void _onFrame(CameraImage image) {
+    _frames++;
     if (_stopped || _worker.busy) return;
     final frame = previewFrameOf(image, sensorOrientation: _controller.description.sensorOrientation, android: _android);
     if (frame == null) return;
     final inner = _region(frame.uprightW, frame.uprightH);
     if (inner == null) return;
+    final clock = Stopwatch()..start();
     _worker.detect(frame, inner).then((edges) {
       if (edges == null || _stopped) return;
       _analysed++;
+      _detectMs += clock.elapsedMilliseconds;
       final now = DateTime.now(), seconds = now.difference(_since).inMilliseconds / 1000;
-      if (kDebugMode && seconds >= 5) {
+      if ((kDebugMode || cardLogOn) && seconds >= (cardLogOn ? 2 : 5)) {
         debugPrint('[CardEdges] 每秒 ${(_analysed / seconds).toStringAsFixed(1)} 次，畫面 ${image.width}×${image.height}，$edges');
+        cardLog('edges frames/s=${(_frames / seconds).toStringAsFixed(1)} analysed/s=${(_analysed / seconds).toStringAsFixed(1)} detect=${_analysed == 0 ? 0 : _detectMs ~/ _analysed}ms frame=${image.width}x${image.height} rot=${frame.rotation} $edges');
         _analysed = 0;
+        _frames = 0;
+        _detectMs = 0;
         _since = now;
       }
       _out.add(edges);
