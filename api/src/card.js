@@ -363,6 +363,14 @@ function voteDriverName(index, fieldReads, notesReads) {
 
 export const voteCardDriverName = voteDriverName
 
+// 投票結果可以標為正常，只有在逐欄選出的名字和備註裏選出的名字都是它的時候：投票裏逐欄的讀法票數多（每欄讀好幾次），
+// 只和逐欄比對等於自己證明自己。2026-11-23 部署測試機逐欄把「刘子豪」讀成「刘子衰」，投票跟着錯還標為正常
+function driverAgreed(voted, fieldValue, notesName) {
+  return Boolean(voted) && voted === fieldValue && voted === notesName
+}
+
+export const cardDriverAgreed = driverAgreed
+
 function chooseCandidate(field, candidates, context) {
   const valid = []
   for (const candidate of candidates) {
@@ -527,7 +535,7 @@ export async function recognizeCard(image, side, options = {}) {
     const corrected = driverNames[index] ? voteDriverName(index, seen[key] || [], seen.notes || []) || driverNames[index] : ''
     // 備註裏的名字也換成投票結果（備註的字小，常錯一兩個字）
     if (corrected && corrected !== driverNames[index] && corrected.length === driverNames[index].length) result.notes = result.notes.replace(driverNames[index], corrected)
-    const agreed = corrected && result[key] === corrected
+    const agreed = driverAgreed(corrected, result[key], driverNames[index])
     result[key] = corrected
     fieldStatus[key] = corrected ? { value: corrected, status: agreed ? 'ok' : 'uncertain', confidence: agreed ? Math.max(fieldStatus[key]?.confidence || 0, 80) : Math.min(fieldStatus[key]?.confidence || 55, 79) } : makeFieldStatus('', fieldStatus[key]?.confidence || 0)
   }

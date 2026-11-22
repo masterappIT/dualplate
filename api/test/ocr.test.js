@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 import {
+  cardDriverAgreed,
   cardFields,
   chooseCardCandidate,
   voteCardDriverName,
@@ -238,6 +239,13 @@ test('駕駛人：備註裏沒有這個位置的名字、或備註不是由主�
   const notes = [{ raw: '主司机:张伟明(1234),副司机:刘子豪(5678),', confidence: 80 }]
   assert.equal(voteCardDriverName(2, [{ raw: '黄志强', confidence: 90 }], notes), '')
   assert.equal(voteCardDriverName(0, [{ raw: '黄志强', confidence: 90 }], [{ raw: '副司机:刘子豪(5678)。', confidence: 80 }]), '')
+})
+
+test('駕駛人：逐欄多次讀錯、備註讀對時，投票結果只和逐欄一致不算正常', () => {
+  assert.equal(cardDriverAgreed('刘子衰', '刘子衰', '刘子豪'), false)
+  assert.equal(cardDriverAgreed('刘子豪', '刘子衰', '刘子豪'), false)
+  assert.equal(cardDriverAgreed('刘子豪', '刘子豪', '刘子豪'), true)
+  assert.equal(cardDriverAgreed('', '', ''), false)
 })
 
 test('請予辦理：卡上的分號讀成逗號時仍認得', () => {
