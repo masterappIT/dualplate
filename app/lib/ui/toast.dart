@@ -10,11 +10,15 @@ import 'tokens.dart';
 
 _Toast? _current;
 
-void showToast(BuildContext context, String title, {Duration duration = ToastStyle.duration}) {
+void showToast(BuildContext context, String title, {Duration duration = ToastStyle.duration}) => showToastOn(Overlay.of(context, rootOverlay: true), title, duration: duration);
+
+// 頁面先關掉、稍後才提示時用（3c 新增公司：返回後 400ms 才提示）：先記下根浮層
+void showToastOn(OverlayState overlay, String title, {Duration duration = ToastStyle.duration}) {
+  if (!overlay.mounted) return;
   _current?.remove();
   final toast = _Toast(title, duration);
   _current = toast;
-  Overlay.of(context, rootOverlay: true).insert(toast.entry);
+  overlay.insert(toast.entry);
 }
 
 // 對應 uni.hideToast()

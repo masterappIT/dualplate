@@ -546,3 +546,32 @@ abstract final class DatePickerStyle {
   static const columnPad = 10.0; // 每欄左右多留的空間（防止放大的選中行被欄邊裁掉）
   static const duration = Duration(milliseconds: 250); // 由下滑上（未能從截圖量，照 iOS 鍵盤）
 }
+
+// ── 3c 出租和帳目（mobile/src/pages/rental、billing、reports、messages 和 components/SignaturePad.vue 的 <style scoped>）──
+// 手寫簽名框：wd-signature 預設樣式（$-signature-bg 白、$-signature-border 1px $-color-gray-5、$-signature-radius 4px）＋ SignaturePad.vue 的設定
+abstract final class SignatureStyle {
+  static const height = 160.0; // :height="160"（畫布高，不含框線）
+  static const background = Color(0xFFFFFFFF); // background-color="#ffffff"（輸出的 PNG 也先鋪白底）
+  static const border = Color(0xFFC8C9CC); // $-color-gray-5
+  static const pen = Color(0xFF14201B); // pen-color="#14201B"
+  static const lineWidth = 2.5; // :line-width="2.5"
+  static const footerGap = 8.0; // .wd-signature__footer margin-top（footer 插槽是空的，仍佔外距）
+}
+
+abstract final class BillingStyle {
+  static const white = Color(0xFFFFFFFF); // .due-amount、.due-clear color:#fff
+}
+
+abstract final class ReportsStyle {
+  static const white = Color(0xFFFFFFFF); // .cover-title、.cover-net color:#fff
+}
+
+abstract final class MessagesStyle {
+  static const draftHeight = 96.0; // .draft{height:96px}
+}
+
+abstract final class RentalStyle {
+  static const agreementMinHeight = 240.0; // .agreement{min-height:240px}
+  static const signMaxWidth = 280.0; // .sign-image{max-width:280px}
+  static const signBlankHeight = 64.0; // .sign-blank{height:64px}
+}
