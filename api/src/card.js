@@ -34,7 +34,11 @@ const rectangles = {
   }
 }
 
+// 商號太長時英文轉到第二行（例：CO / ., LIMITED）），在商號下面另讀一行
+const companyMore = { left: 206, top: 262, width: 750, height: 52 }
+
 const fieldConfig = {
+  companyMore: { language: 'eng', whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz .,&()'-", psm: '7' },
   cardNumber: { language: 'eng', whitelist: '0123456789', psm: '7' },
   serial: { language: 'eng', whitelist: '0123456789', psm: '7' },
   mainlandPlate: { language: 'chi_sim', whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789粵粤港澳', psm: '7' },
@@ -67,6 +71,9 @@ const traditionalToSimplified = value => String(value ?? '').replace(/[華]/g, '
 const simplify = value => traditionalToSimplified(value).replace(/繁體|繁体/g, '')
 const tidy = value => simplify(value).replace(/[\n\r]/g, ' ').replace(/\s+/g, ' ').replace(/^[：:，,;；\s]+/, '').trim()
 const compact = value => tidy(value).replace(/[\s·•,，;；:：]/g, '')
+const places = '深圳|东莞|東莞|广州|廣州|珠海|中山|佛山|惠州|江门|江門|肇庆|肇慶|汕头|汕頭|清远|清遠|河源|韶关|韶關|湛江|茂名|阳江|陽江|云浮|雲浮|梅州|潮州|揭阳|揭陽|汕尾|香港|澳门|澳門|上海|北京|天津|重庆|重慶|厦门|廈門|福建|广东|廣東|中国|中國'
+const placeBracket = new RegExp(`（\\s*(${places})\\s*[^）\\s]?\\s*(?=有限|股份|集团|集團|实业|實業|科技|贸易|貿易)`, 'g')
+const fixPlaceBracket = value => value.includes('）') ? value : value.replace(placeBracket, '（$1）')
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value))
 const emptyCard = () => Object.fromEntries(cardFields.map(key => [key, '']))
 
@@ -111,7 +118,7 @@ export function normalizeCardField(key, value) {
     const match = candidates.find(item => item.length === wanted || (key === 'serial' && item.length === 7) || (key === 'cardNumber' && item.length >= 6)) || ''
     return key === 'serial' && match.length === 7 ? `0${match}` : match
   }
-  if (key === 'company' || key === 'contractor') return text.replace(/[，、]/g, ',').replace(/\bC0\b/gi, 'CO').replace(/\s+([,.)])/g, '$1').replace(/([(.])\s+/g, '$1').replace(/\s+/g, ' ').replace(/\s+(?=[\u4e00-\u9fff])/g, '').replace(/(?<=[\u4e00-\u9fff])\s+(?=[A-Za-z])/g, ' ')
+  if (key === 'company' || key === 'contractor') return fixPlaceBracket(text.replace(/\s*[《〈<「(（]\s*/g, '（').replace(/\s*[》〉>」)）]/g, '）')).replace(/[，、]/g, ',').replace(/\bC0\b/gi, 'CO').replace(/\s+([,.)])/g, '$1').replace(/([(.])\s+/g, '$1').replace(/\s+/g, ' ').replace(/\s+(?=[\u4e00-\u9fff])/g, '').replace(/(?<=[\u4e00-\u9fff])\s+(?=[A-Za-z])/g, ' ')
   // Mainland plates never use the letters I and O, so those are misread digits.
   if (key === 'mainlandPlate') return compact(text).toUpperCase().replace(/^粤/, '粵').replace(/[洪鸿]/g, '港').replace(/^(粵Z)(.*)([港澳])$/, (all, head, body, tail) => head + body.replace(/I/g, '1').replace(/O/g, '0') + tail)
   if (key === 'localPlate') return compact(text).toUpperCase()
@@ -334,9 +341,41 @@ function chooseCandidate(field, candidates, context) {
   const counts = new Map(valid.map(candidate => [candidate.value, 0]))
   for (const candidate of valid) counts.set(candidate.value, counts.get(candidate.value) + 1)
   valid.sort((left, right) => counts.get(right.value) - counts.get(left.value) || right.confidence - left.confidence)
+  if (valid[0] && (field === 'company' || field === 'contractor')) {
+    // 逐字投票：每次試讀常錯不同的一兩個字，所以同樣長度的讀法逐個位置按把握度加權取最多的字。
+    // 開頭的中文部分用所有讀法（後面讀壞了的也算），其餘部分只用合格的讀法
+    const head = value => (value.match(/^[\u3400-\u9fff]+/) || [''])[0]
+    const vote = (text, peers) => [...text].map((char, index) => {
+      const tally = new Map()
+      for (const peer of peers) tally.set(peer.text[index], (tally.get(peer.text[index]) || 0) + Math.max(1, peer.confidence))
+      return [...tally.entries()].sort((a, b) => b[1] - a[1])[0][0]
+    }).join('')
+    const winner = valid[0].value, winnerHead = head(winner), tail = winner.slice(winnerHead.length)
+    const heads = candidates.map(candidate => { const value = normalizeCardField(field, candidate.raw); return { text: head(value), confidence: candidate.confidence } }).filter(peer => peer.text.length === winnerHead.length)
+    const tails = valid.filter(candidate => head(candidate.value).length === winnerHead.length).map(candidate => ({ text: candidate.value.slice(winnerHead.length), confidence: candidate.confidence })).filter(peer => peer.text.length === tail.length)
+    const voted = vote(winnerHead, heads) + vote(tail, tails)
+    // 拼出來的名稱沒有一次試讀完整讀到，可能仍有錯字，標為待核對
+    if (validateCardField(field, voted, context)) return { value: voted, confidence: valid.some(candidate => candidate.value === voted) ? valid[0].confidence : Math.min(valid[0].confidence, 69) }
+  }
   if (valid[0]) return { value: valid[0].value, confidence: valid[0].confidence }
   return { value: '', confidence: Math.max(0, ...candidates.map(candidate => candidate.confidence)) }
 }
+
+// 商號只有左括號（英文名轉了行）時，接上商號下面那一行：開頭的標點（例：「.,」）+ 英文直到右括號。
+// 按英文部分投票，至少兩次讀到一樣才接上；兩行拼起來的名稱標為待核對
+function joinCompanySecondLine(chosen, reads) {
+  if (!chosen.value.includes('（') || chosen.value.includes('）')) return chosen
+  const lines = reads.map(read => tidy(read.raw).toUpperCase().match(/^([^A-Z]*?)([A-Z][A-Z .,&'-]*?)\s*[)）]/)).filter(match => match && /[A-Z]{3}/.test(match[2]))
+  const counts = new Map(lines.map(match => [match[2], lines.filter(item => item[2] === match[2]).length]))
+  const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]
+  if (!best || best[1] < 2) return chosen
+  const prefix = lines.filter(match => match[2] === best[0]).map(match => match[1]).join('')
+  const join = /[.,]/.test(prefix) && /\bCO$/.test(chosen.value) ? '., ' : ' '
+  return { value: `${chosen.value}${join}${best[0]}）`, confidence: Math.min(chosen.confidence, 69) }
+}
+
+export const chooseCardCandidate = chooseCandidate
+export const joinCardCompanyLine = joinCompanySecondLine
 
 function layoutCandidates(field, lines) {
   const candidates = []
@@ -418,6 +457,8 @@ export async function recognizeCard(image, side, options = {}) {
     const modes = ['company', 'contractor', 'crossing', 'driver1', 'driver2', 'driver3', 'color', 'purpose', 'notes'].includes(candidateField) ? ['8', '6'] : [fieldConfig[candidateField]?.psm || '7']
     return Promise.all(variants.flatMap(variant => modes.map(psm => recognizeCandidate(variant, candidateField, located[field], psm))))
   }))
+  const moreReads = side === 'front' ? await Promise.all(variants.map(variant => recognizeCandidate(variant, 'companyMore', { ...companyMore, left: located.company.left, width: located.company.width }, '7'))) : []
+  if (options.debug) console.log('OCR MORE', JSON.stringify(moreReads))
   for (const [index, field] of fields.entries()) {
     const candidateField = field === 'validity' ? 'validFrom' : field
     const candidates = [...reads[index], ...layoutCandidates(field, layoutLines)]
@@ -435,7 +476,7 @@ export async function recognizeCard(image, side, options = {}) {
       }
       continue
     }
-    const chosen = chooseCandidate(field, candidates, options)
+    const chosen = field === 'company' ? joinCompanySecondLine(chooseCandidate(field, candidates, options), moreReads) : chooseCandidate(field, candidates, options)
     result[field] = correctTraditionalField(field, chosen.value)
     fieldStatus[field] = makeFieldStatus(chosen.value, chosen.confidence)
   }

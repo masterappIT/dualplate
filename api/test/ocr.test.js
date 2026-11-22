@@ -6,7 +6,9 @@ import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 import {
   cardFields,
+  chooseCardCandidate,
   extractValidityDates,
+  joinCardCompanyLine,
   normalizeCardField,
   recognizeCard,
   validateCardField
@@ -152,6 +154,57 @@ test('OCR validators normalize and reject invalid values for every card field', 
   }
   assert.deepEqual(extractValidityDates('有效期：2025-11-27 至 2027-01-01'), { validFrom: '2025-11-27', validTo: '2027-01-01' })
   assert.deepEqual(extractValidityDates('2027-01-01 至 2025-11-27'), { validFrom: '', validTo: '' })
+})
+
+// 2026-11-23 真卡上的全形括號常被讀成《〈，內承單位的右括號常被讀成一個字，整欄因此不合格
+test('商號、內承單位：讀成《〈的括號統一成全形括號', () => {
+  assert.equal(normalizeCardField('company', '大明实业有限公司 《DAMING INDUSTRIAL CO'), '大明实业有限公司（DAMING INDUSTRIAL CO')
+  assert.equal(normalizeCardField('company', '大明实业有限公司 〈DAMING CO., LIMITED〉'), '大明实业有限公司（DAMING CO., LIMITED）')
+  assert.equal(normalizeCardField('company', '大明有限公司(DAMING CO., LIMITED)'), '大明有限公司（DAMING CO., LIMITED）')
+})
+
+test('內承單位：括號裏是城市名、右括號讀成一個字時改回右括號', () => {
+  for (const misread of ['大明包装制品《深圳和有限公司', '大明包装制品《深圳大有限公司', '大明包装制品(深圳)有限公司', '大明包装制品（深圳 有限公司']) {
+    const value = normalizeCardField('contractor', misread)
+    assert.equal(value, '大明包装制品（深圳）有限公司', misread)
+    assert.equal(validateCardField('contractor', value), true, misread)
+  }
+})
+
+test('內承單位：已有右括號或括號裏不是城市名時不改字', () => {
+  assert.equal(normalizeCardField('contractor', '大明（集团）有限公司'), '大明（集团）有限公司')
+  assert.equal(normalizeCardField('contractor', '大明包装制品（深圳市）有限公司'), '大明包装制品（深圳市）有限公司')
+  assert.equal(normalizeCardField('contractor', '深圳市大明软件技术服务有限公司'), '深圳市大明软件技术服务有限公司')
+})
+
+test('商號：每次讀錯的字不同時逐字投票取最多的字', () => {
+  const reads = [
+    ['大明实业有限公司 《DAMING INDUSTRIAL CO', 72], ['犬明实业有限公司 (DAMING INDUSTRIAL CO', 80],
+    ['大朋实业有限公司 (DAMING INDUSTRIAL CO', 76], ['大明实业有限公司 〈DAMING INDUSTRIAL CO', 70],
+    ['天明实业有限公司 (DAMING INDUSTRIAL CO', 60]
+  ].map(([raw, confidence]) => ({ raw, confidence }))
+  const chosen = chooseCardCandidate('company', reads, {})
+  assert.equal(chosen.value, '大明实业有限公司（DAMING INDUSTRIAL CO')
+  assert.ok(chosen.confidence >= 70, '有試讀完整讀到投票結果，維持原把握度')
+})
+
+test('商號：投票拼出沒有一次讀到的名稱時標為待核對', () => {
+  const reads = [['犬明实业有限公司', 80], ['大朋实业有限公司', 78], ['大明实业有眼公司', 76]].map(([raw, confidence]) => ({ raw, confidence }))
+  const chosen = chooseCardCandidate('company', reads, {})
+  assert.equal(chosen.value, '大明实业有限公司')
+  assert.ok(chosen.confidence < 70)
+})
+
+test('商號：英文名轉行時接上第二行，至少兩次讀到一樣才接', () => {
+  const first = { value: '大明实业有限公司（DAMING INDUSTRIAL CO', confidence: 80 }
+  const reads = ['., LIMITED)          ,\n', '., LIMITED )\n', '. LIMITED)\n', '-, LIMITED)     If\n', ' LIMITED) , -.  ae\n'].map(raw => ({ raw, confidence: 50 }))
+  const joined = joinCardCompanyLine(first, reads)
+  assert.equal(joined.value, '大明实业有限公司（DAMING INDUSTRIAL CO., LIMITED）')
+  assert.ok(joined.confidence < 70, '兩行拼起來的名稱標為待核對')
+  assert.deepEqual(joinCardCompanyLine(first, [{ raw: '., LIMITED)', confidence: 90 }, { raw: 'ae ee', confidence: 20 }]), first, '只讀到一次不接')
+  const closed = { value: '大明有限公司（DAMING CO., LIMITED）', confidence: 80 }
+  assert.deepEqual(joinCardCompanyLine(closed, reads), closed, '括號已完整不接')
+  assert.equal(joinCardCompanyLine({ value: '大明实业有限公司（DAMING', confidence: 80 }, [{ raw: 'TRADING LIMITED)', confidence: 50 }, { raw: 'TRADING LIMITED )', confidence: 50 }]).value, '大明实业有限公司（DAMING TRADING LIMITED）')
 })
 
 test('synthetic approval cards never return confidently wrong values', async () => {
