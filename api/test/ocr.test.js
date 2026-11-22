@@ -207,6 +207,13 @@ test('商號：英文名轉行時接上第二行，至少兩次讀到一樣才�
   assert.equal(joinCardCompanyLine({ value: '大明实业有限公司（DAMING', confidence: 80 }, [{ raw: 'TRADING LIMITED)', confidence: 50 }, { raw: 'TRADING LIMITED )', confidence: 50 }]).value, '大明实业有限公司（DAMING TRADING LIMITED）')
 })
 
+test('請予辦理：卡上的分號讀成逗號時仍認得', () => {
+  for (const misread of ['变更驾驶人，', '变更驾驶人,', '变更驾驶人;', '变更驾驶人；']) {
+    assert.equal(normalizeCardField('purpose', misread), '变更驾驶人', misread)
+    assert.equal(validateCardField('purpose', normalizeCardField('purpose', misread)), true, misread)
+  }
+})
+
 test('synthetic approval cards never return confidently wrong values', async () => {
   const cards = await makeSyntheticCards()
   const runs = {

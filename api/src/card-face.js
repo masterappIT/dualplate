@@ -18,8 +18,15 @@ async function analyse(buffer) {
   const distance = i => Math.hypot(data[i] - background[0], data[i + 1] - background[1], data[i + 2] - background[2])
   const noise = samples.map(distance).sort((a, b) => a - b)[Math.floor(samples.length * 0.9)]
   const threshold = Math.max(40, noise * 1.5), mask = new Uint8Array(w * h)
-  for (let i = 0; i < w * h; i++) mask[i] = distance(i * 3) > threshold ? 1 : 0
-  return { w, h, mask, background }
+  // solid：「範圍內是不是卡」用寬一點的門檻（背景雜訊本身）。2026-11-23 大理石紋桌面雜訊大，門檻 1.5 倍時卡上的字和陰影
+  // 都不算卡，找對了的卡邊因範圍內只有 87% 是卡被丟掉；白卡放淺色桌面時卡和桌面差不到 40，仍然不過
+  const loose = Math.max(40, noise), solid = new Uint8Array(w * h)
+  for (let i = 0; i < w * h; i++) {
+    const d = distance(i * 3)
+    mask[i] = d > threshold ? 1 : 0
+    solid[i] = d > loose ? 1 : 0
+  }
+  return { w, h, mask, solid, background }
 }
 // 某一段行（或列）裏，每一列（或行）屬於卡的比例
 function profile({ w, h, mask }, vertical, from, to) {
@@ -77,7 +84,7 @@ export async function cardFace(bytes) {
   if (width < frameWidth * 0.6 || Math.abs(width / height / RATIO - 1) > 0.1) return fallback()
   // 卡面要和桌面分得清（框內幾乎全部都不是桌面色）；白卡放白桌時只有文字分得出，邊界不可靠，改用框內
   let inside = 0
-  for (let y = found.top; y <= found.bottom; y++) for (let x = found.left; x <= found.right; x++) inside += map.mask[y * map.w + x]
+  for (let y = found.top; y <= found.bottom; y++) for (let x = found.left; x <= found.right; x++) inside += map.solid[y * map.w + x]
   if (inside / (width * height) < 0.9) return fallback()
   const image = await sharp(source).extract({ left: found.left * SCALE, top: found.top * SCALE, width: Math.min(width * SCALE, MARGIN_W - found.left * SCALE), height: Math.min(height * SCALE, MARGIN_H - found.top * SCALE) })
     .resize(FACE_W, FACE_H, { fit: 'fill' }).jpeg({ quality: 90 }).toBuffer()

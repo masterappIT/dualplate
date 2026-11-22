@@ -126,7 +126,8 @@ export function normalizeCardField(key, value) {
   if (key === 'currentApproval' || key === 'previousApproval') return normalizeApproval(text)
   if (key === 'color') return colors.get(text.replace(/\s+/g, '')) || text.replace(/\s+/g, '').replace(/[;；]$/, '')
   if (key === 'seats') return compact(text).replace(/噸/g, '吨')
-  if (key === 'crossing' || key === 'purpose') return text.replace(/[;；]$/, '').replace(/\s+/g, '')
+  // 卡上「变更驾驶人;」的分號常讀成逗號
+  if (key === 'crossing' || key === 'purpose') return text.replace(/[;；,，]$/, '').replace(/\s+/g, '')
   if (key === 'validFrom' || key === 'validTo') return normalizeDate(text)
   // OCR spaces out Chinese characters; spaces between them carry no meaning.
   if (key === 'notes') return text.replace(/(?<=[\u3400-\u9fff])\s+(?=[\u3400-\u9fff])/g, '').replace(/\s*([:：,，()（）])\s*/g, '$1').replace(/^注[,，:：]?/, '')
@@ -192,7 +193,8 @@ const labelAliases = {
 }
 
 function normalizeLabel(value) {
-  return compact(value).replace(/[号號]/g, '号').replace(/[单單]/g, '單')
+  // 標籤中間常多讀出引號（例：「有效”期」）
+  return compact(value).replace(/[“”"'‘’`「」]/g, '').replace(/[号號]/g, '号').replace(/[单單]/g, '單')
 }
 
 function locateFieldRectangles(side, lines) {
@@ -209,6 +211,12 @@ function locateFieldRectangles(side, lines) {
       const rightEdge = clamp(line.bbox.x1 + 12, rect.left, rect.left + Math.min(100, rect.width / 2))
       rect.left = rightEdge
       rect.width = Math.max(40, Math.min(rect.width - (rightEdge - rectangles[side][field].left), TEMPLATE_WIDTH - rect.left - 2))
+    }
+    // 上下對準標籤那一行（版面圖是卡面的兩倍）：卡在框內偏一點時，固定位置會切到下一行的頂部，
+    // 例如有效期切進備註、整欄讀不出（2026-11-23 真機）。只用於單行欄位，行高合理、偏差 20 以內才移
+    if (field !== 'notes' && field !== 'company') {
+      const center = (line.bbox.y0 + line.bbox.y1) / 4, lineHeight = (line.bbox.y1 - line.bbox.y0) / 2
+      if (lineHeight >= 15 && lineHeight < rect.height && Math.abs(center - (rect.top + rect.height / 2)) <= 20) rect.top = Math.round(center - rect.height / 2)
     }
   }
   return located
@@ -481,7 +489,13 @@ export async function recognizeCard(image, side, options = {}) {
     fieldStatus[field] = makeFieldStatus(chosen.value, chosen.confidence)
   }
   const driverNames = extractDriverNames(result.notes)
+  // 備註以「。」結尾才算讀完整；沒讀到第二行時，備註裏沒有的駕駛人保留逐欄讀到的名字（標為待核對），不要清掉
+  const notesComplete = /。$/.test(result.notes)
   if (driverNames.length) for (const [index, key] of ['driver1', 'driver2', 'driver3'].entries()) {
+    if (!driverNames[index] && !notesComplete && result[key]) {
+      fieldStatus[key] = { ...fieldStatus[key], status: 'uncertain', confidence: Math.min(fieldStatus[key]?.confidence || 0, 79) }
+      continue
+    }
     const corrected = driverNames[index] || ''
     const agreed = corrected && result[key] === corrected
     result[key] = corrected
