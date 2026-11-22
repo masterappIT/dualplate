@@ -204,6 +204,10 @@ Sidebar（深綠實心） │ Topbar：麵包屑 ………… ⌘K 搜尋 · 今
 | `UniSwitch` | `lib/ui/uni_switch.dart` | `<switch>` |
 | `showLoading`、`hideLoading` | `lib/ui/loading.dart` | `uni.showLoading` |
 | `previewImages` | `lib/ui/image_preview.dart` | `uni.previewImage`（未做長按保存） |
+| `SignaturePad`、`SignatureController` | `lib/business/signature_pad.dart` | `SignaturePad.vue`（手寫簽名，輸出白底 PNG data URL） |
+| `CompanyEditor` | `lib/business/company_editor.dart` | `CompanyEditor.vue`（修改公司資料表單；`main()` 經 `CompaniesPage.editor` 接上） |
+| `UniTextArea` | `lib/business/uni_textarea.dart` | `<textarea>` |
+| `showToastOn` | `lib/ui/toast.dart` | 頁面先關、稍後才提示時用（先記下根浮層） |
 | 牌照詳情頁內組件（`Blk`、`DBtn`、`PickerBox`、`TextArea`、`StatusLabel`、`EditorBox`、`FoldHead` 等） | `lib/pages/plate_detail/plate_detail_widgets.dart` | 詳情頁的頁內樣式類別；階段 3 其他頁要用時搬到 `lib/ui/` |
 
 共用邏輯（`lib/core/`）：`api.dart`（`api`、`publicApi`、401 自動登出並打開登入頁、條款檢查）、`session.dart`（登入狀態、`isSelfManaged`）、`wording.dart`（自管／托管用語、`money`、`friendlyDate`、`daysLeft`、`phoneText`、`requestTone`、`clientStage` 等，對應 `lib/api.js` 同名函數）、`js.dart`（照 JavaScript 的真假值和字串轉換，讓移植的判斷結果一樣）。

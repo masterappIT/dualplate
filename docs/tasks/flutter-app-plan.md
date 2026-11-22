@@ -111,7 +111,7 @@
 |---|---|---|---|---|
 | 1 | 骨架和登入 | 組件樣板和登入頁與現有 App 一比一；iOS、Android 都能登入，四個分頁正常 | 約 1 週 | 收尾（管理者 2026-11-17 決定）；1f 未做，留待讀卡調整時一併處理 |
 | 2 | 掃描批文卡和牌照詳情（關卡） | 同一批實卡，Flutter 版讀對的欄數不低於現有 App；管理者決定繼續 | 約 1 週 | 收尾（管理者 2026-11-17 決定）：2a–2c 已合併；2d 真機讀卡未過，問題見第九節；Flutter 其餘部分全部完成後再回來調整讀卡 |
-| 3 | 其餘頁面（3-0 預備、3a–3d 四批、3e 收尾） | 第八節清單的頁面和組件全部一比一，三種帳號走過 | 2–3 週 | 進行中：管理者 2026-11-21 批准，逐批做；3-0 完成（1a49ad9）；3a 已合併（331da7c）；3b 已合併（2c2cabd）；3c 等管理者指令 |
+| 3 | 其餘頁面（3-0 預備、3a–3d 四批、3e 收尾） | 第八節清單的頁面和組件全部一比一，三種帳號走過 | 2–3 週 | 進行中：管理者 2026-11-21 批准，逐批做；3-0 完成（1a49ad9）；3a 已合併（331da7c）；3b 已合併（2c2cabd）；3c 已合併（0d7c356）；3d 等管理者指令 |
 | 4 | App 專用功能 | 啟動畫面、首頁緩存、App 內更新、條款同意框、返回鍵全部和現在一樣 | 3–4 天 | 未開始 |
 | 5 | 發布 | iOS 1.1.0 通過審核上架；Android 新 APK 放上網站；真機從舊版升級成功 | 約 1 週 | 未開始 |
 | 6 | 清理 | `mobile/` 不再有 App 專用代碼；舊 DCloud 專案移除 | 1–2 天（上線穩定約兩週後） | 未開始 |
@@ -326,6 +326,9 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 | 2026-11-16 | 牌照詳情 | 打開時 onLoad、onShow 各載入一次，同一批請求送兩次。Flutter 版只載一次，**沒有照做** | |
 | 2026-11-16 | 牌照詳情 | 切換 90 天過關開關時，「今天已過關」按鈕也變成「記錄中」（共用 crossingBusy；Flutter 版照舊） | |
 | 2026-11-16 | 牌照詳情 | 「已過關」印章蓋在提醒開關上（Flutter 版照舊） | |
+| 2026-11-22 | 出租 | 「上傳 PDF」顯示 JavaScript 錯誤原文 `uni.chooseFile is not a function`（3c 在模擬器截圖證實；Flutter 版照舊） | |
+| 2026-11-22 | 出租 | 已上傳的簽署本是 PDF 時，按「查看」只把整串 data URL 複製到剪貼簿（按原始碼推斷，未在現有 App 試；Flutter 版照舊） | |
+| 2026-11-22 | 新增出租 | 結束日期不受起租日限制（同 3b 新到期日的情況；Flutter 版照舊） | |
 
 ## 八、代替清單（全部打勾才算可以代替）
 
@@ -351,13 +354,13 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 | requests | 申請辦理 | 3b | 完成（2c2cabd） |
 | request-detail | 辦理進度 | 3b | 完成（2c2cabd） |
 | scope | 委託內容 | 3b | 完成（2c2cabd） |
-| rental | 出租 | 3c | 未做 |
-| rental-new | 新增出租 | 3c | 未做 |
-| billing | 帳單 | 3c | 未做 |
-| reports | 月報 | 3c | 未做 |
-| messages | 聯絡我們 | 3c | 未做 |
-| profile | 我的資料 | 3c | 未做 |
-| company-new | 新增公司 | 3c | 未做 |
+| rental | 出租 | 3c | 完成（0d7c356） |
+| rental-new | 新增出租 | 3c | 完成（0d7c356） |
+| billing | 帳單 | 3c | 完成（0d7c356） |
+| reports | 月報 | 3c | 完成（0d7c356） |
+| messages | 聯絡我們 | 3c | 完成（0d7c356） |
+| profile | 我的資料 | 3c | 完成（0d7c356） |
+| company-new | 新增公司 | 3c | 完成（0d7c356） |
 | signup | 申請使用 | 3d | 未做 |
 | terms | 服務條款及私隱聲明 | 3d | 未做 |
 | close-account | 註銷帳號 | 3d | 未做 |
@@ -377,7 +380,7 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 | CardCapture（原生相機、對準框、找卡邊、自動拍） | 2 | 已合併（2a、2b）；真 iPhone 對焦和找卡邊未過（2026-11-17），Flutter 其餘部分完成後再改 |
 | AdvisorCard、ContactCard、WelcomeGuide | 3a | 完成（331da7c）：ContactCard 擴充登入後版本 |
 | iOS 鍵盤上方工具列（WebView 系統畫的「上一項／下一項／完成」） | 1 | 已做（1d），未和現有 App 並排對照 |
-| CompanyEditor、SignaturePad | 3c | 未做 |
+| CompanyEditor、SignaturePad | 3c | 完成（0d7c356） |
 
 ### 共用邏輯和 App 專用功能
 
@@ -489,6 +492,17 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
   - QR 碼點擊放大未做；`/terms`、`/signup` 是空白佔位頁。
 - 移植時發現登入頁五個現有問題，已記在第七節，Flutter 版照舊。
 - 用審查帳號登入時的四段錄影（1d 的 iOS 兩次、Android 一次，和管理者手動登入那次）畫面上看得到手機號碼，管理者決定刪除，已刪除；截圖和沒有登入的錄影保留。
+
+### 2026-11-22（3c 合併）
+
+- 管理者「開工 3c……完成後直接提交」：3c 一個 session 在分支做完（2b6b967、1a98316），負責人合併到 `main`（0d7c356），未推送。
+- 內容：rental、rental-new、billing、reports、messages、profile、company-new 七頁；SignaturePad（CustomPainter，輸出白底 PNG data URL，尺寸 = 邏輯尺寸 × 像素比，同現有 App）、CompanyEditor、UniTextArea。
+- 合併後負責人重跑一次：`flutter analyze` 無問題；`flutter test` 1308 通過（3c session 在沒有卡樣本的 worktree 為 1302 通過、6 跳過；新增 135 個）。沒有再開模擬器。
+- 共用檔改動（都向下兼容）：`Field` 加可選 `maxLength`；`toast.dart` 加 `showToastOn`（頁面先關、稍後才提示時用）；`Session.updateUser`（我的資料改顯示名稱）；`main()` 接 `CompaniesPage.editor = CompanyEditor.builder`（放 `main()` 而不在 `DualplateApp`，3a 三個佔位測試不用改；3e 可改為在 `DualplateApp` 接並改那三個測試）；`tokens.dart` 末尾加 `SignatureStyle`、`BillingStyle`、`ReportsStyle`、`MessagesStyle`、`RentalStyle`。
+- 模擬器上修好：簽名框直向筆畫被頁面捲動搶走；新增公司返回後 400ms 提示時頁面已關會崩潰；新增出租「以誰的名義出租」低 8pt（網頁外距合併）。
+- 截圖在 `/private/tmp/dp3/3c-shots/`（`f-` Flutter、`l-` 現有 App、`pair-` 並排）。點擊工具 `/private/tmp/dp3/uitest/` 已去掉點擊前等「空閒」，每下約 1 秒；swipe 速度不能為 0，否則工具退出。
+- 已知差異（未改）：CompanyEditor 下接「每月報帳」間距 Flutter 20、現有 App 12（3a `filingBox` 自帶上距）；協議輸入框英文數字字寬較寬（字型）；照片選單字略大（3b 組件）；`icon:'success'` 提示只顯示文字（同 3b）。
+- 未截、留 3e：現有 App 的寫入流程只截了開始畫面（點擊工具不能打字）；現有 App 沒有入口的組合（自管月報、空白自管帳單／出租、托管聯絡我們）；有內容的月報（三個帳號都沒有月報，只有單元測試）；納稅人類型選擇器；Android。
 
 ### 2026-11-22（3a、3b 清理）
 
