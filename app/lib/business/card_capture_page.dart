@@ -13,6 +13,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:image_picker/image_picker.dart';
+import '../shell/system_bars.dart';
 import '../ui/toast.dart';
 import '../ui/tokens.dart';
 import 'card_edges.dart';
@@ -375,7 +376,8 @@ class CardCapturePageState extends State<CardCapturePage> {
     final f = _frame;
     final white = ts(Fs.body, color: CaptureStyle.fg);
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light, // navigationBarTextStyle white
+      // navigationBarTextStyle white；安卓底部導航列那一條黑色（nav-bar.js PAGE_COLORS）
+      value: pageStyle(SystemUiOverlayStyle.light, CaptureStyle.bg),
       child: ColoredBox(
         color: CaptureStyle.bg,
         child: Align(

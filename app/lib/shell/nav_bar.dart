@@ -4,6 +4,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import '../ui/dialogs.dart';
+import 'system_bars.dart';
 import '../ui/tokens.dart';
 
 class NavBar extends StatelessWidget {
@@ -116,7 +117,8 @@ class AppPage extends StatelessWidget {
         color: C.paper,
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           NavBar(title, back: back),
-          Expanded(child: MediaQuery.removePadding(context: context, removeTop: true, child: DialogArea(child: child ?? const SizedBox.shrink()))),
+          // 安卓：底部導航列那一條畫紙色，在彈窗區之內，遮罩蓋得到（system_bars.dart BottomStrip，nav-bar.js）
+          Expanded(child: MediaQuery.removePadding(context: context, removeTop: true, child: DialogArea(child: BottomStrip(color: C.paper, child: child ?? const SizedBox.shrink())))),
         ]),
       );
 }

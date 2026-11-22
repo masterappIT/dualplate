@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- App 內更新：只開放 App 自己資料夾裏的 _downloads/（下載的新版 APK）給系統安裝畫面讀取 -->
+<paths>
+    <files-path name="downloads" path="_downloads/" />
+</paths>

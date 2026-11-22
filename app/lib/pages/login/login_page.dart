@@ -1,12 +1,14 @@
 // 登入頁：一比一照搬 mobile/src/pages/login/login.vue（App 端）。文字逐字照抄，數值見 tokens.dart 的 LoginStyle。
 // 上半：深通行綠畫布（扭索紋、口岸網絡、立體車牌示例）；下半：證件式登入卡（手機號碼／電郵、密碼、錯誤提示、聯絡方式、條款連結）。
 // 登入成功：卡右上蓋「已登入」印章、畫布擴散，700ms 後轉到首頁分頁（uni.switchTab）。
-// 不搬：微信登入和綁定（只在小程序）；安卓 App 內更新檢查（階段 4）。
+// 不搬：微信登入和綁定（只在小程序）。安卓 App 每次顯示本頁時檢查新版本（business/app_update.dart，階段 4）。
 import 'package:flutter/material.dart' show Material, MaterialType, TextField, InputDecoration, InputBorder;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
+import '../../business/app_update.dart';
+import '../../business/page_show.dart';
 import '../../business/plates.dart';
 import '../../business/stamp_mark.dart';
 import '../../core/api.dart';
@@ -14,6 +16,7 @@ import '../../core/session.dart';
 import '../../ui/base.dart';
 import '../../ui/keyboard_bar.dart';
 import '../../ui/tokens.dart';
+import '../../shell/system_bars.dart' show pageStyle;
 import 'area_picker.dart';
 import 'contact_card.dart';
 import 'ports_canvas.dart';
@@ -75,7 +78,13 @@ class LoginPage extends StatefulWidget {
   State<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMixin {
+class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMixin, PageShow {
+  // onShow(() => appUpdate.check())
+  @override
+  String get showPath => '/login';
+  @override
+  void onShow() => appUpdate.check(context);
+
   final phone = TextEditingController(), email = TextEditingController(), password = TextEditingController();
   final scroll = ScrollController();
   final ports = PortsController();
@@ -184,7 +193,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     final heroHeight = (media.size.height * (wide ? LoginStyle.heroVhWide : LoginStyle.heroVh) + LoginStyle.heroExtra).clamp(LoginStyle.heroMin, double.infinity);
     final overlap = wide ? LoginStyle.sheetOverlapWide : LoginStyle.sheetOverlap;
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light, // navigationBarTextStyle white
+      // navigationBarTextStyle white；安卓底部導航列那一條是頁面底色（nav-bar.js；那一條由 shell/router.dart 的 BottomStrip 畫）
+      value: pageStyle(SystemUiOverlayStyle.light, C.paper),
       child: ColoredBox(
         color: C.paper,
         child: Stack(children: [

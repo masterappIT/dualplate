@@ -13,9 +13,12 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import '../shell/system_bars.dart' show MaskNavBar;
+import 'back_gate.dart';
 import 'tokens.dart';
 
 const _overlay = Color(0xA6000000); // --wot-overlay-bg rgba(0,0,0,.65)
+// 安卓底部導航列那一條跟遮罩變暗（nav-bar.js；shell/system_bars.dart MaskNavBar）
 const _duration = Duration(milliseconds: 300); // wd-popup 預設 300ms，ease
 const _ease = Motion.ease;
 const _sheetGap = 10.0;
@@ -74,6 +77,7 @@ class _DialogAreaState extends State<DialogArea> {
       _route = route;
       if (route != null) {
         route.registerPopEntry(_entry);
+        BackGate.add(route, _entry.canPop);
         DialogArea._byRoute[route] = this;
       }
     }
@@ -83,6 +87,7 @@ class _DialogAreaState extends State<DialogArea> {
     final route = _route;
     if (route == null) return;
     route.unregisterPopEntry(_entry);
+    BackGate.remove(route, _entry.canPop);
     if (identical(DialogArea._byRoute[route], this)) DialogArea._byRoute.remove(route);
   }
 
@@ -201,7 +206,7 @@ class _MessageBox<T> extends StatelessWidget {
       actions.add(Expanded(child: _WotButton(text: text, type: type, onTap: () => Navigator.of(context).pop(value))));
     }
     return Stack(children: [
-      Positioned.fill(child: GestureDetector(onTap: onModal, child: FadeTransition(opacity: curve, child: const ColoredBox(color: _overlay)))),
+      Positioned.fill(child: MaskNavBar(animation: animation, child: GestureDetector(onTap: onModal, child: FadeTransition(opacity: curve, child: const ColoredBox(color: _overlay))))),
       Center(
         child: FadeTransition(
           opacity: curve,
@@ -307,7 +312,7 @@ class _Sheet extends StatelessWidget {
     void close([int index = -1]) => Navigator.of(context).pop(index);
     return LayoutBuilder(
       builder: (context, area) => Stack(children: [
-        Positioned.fill(child: GestureDetector(onTap: close, child: FadeTransition(opacity: curve, child: const ColoredBox(color: _overlay)))),
+        Positioned.fill(child: MaskNavBar(animation: animation, child: GestureDetector(onTap: close, child: FadeTransition(opacity: curve, child: const ColoredBox(color: _overlay))))),
         Align(
           alignment: Alignment.bottomCenter,
           child: SlideTransition(

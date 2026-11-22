@@ -87,6 +87,10 @@ abstract final class Session {
     _write(() async => _prefs?.setString('loginArea', code));
   }
 
+  // 其他本機資料（uni.getStorageSync／setStorageSync）：首頁緩存 homeCache（core/launch.dart）、安卓條款同意框的版本（core/privacy.dart）
+  static String? readString(String key) => _prefs?.getString(key);
+  static void writeString(String key, String value) => _write(() async => _prefs?.setString(key, value));
+
   // 只給測試用：直接設定記憶體內的狀態，不寫入
   static void debugSet({String? token, Map<String, dynamic>? user, String? mode}) {
     _token = token;
