@@ -10,6 +10,7 @@ import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import '../../business/approval_card.dart';
 import '../../business/card_capture.dart';
+import '../../business/card_log.dart';
 import '../../core/api.dart';
 import '../../core/js.dart';
 import '../../core/session.dart';
@@ -118,12 +119,14 @@ class PlateCreatePageState extends State<PlateCreatePage> {
     if (photo == null || !mounted) return;
     _set(() => busy = true);
     showLoading(context, '正在辨識批文卡…');
+    final clock = Stopwatch()..start();
     try {
       _set(() {
         images = {...images, side: photo};
         previews = {...previews, side: _bytes(photo)};
       });
       final recognized = await api('/card-recognize', 'POST', {'side': side, 'image': photo});
+      cardLog('recognize create $side ${clock.elapsedMilliseconds}ms upload=${photo.length ~/ 1024}KB fields=${((at(recognized, 'fieldStatus') as Map?) ?? const {}).length}');
       final image = at(recognized, 'image');
       if (truthy(image)) {
         _set(() {
@@ -143,6 +146,7 @@ class PlateCreatePageState extends State<PlateCreatePage> {
       });
       toast('已辨識，請確認編號');
     } catch (e) {
+      cardLog('recognize create $side failed ${clock.elapsedMilliseconds}ms $e');
       toast(e is ApiError && e.message.isNotEmpty ? e.message : '上傳失敗');
     } finally {
       _set(() => busy = false);
