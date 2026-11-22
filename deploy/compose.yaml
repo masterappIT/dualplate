@@ -12,8 +12,10 @@ services:
       - /srv/dualplate/backups:/srv/dualplate/backups
       - /srv/dualplate/logs:/srv/dualplate/logs
     networks: [internal]
-    # 平時約 100MB；批文卡 OCR 時會短暫升高
-    mem_limit: 768m
+    # 平時約 100MB；批文卡 OCR 時會升高（兩個中文、一個英文辨識程式常駐，閒置 5 分鐘關閉）。
+    # 2026-11-23 管理者同意由 768MB 調高：768MB 容器實測兩個中文辨識程式最高約 710MB，加上伺服器本身太接近上限。
+    # 改這裏不會隨推送生效：要同步改伺服器上的 /srv/dualplate/compose.yaml 並重建 api 容器
+    mem_limit: 1024m
   web:
     image: ${WEB_IMAGE:?WEB_IMAGE required}
     container_name: dualplate-web
