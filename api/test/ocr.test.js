@@ -7,6 +7,7 @@ import sharp from 'sharp'
 import {
   cardFields,
   chooseCardCandidate,
+  voteCardDriverName,
   extractValidityDates,
   joinCardCompanyLine,
   normalizeCardField,
@@ -205,6 +206,38 @@ test('商號：英文名轉行時接上第二行，至少兩次讀到一樣才�
   const closed = { value: '大明有限公司（DAMING CO., LIMITED）', confidence: 80 }
   assert.deepEqual(joinCardCompanyLine(closed, reads), closed, '括號已完整不接')
   assert.equal(joinCardCompanyLine({ value: '大明实业有限公司（DAMING', confidence: 80 }, [{ raw: 'TRADING LIMITED)', confidence: 50 }, { raw: 'TRADING LIMITED )', confidence: 50 }]).value, '大明实业有限公司（DAMING TRADING LIMITED）')
+})
+
+test('商號：英文詞之間讀出的冒號、「- 」當空格，第一行末尾的逗號去掉', () => {
+  assert.equal(normalizeCardField('company', '大明实业有限公司（DAMING: INDUSTRIAL CO'), '大明实业有限公司（DAMING INDUSTRIAL CO')
+  assert.equal(normalizeCardField('company', '大明实业有限公司（DAMING- INDUSTRIAL CO,'), '大明实业有限公司（DAMING INDUSTRIAL CO')
+  assert.equal(normalizeCardField('company', '大明有限公司（DAMING CO., LIMITED）'), '大明有限公司（DAMING CO., LIMITED）')
+})
+
+test('商號：英文部分按詞投票，把握度最高的一次讀錯一個詞也不採用', () => {
+  const reads = [
+    ['大明实业有限公司（DAMING INDUSTRIAL 5C0', 80], ['大明实业有限公司（DAMING INDUSTRIAL CO', 71],
+    ['大明实业有限公司（DAMINGL INDUSTRIAL CO', 74], ['大明实业有限公司（DAMING INDUSTRAL CO', 72]
+  ].map(([raw, confidence]) => ({ raw, confidence }))
+  assert.equal(chooseCardCandidate('company', reads, {}).value, '大明实业有限公司（DAMING INDUSTRIAL CO')
+})
+
+test('備註：「(1234)」的左括號讀成「\\」時改回，逗號統一成半形', () => {
+  assert.equal(normalizeCardField('notes', '主司机:张伟明(1234),副司机:刘子豪(5678)，副司机:黄志强\\9012)。'), '主司机:张伟明(1234),副司机:刘子豪(5678),副司机:黄志强(9012)。')
+  assert.equal(validateCardField('notes', normalizeCardField('notes', '主司机:张伟明(1234),副司机:黄志强\\9012)。')), true)
+})
+
+test('駕駛人：逐欄讀法和每次讀備註的名字一起逐字投票', () => {
+  const field = [['宁志强', 36], ['案志强', 56], ['黄志强', 42]].map(([raw, confidence]) => ({ raw, confidence }))
+  const notes = [['主司机:张伟明(1234),副司机:刘子豪(5678),副司机:黄训强(9012)。', 75], ['主司机:张伟明(1234),副司机:刘子豪(5678),副司机:黄类强(9012)。', 79]].map(([raw, confidence]) => ({ raw, confidence }))
+  assert.equal(voteCardDriverName(2, field, notes), '黄志强')
+  assert.equal(voteCardDriverName(1, [], notes), '刘子豪')
+})
+
+test('駕駛人：備註裏沒有這個位置的名字、或備註不是由主司机開始時不投票', () => {
+  const notes = [{ raw: '主司机:张伟明(1234),副司机:刘子豪(5678),', confidence: 80 }]
+  assert.equal(voteCardDriverName(2, [{ raw: '黄志强', confidence: 90 }], notes), '')
+  assert.equal(voteCardDriverName(0, [{ raw: '黄志强', confidence: 90 }], [{ raw: '副司机:刘子豪(5678)。', confidence: 80 }]), '')
 })
 
 test('請予辦理：卡上的分號讀成逗號時仍認得', () => {

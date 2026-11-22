@@ -118,7 +118,8 @@ export function normalizeCardField(key, value) {
     const match = candidates.find(item => item.length === wanted || (key === 'serial' && item.length === 7) || (key === 'cardNumber' && item.length >= 6)) || ''
     return key === 'serial' && match.length === 7 ? `0${match}` : match
   }
-  if (key === 'company' || key === 'contractor') return fixPlaceBracket(text.replace(/\s*[《〈<「(（]\s*/g, '（').replace(/\s*[》〉>」)）]/g, '）')).replace(/[，、]/g, ',').replace(/\bC0\b/gi, 'CO').replace(/\s+([,.)])/g, '$1').replace(/([(.])\s+/g, '$1').replace(/\s+/g, ' ').replace(/\s+(?=[\u4e00-\u9fff])/g, '').replace(/(?<=[\u4e00-\u9fff])\s+(?=[A-Za-z])/g, ' ')
+  // 英文詞之間讀出的冒號、「- 」當空格；第一行末尾多讀的逗號去掉
+  if (key === 'company' || key === 'contractor') return fixPlaceBracket(text.replace(/\s*[《〈<「(（]\s*/g, '（').replace(/\s*[》〉>」)）]/g, '）')).replace(/(?<=[A-Za-z])\s*[:：]\s*(?=[A-Za-z])/g, ' ').replace(/(?<=[A-Za-z])-\s+(?=[A-Za-z])/g, ' ').replace(/(?<=[A-Za-z])\s*[,，]$/, '').replace(/[，、]/g, ',').replace(/\bC0\b/gi, 'CO').replace(/\s+([,.)])/g, '$1').replace(/([(.])\s+/g, '$1').replace(/\s+/g, ' ').replace(/\s+(?=[\u4e00-\u9fff])/g, '').replace(/(?<=[\u4e00-\u9fff])\s+(?=[A-Za-z])/g, ' ')
   // Mainland plates never use the letters I and O, so those are misread digits.
   if (key === 'mainlandPlate') return compact(text).toUpperCase().replace(/^粤/, '粵').replace(/[洪鸿]/g, '港').replace(/^(粵Z)(.*)([港澳])$/, (all, head, body, tail) => head + body.replace(/I/g, '1').replace(/O/g, '0') + tail)
   if (key === 'localPlate') return compact(text).toUpperCase()
@@ -130,7 +131,8 @@ export function normalizeCardField(key, value) {
   if (key === 'crossing' || key === 'purpose') return text.replace(/[;；,，]$/, '').replace(/\s+/g, '')
   if (key === 'validFrom' || key === 'validTo') return normalizeDate(text)
   // OCR spaces out Chinese characters; spaces between them carry no meaning.
-  if (key === 'notes') return text.replace(/(?<=[\u3400-\u9fff])\s+(?=[\u3400-\u9fff])/g, '').replace(/\s*([:：,，()（）])\s*/g, '$1').replace(/^注[,，:：]?/, '')
+  // 「(6722)」的左括號常讀成「\」
+  if (key === 'notes') return text.replace(/[\\/](?=\s*\d{4}\s*[)）])/g, '(').replace(/，/g, ',').replace(/(?<=[\u3400-\u9fff])\s+(?=[\u3400-\u9fff])/g, '').replace(/\s*([:：,，()（）])\s*/g, '$1').replace(/^注[,，:：]?/, '')
   return text
 }
 
@@ -340,6 +342,27 @@ function extractDriverNames(notes) {
   return names
 }
 
+// 駕駛人名字：逐欄讀到的（2–4 個中文字，姓氏不對也算一票）和每次讀備註時同一位置的名字（只用由「主司机」開始的讀法，
+// 位置才對得上）一起按把握度逐字投票：備註字小常錯一兩個字，逐欄有時又讀不到（2026-11-23 真卡第三位副司機）。
+// 備註裏沒有這個位置的名字就不投票，回傳空字串
+function voteDriverName(index, fieldReads, notesReads) {
+  const fromNotes = notesReads.filter(read => /主\s*司\s*机/.test(read.raw)).map(read => ({ text: extractDriverNames(normalizeCardField('notes', read.raw))[index], confidence: read.confidence })).filter(read => read.text)
+  if (!fromNotes.length) return ''
+  const pool = [...fieldReads.map(read => ({ text: normalizeCardField('driver1', read.raw), confidence: read.confidence })).filter(read => /^[\u3400-\u9fff]{2,4}$/.test(read.text)), ...fromNotes]
+  const weight = new Map()
+  for (const read of pool) weight.set(read.text.length, (weight.get(read.text.length) || 0) + Math.max(1, read.confidence))
+  const length = [...weight.entries()].sort((a, b) => b[1] - a[1])[0][0]
+  const peers = pool.filter(read => read.text.length === length)
+  const voted = Array.from({ length }, (_, position) => {
+    const tally = new Map()
+    for (const peer of peers) tally.set(peer.text[position], (tally.get(peer.text[position]) || 0) + Math.max(1, peer.confidence))
+    return [...tally.entries()].sort((a, b) => b[1] - a[1])[0][0]
+  }).join('')
+  return validateCardField('driver1', voted) ? voted : ''
+}
+
+export const voteCardDriverName = voteDriverName
+
 function chooseCandidate(field, candidates, context) {
   const valid = []
   for (const candidate of candidates) {
@@ -360,8 +383,11 @@ function chooseCandidate(field, candidates, context) {
     }).join('')
     const winner = valid[0].value, winnerHead = head(winner), tail = winner.slice(winnerHead.length)
     const heads = candidates.map(candidate => { const value = normalizeCardField(field, candidate.raw); return { text: head(value), confidence: candidate.confidence } }).filter(peer => peer.text.length === winnerHead.length)
-    const tails = valid.filter(candidate => head(candidate.value).length === winnerHead.length).map(candidate => ({ text: candidate.value.slice(winnerHead.length), confidence: candidate.confidence })).filter(peer => peer.text.length === tail.length)
-    const voted = vote(winnerHead, heads) + vote(tail, tails)
+    // 後面（英文名等）按詞投票：同樣詞數的讀法逐個詞按把握度加權（2026-11-23 把握度最高的一次把 CO 讀成 5C0）
+    const tailWords = tail.split(' ')
+    const tails = valid.filter(candidate => head(candidate.value).length === winnerHead.length).map(candidate => ({ words: candidate.value.slice(winnerHead.length).split(' '), confidence: candidate.confidence })).filter(peer => peer.words.length === tailWords.length)
+    const votedTail = tailWords.map((word, index) => vote([word], tails.map(peer => ({ text: [peer.words[index]], confidence: peer.confidence })))).join(' ')
+    const voted = vote(winnerHead, heads) + votedTail
     // 拼出來的名稱沒有一次試讀完整讀到，可能仍有錯字，標為待核對
     if (validateCardField(field, voted, context)) return { value: voted, confidence: valid.some(candidate => candidate.value === voted) ? valid[0].confidence : Math.min(valid[0].confidence, 69) }
   }
@@ -467,9 +493,11 @@ export async function recognizeCard(image, side, options = {}) {
   }))
   const moreReads = side === 'front' ? await Promise.all(variants.map(variant => recognizeCandidate(variant, 'companyMore', { ...companyMore, left: located.company.left, width: located.company.width }, '7'))) : []
   if (options.debug) console.log('OCR MORE', JSON.stringify(moreReads))
+  const seen = {}
   for (const [index, field] of fields.entries()) {
     const candidateField = field === 'validity' ? 'validFrom' : field
     const candidates = [...reads[index], ...layoutCandidates(field, layoutLines)]
+    seen[field] = candidates
     if (options.debug) console.log('OCR DEBUG', side, field, located[field], candidates.map(candidate => ({ raw: candidate.raw, confidence: candidate.confidence })))
     if (field === 'validity') {
       const validity = makeValidityCandidates(candidates).sort((left, right) => right.confidence - left.confidence)[0]
@@ -496,12 +524,15 @@ export async function recognizeCard(image, side, options = {}) {
       fieldStatus[key] = { ...fieldStatus[key], status: 'uncertain', confidence: Math.min(fieldStatus[key]?.confidence || 0, 79) }
       continue
     }
-    const corrected = driverNames[index] || ''
+    const corrected = driverNames[index] ? voteDriverName(index, seen[key] || [], seen.notes || []) || driverNames[index] : ''
+    // 備註裏的名字也換成投票結果（備註的字小，常錯一兩個字）
+    if (corrected && corrected !== driverNames[index] && corrected.length === driverNames[index].length) result.notes = result.notes.replace(driverNames[index], corrected)
     const agreed = corrected && result[key] === corrected
     result[key] = corrected
     fieldStatus[key] = corrected ? { value: corrected, status: agreed ? 'ok' : 'uncertain', confidence: agreed ? Math.max(fieldStatus[key]?.confidence || 0, 80) : Math.min(fieldStatus[key]?.confidence || 55, 79) } : makeFieldStatus('', fieldStatus[key]?.confidence || 0)
   }
   result.notes = correctTraditionalField('notes', result.notes)
+  if (fieldStatus.notes?.value) fieldStatus.notes = { ...fieldStatus.notes, value: result.notes }
   crossCheck(result, fieldStatus)
   if (options.logger) options.logger({ side, durationMs: Date.now() - started, fields: Object.keys(fieldStatus).length })
   return { cardData: cleanCard(result), fieldStatus }
