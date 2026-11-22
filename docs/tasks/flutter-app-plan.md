@@ -504,6 +504,14 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 - 沒有開模擬器看畫面（按「不在測試和模擬器浪費時間」）。新套件只做了 iOS 模擬器版和 Android 除錯版編譯。真機上打開 WhatsApp、選 PDF、打開 PDF 留到階段 4 真機一起看。
 - 留意：階段 4（flutter-4 分支，從 `57f155e` 開出）合併時，`pubspec.yaml`、`pubspec.lock`、Android 清單、`dialogs.dart`、`tokens.dart` 可能要手動合併；鎖定提示框現在擋返回鍵，「必須更新」可以直接用 `notice(locked: true)`。
 
+### 2026-11-23（階段 4 修正合併）
+
+- flutter-4 交來 `a896daa`，負責人看過第二次同意框、退出提示、30 張底部色條拼圖後合併（`a3a6026`）。
+- 1、2、3、5、8 已改：第二次同意框底色與第一次相同；按鈕「退出 App」；退出提示固定繁體、用 App 自己的 toast（顯示 2 秒，等於再按的時限；其他 toast 是 1.5 秒，session 自行決定）；連結經 `launchExternal`；Kotlin 的 `openUrl`、`toast` 和 `BackGate.rootBack` 已刪。
+- 7：安卓 30 張截圖底部都沒有白條或錯位。沒截到兩頁：自管的「訊息」（陳先生「我的」頁找不到「在 app 內發訊息」，未追查）、申請使用（點擊落空，截到的是登入頁）。
+- 合併後 `flutter analyze` 無問題；`flutter test --no-pub` 1540 全部通過（`pub get` 卡了 10 分鐘，pubspec 沒改，改用 `--no-pub`）。
+- 未推送。
+
 ### 2026-11-23（階段 4 發現的問題：照建議修正）
 
 - 管理者「照建議」。只改 Flutter 版，現有 App 階段 5 後停用，不改 `mobile/`。交 flutter-4 一次改完，負責人驗收合併，不推送。
