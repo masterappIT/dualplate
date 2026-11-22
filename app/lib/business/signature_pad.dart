@@ -6,6 +6,7 @@
 // SignaturePad.vue 的 footer 插槽放了空 <view />：wd-signature__footer 仍有 margin-top 8，所以畫布和下一行之間是 8 + 8。
 import 'dart:convert';
 import 'dart:ui' as ui;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 import '../ui/base.dart';
 import '../ui/tokens.dart';
@@ -126,13 +127,19 @@ class _SignaturePadState extends State<SignaturePad> {
         decoration: BoxDecoration(color: SignatureStyle.background, border: Border.all(color: SignatureStyle.border), borderRadius: BorderRadius.circular(R.control)),
         child: LayoutBuilder(builder: (context, box) {
           c.size = Size(box.maxWidth, box.maxHeight);
-          // 簽名時不讓頁面捲動（disable-scroll）：拖動手勢由簽名框接住
-          return GestureDetector(
+          // 簽名時不讓頁面捲動（disable-scroll）：手指一按下，拖動手勢就歸簽名框，頁面不會捲動；由按下的位置開始畫
+          return RawGestureDetector(
             behavior: HitTestBehavior.opaque,
-            onPanStart: (d) => c.start(d.localPosition),
-            onPanUpdate: (d) => c.move(d.localPosition),
-            onPanEnd: (_) => c.end(),
-            onPanCancel: c.end,
+            gestures: {
+              _ClaimPan: GestureRecognizerFactoryWithHandlers<_ClaimPan>(_ClaimPan.new, (r) {
+                r
+                  ..dragStartBehavior = DragStartBehavior.down
+                  ..onStart = ((d) => c.start(d.localPosition))
+                  ..onUpdate = ((d) => c.move(d.localPosition))
+                  ..onEnd = ((_) => c.end())
+                  ..onCancel = c.end;
+              }),
+            },
             child: CustomPaint(painter: _SignaturePainter(c.strokes, c.strokes.fold(0, (n, s) => n + s.length)), size: Size.infinite),
           );
         }),
@@ -156,4 +163,13 @@ class _SignaturePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) => paintSignature(canvas, size, strokes);
   @override
   bool shouldRepaint(_SignaturePainter old) => true;
+}
+
+// 按下就贏得手勢競爭（外面的捲動不會搶走）
+class _ClaimPan extends PanGestureRecognizer {
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event);
+    resolve(GestureDisposition.accepted);
+  }
 }

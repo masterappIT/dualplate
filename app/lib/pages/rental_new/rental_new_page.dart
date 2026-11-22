@@ -124,14 +124,13 @@ class RentalNewPageState extends State<RentalNewPage> {
       card([
         step('以誰的名義出租'),
         sub('建議以香港身份或香港公司簽署。'),
-        // .choices 上距 8，每個 .wd-radio 自己再有上距 10
+        // .choices 上距 8 和第一個 .wd-radio 的上距 10 合併成 10（WdRadioGroup 每行自帶上距 10；和現有 App 截圖對照）
         Blk(
           WdRadioGroup<String>(
             value: f.lessorKey,
             options: [for (final l in lessors) ('${jsString(l['type'])}:${jsString(l['id'])}', '${jsString(l['label'])}（${jsString(l['hint'])}）')],
             onChanged: (v) => _set(() => f.lessorKey = v),
           ),
-          top: 8,
         ),
       ]),
       card([

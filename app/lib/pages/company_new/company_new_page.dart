@@ -84,8 +84,8 @@ class CompanyNewPageState extends State<CompanyNewPage> {
     try {
       await api('/my/companies', 'POST', companyNewBody(jurisdiction, name.text, plateId));
       if (!mounted) return;
-      // 提示放在根導航器上：這一頁關掉後仍然顯示
-      final root = Navigator.of(context, rootNavigator: true).context;
+      // 提示放在根導航器的浮層上：這一頁關掉後仍然顯示
+      final root = Overlay.of(context, rootOverlay: true);
       final text = selfManaged ? '公司已新增' : '公司已新增，顧問會再核對';
       // 直接打開這一頁（例如重新整理後）沒有上一頁可返回：改到「我的公司」
       if (context.canPop()) {
@@ -94,7 +94,7 @@ class CompanyNewPageState extends State<CompanyNewPage> {
         context.go('/companies');
       }
       Timer(const Duration(milliseconds: 400), () {
-        if (root.mounted) showToast(root, text);
+        showToastOn(root, text);
       });
     } catch (e) {
       _set(() {
