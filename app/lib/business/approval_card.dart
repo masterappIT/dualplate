@@ -35,11 +35,12 @@ class ApprovalCard extends StatefulWidget {
   // 卡面圓角和陰影：預設照 .approval-face；牌照頁的卡疊用 :deep(.approval-face) 另給（3a）
   final ApprovalFace face;
 
-  // validity(a,b)：兩個都有用「–」連起，日期的「-」換成「.」
+  // validity(a,b)：兩個都有用「-」連起，日期的「-」換成「.」。
+  // 階段 5b 管理者決定（2026-11-23）：照真卡用短的「-」（原組件是長的「–」，蘋方裏顯示得像「一」）
   static String date(Object? value) => (value == null ? '' : '$value').replaceAll('-', '.');
   static String validity(Object? a, Object? b) {
     bool has(Object? v) => v != null && '$v'.isNotEmpty;
-    return has(a) && has(b) ? '${date(a)}–${date(b)}' : date(has(a) ? a : b);
+    return has(a) && has(b) ? '${date(a)}-${date(b)}' : date(has(a) ? a : b);
   }
 
   @override
