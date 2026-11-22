@@ -2,6 +2,10 @@
 // 卡面底圖是 static/approval-card/front.svg、back.svg 用 Chrome 照原尺寸 2 倍轉成的 PNG（assets/approval_card/，轉法見 tool/card_png.sh）；
 // 文字層的位置、字號全部是卡寬的百分比（CSS 的 cqw），用 LayoutBuilder 按卡寬換算。
 // 卡上的字是批文卡原件的印刷字（簡體），照原組件不改。
+// 階段 5b 管理者決定（2026-11-23，「文字不夠真實」）：字體、粗細、字距改成照真卡，位置不變——
+//   正面：欄名改細宋體、字均勻拉開到冒號對齊；簽發機關改細字；商號最多兩行；内承单位和商號一樣大。
+//   背面：資料和欄名改黑體（iOS 蘋方、Android 系統黑體），欄名字均勻拉開到冒號對齊。
+//   現有 App 和網頁的 ApprovalCard.vue 不改。
 // 翻面：perspective 1200px，rotateY 180°，.65s cubic-bezier(.22,.67,.22,1)；背面 backface-visibility:hidden。
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
@@ -31,11 +35,12 @@ class ApprovalCard extends StatefulWidget {
   // 卡面圓角和陰影：預設照 .approval-face；牌照頁的卡疊用 :deep(.approval-face) 另給（3a）
   final ApprovalFace face;
 
-  // validity(a,b)：兩個都有用「–」連起，日期的「-」換成「.」
+  // validity(a,b)：兩個都有用「-」連起，日期的「-」換成「.」。
+  // 階段 5b 管理者決定（2026-11-23）：照真卡用短的「-」（原組件是長的「–」，蘋方裏顯示得像「一」）
   static String date(Object? value) => (value == null ? '' : '$value').replaceAll('-', '.');
   static String validity(Object? a, Object? b) {
     bool has(Object? v) => v != null && '$v'.isNotEmpty;
-    return has(a) && has(b) ? '${date(a)}–${date(b)}' : date(has(a) ? a : b);
+    return has(a) && has(b) ? '${date(a)}-${date(b)}' : date(has(a) ? a : b);
   }
 
   @override
@@ -184,59 +189,67 @@ class _Face extends StatelessWidget {
     return v == null ? '' : '$v';
   }
 
-  List<Widget> _frontLayer(double cq, double w, double h) => [
-        // .card-title
-        Positioned(
-          left: w * .164,
-          top: h * .088,
-          width: w * .79,
-          child: ClipRect(child: _text(approvalCardTitle, cq * 3.65, ApprovalCardStyle.title, weight: _w750, spacing: cq * .03, align: TextAlign.center)),
-        ),
-        _row(w, h, cq, left: .049, width: .91, top: .234, minHeight: cq * 5, align: _Align.start, children: [
-          _Cell.label('编　　号:', basis: .169, size: cq * 2.85, spacing: cq * .5, dy: cq * 1.25),
-          _Cell.value(_v('cardNumber'), size: cq * 4.45, arial: true, bold: true, spacing: cq * .5),
-        ]),
-        _row(w, h, cq, left: .049, width: .91, top: .344, align: _Align.start, children: [
-          _Cell.label('商　　号:', basis: .169, size: cq * 2.85, spacing: cq * .5, dy: cq * .2),
-          _Cell.value(_v('company'), size: cq * 3.15),
-        ]),
-        _row(w, h, cq, left: .049, width: .91, top: .593, align: _Align.start, children: [
-          _Cell.label('内承单位:', basis: .169, size: cq * 2.85, dy: cq * .2),
-          _Cell.value(_v('contractor'), size: cq * 3.5),
-        ]),
-        _row(w, h, cq, left: .049, width: .91, top: .769, align: _Align.start, children: [
-          _Cell.label('通行口岸:', basis: .169, size: cq * 2.85, dy: cq * .2),
-          _Cell.value(_v('crossing'), size: cq * 3.3),
-        ]),
-        _row(w, h, cq, left: .049, width: .91, top: .873, align: _Align.baseline, children: [
-          _Cell.label('签发机关:', basis: .169, size: cq * 2.45, dy: cq * .2),
-          _Cell.label(approvalCardIssuer, size: cq * 2.45, dy: cq * .2, flex: true),
-          _Cell.value(_v('serial'), basis: .19, size: cq * 3.15, arial: true, bold: true, spacing: cq * .2, dy: cq * .3, right: true),
-        ]),
-      ];
+  List<Widget> _frontLayer(double cq, double w, double h) {
+    // 正面欄名：細宋體，字均勻拉開到欄名欄 93% 寬，冒號上下對齊（真卡「编　　号:」「内 承 单 位:」）
+    _Cell label(String t, double dy, [double size = 2.85]) => _Cell.label(t, basis: .169, size: cq * size, dy: dy, spreadFill: .93);
+    return [
+      // .card-title
+      Positioned(
+        left: w * .164,
+        top: h * .088,
+        width: w * .79,
+        child: ClipRect(child: _text(approvalCardTitle, cq * 3.65, ApprovalCardStyle.title, weight: _w750, spacing: cq * .03, align: TextAlign.center)),
+      ),
+      _row(w, h, cq, left: .049, width: .91, top: .234, minHeight: cq * 5, align: _Align.start, children: [
+        label('编　　号:', cq * 1.25),
+        _Cell.value(_v('cardNumber'), size: cq * 4.45, font: _Font.arial, bold: true, spacing: cq * .5),
+      ]),
+      _row(w, h, cq, left: .049, width: .91, top: .344, align: _Align.start, children: [
+        label('商　　号:', cq * .2),
+        // 真卡的長商號換到第二行，第二行對齊資料欄
+        _Cell.value(_v('company'), size: cq * 3.15, lines: 2, lineHeight: 1.5),
+      ]),
+      _row(w, h, cq, left: .049, width: .91, top: .593, align: _Align.start, children: [
+        label('内承单位:', cq * .2),
+        _Cell.value(_v('contractor'), size: cq * 3.15),
+      ]),
+      _row(w, h, cq, left: .049, width: .91, top: .769, align: _Align.start, children: [
+        label('通行口岸:', cq * .2),
+        _Cell.value(_v('crossing'), size: cq * 3.3),
+      ]),
+      _row(w, h, cq, left: .049, width: .91, top: .873, align: _Align.baseline, children: [
+        label('签发机关:', cq * .2, 2.45),
+        _Cell.label(approvalCardIssuer, size: cq * 2.45, dy: cq * .2, flex: true),
+        _Cell.value(_v('serial'), basis: .19, size: cq * 3.15, font: _Font.arial, bold: true, spacing: cq * .2, dy: cq * .3, right: true),
+      ]),
+    ];
+  }
 
   List<Widget> _backLayer(double cq, double w, double h) {
-    // .back-row{font-size:3.2cqw}：空的 .driver-spacer 按這個字號佔一行
-    _Cell label(String t, double basis) => _Cell.label(t, basis: basis, size: cq * 2.85, dy: cq * .2);
+    // 背面欄名：藍色黑體，字均勻拉開到同組最長欄名的寬度，冒號上下對齊（真卡「驾　驶　人:」「请 予 办 理:」）
+    _Cell label(String t, double basis, String spreadTo) => _Cell.label(t, basis: basis, size: cq * 2.85, dy: cq * .2, font: _Font.hei, spreadTo: spreadTo);
+    _Cell value(String t, double size, {int lines = 1, double lineHeight = ApprovalCardStyle.lineHeight}) => _Cell.value(t, size: size, font: _Font.hei, lines: lines, lineHeight: lineHeight);
+    const leftRef = '内地车牌号:', rightRef = '座位/吨位:';
     Widget left(double top, List<_Cell> cells) => _row(w, h, cq, left: .042, width: .47, top: top, children: cells);
     Widget right(double top, String t, String key, {double basis = .307}) =>
-        _row(w, h, cq, left: .544, width: .435, top: top, children: [label(t, basis), _Cell.value(_v(key), size: cq * 3.05)]);
-    Widget wide(double top, String t, _Cell value) => _row(w, h, cq, left: .042, width: .935, top: top, children: [label(t, .18), value]);
-    _Cell index(String t) => _Cell.label(t, basis: .086, size: cq * 2.85, dy: cq * .2);
-    _Cell spacer() => _Cell.label('', basis: .356, size: cq * 3.2);
+        _row(w, h, cq, left: .544, width: .435, top: top, children: [label(t, basis, rightRef), value(_v(key), cq * 3.05)]);
+    Widget wide(double top, String t, _Cell v) => _row(w, h, cq, left: .042, width: .935, top: top, children: [label(t, .18, leftRef), v]);
+    _Cell index(String t) => _Cell.label(t, basis: .086, size: cq * 2.85, dy: cq * .2, font: _Font.hei);
+    _Cell spacer() => _Cell.label('', basis: .356, size: cq * 3.2, font: _Font.hei);
     return [
-      left(.076, [label('内地车牌号:', .356), _Cell.value(_v('mainlandPlate'), size: cq * 3.3)]),
-      left(.172, [label('港澳车牌号:', .356), _Cell.value(_v('localPlate'), size: cq * 3.3)]),
-      left(.268, [label('驾　驶　人:', .356), index('1.'), _Cell.value(_v('driver1'), size: cq * 3.3)]),
-      left(.364, [spacer(), index('2.'), _Cell.value(_v('driver2'), size: cq * 3.3)]),
-      left(.46, [spacer(), index('3.'), _Cell.value(_v('driver3'), size: cq * 3.3)]),
+      left(.076, [label('内地车牌号:', .356, leftRef), value(_v('mainlandPlate'), cq * 3.3)]),
+      left(.172, [label('港澳车牌号:', .356, leftRef), value(_v('localPlate'), cq * 3.3)]),
+      left(.268, [label('驾　驶　人:', .356, leftRef), index('1.'), value(_v('driver1'), cq * 3.3)]),
+      left(.364, [spacer(), index('2.'), value(_v('driver2'), cq * 3.3)]),
+      left(.46, [spacer(), index('3.'), value(_v('driver3'), cq * 3.3)]),
       right(.076, '现批文号:', 'currentApproval'),
       right(.172, '原批文号:', 'previousApproval'),
       right(.268, '颜　　色:', 'color', basis: .348),
       right(.364, '座位/吨位:', 'seats', basis: .348),
-      wide(.538, '请予办理:', _Cell.value(_v('purpose'), size: cq * 3.3)),
-      wide(.671, '有　效　期:', _Cell.value(ApprovalCard.validity(data['validFrom'], data['validTo']), size: cq * 3.3)),
-      wide(.771, '备　　注:', _Cell.value(_v('notes'), size: cq * 3.05, wrap: true)),
+      wide(.538, '请予办理:', value(_v('purpose'), cq * 3.3)),
+      wide(.671, '有　效　期:', value(ApprovalCard.validity(data['validFrom'], data['validTo']), cq * 3.3)),
+      // 真卡備注兩行之間比較疏；兩行的高度仍在底部提示之上
+      wide(.771, '备　　注:', value(_v('notes'), cq * 3.05, lines: 2, lineHeight: 1.5)),
       // .card-warning
       Positioned(
         left: w * .18,
@@ -251,16 +264,25 @@ class _Face extends StatelessWidget {
     final rowW = w * width;
     final cells = <Widget>[];
     for (final c in children) {
-      Widget t = c.wrap
-          // .note-value：可換行，line-height 1.1，最多 2.2em（兩行），多出的裁掉
-          ? ConstrainedBox(constraints: BoxConstraints(maxHeight: c.size * 2.2), child: ClipRect(child: _text(c.text, c.size, ApprovalCardStyle.value, wrap: true, height: 1.1)))
-          : ClipRect(child: _text(c.text, c.size, c.isLabel ? ApprovalCardStyle.label : ApprovalCardStyle.value,
-              weight: c.isLabel ? _w650 : c.bold ? FontWeight.w700 : FontWeight.w400, spacing: c.spacing, arial: c.arial, align: c.right ? TextAlign.right : TextAlign.left));
+      final color = c.isLabel ? ApprovalCardStyle.label : ApprovalCardStyle.value;
+      final weight = c.font == _Font.hei ? ApprovalCardStyle.heiWeight : c.bold ? FontWeight.w700 : FontWeight.w400;
+      Widget t;
+      if (c.lines > 1) {
+        // 可換行的資料（商號、備注）：最多 c.lines 行，多出的裁掉；行距加大時第一行仍在原位
+        t = Transform.translate(
+          offset: Offset(0, -(c.lineHeight - ApprovalCardStyle.lineHeight) / 2 * c.size),
+          child: _text(c.text, c.size, color, weight: weight, font: c.font, lines: c.lines, height: c.lineHeight),
+        );
+      } else {
+        final spread = c.spreadFill != null && c.basis != null ? rowW * c.basis! * c.spreadFill! : c.spreadTo != null && c.spreadTo != c.text ? _measure(c.spreadTo!, c.size, weight, c.font) : null;
+        t = spread != null
+            // 不可比欄名欄寬（例如「现批文号:」的欄比「座位/吨位:」的窄）
+            ? _spread(c.text, c.basis != null ? math.min(spread, rowW * c.basis!) : spread, c.size, color, weight, c.font)
+            : ClipRect(child: _text(c.text, c.size, color, weight: weight, spacing: c.spacing, font: c.font, align: c.right ? TextAlign.right : TextAlign.left));
+      }
       if (c.dy != 0) t = Transform.translate(offset: Offset(0, c.dy), child: t);
       if (c.basis != null) {
         cells.add(SizedBox(width: rowW * c.basis!, child: t));
-      } else if (c.flex) {
-        cells.add(Expanded(child: t));
       } else {
         cells.add(Expanded(child: t)); // .card-value{flex:1}
       }
@@ -282,6 +304,36 @@ class _Face extends StatelessWidget {
     );
   }
 
+  // 欄名的字均勻排在 width 寬裏，冒號貼着最後一個字（真卡「内 承 单 位:」）
+  Widget _spread(String text, double width, double size, Color color, FontWeight weight, _Font font) {
+    final chars = text.replaceAll(RegExp(r'[\s\u3000]'), '').split('');
+    final units = chars.length > 1 && chars.last == ':' ? [...chars.sublist(0, chars.length - 2), '${chars[chars.length - 2]}:'] : chars;
+    // 字本身已比 width 寬（例如字型不同）：不拉開，照原字排，多出的裁掉
+    // 每個字的寬按畫出來的取整（Text 的寬會進位），否則合計可能比 width 多零點幾而溢出
+    final natural = units.fold<double>(0, (sum, u) => sum + _measure(u, size, weight, font).ceilToDouble());
+    if (units.length < 2 || natural >= width) return ClipRect(child: _text(text, size, color, weight: weight, font: font));
+    // 外面的欄名欄是固定寬（tight），要先放鬆，SizedBox 的寬才生效
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: SizedBox(
+        width: width,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [for (final u in units) _text(u, size, color, weight: weight, font: font)],
+        ),
+      ),
+    );
+  }
+
+  double _measure(String text, double size, FontWeight weight, _Font font) {
+    final painter = TextPainter(text: TextSpan(text: text, style: _style(size, ApprovalCardStyle.label, weight, null, font, ApprovalCardStyle.lineHeight)), textDirection: TextDirection.ltr, textScaler: TextScaler.noScaling)..layout();
+    final width = painter.width;
+    painter.dispose();
+    return width;
+  }
+
   // 卡面的「宋體」：見 tokens.dart 的 ApprovalCardStyle（兩個平台都用打包的 Noto Serif SC 子集；iOS 缺字落到蘋方）
   static bool get _ios => defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.macOS;
   static const _serif = ApprovalCardStyle.song;
@@ -290,45 +342,61 @@ class _Face extends StatelessWidget {
   static const _w650 = FontWeight.w700;
   static const _w750 = FontWeight.w700;
 
-  Widget _text(String text, double size, Color color, {FontWeight weight = FontWeight.w400, double? spacing, TextAlign align = TextAlign.left, bool arial = false, bool wrap = false, double height = ApprovalCardStyle.lineHeight}) => Text(
+  static TextStyle _style(double size, Color color, FontWeight weight, double? spacing, _Font font, double height) => TextStyle(
+        fontSize: size,
+        height: height,
+        leadingDistribution: TextLeadingDistribution.even,
+        color: color,
+        fontWeight: weight,
+        letterSpacing: spacing,
+        fontFamily: switch (font) { _Font.arial => ApprovalCardStyle.arial, _Font.song => _serif, _Font.hei => _ios ? ApprovalCardStyle.heiIos : ApprovalCardStyle.heiAndroid },
+        // 黑體不接頁面的後備字型（頁面的是繁體 PingFang TC、Noto Sans TC），卡上是簡體字
+        fontFamilyFallback: switch (font) { _Font.arial => [...ApprovalCardStyle.arialFallback, ..._serifFallback], _Font.song => _serifFallback, _Font.hei => const [] },
+        locale: font == _Font.hei ? ApprovalCardStyle.heiLocale : null,
+        decoration: TextDecoration.none,
+      );
+
+  Widget _text(String text, double size, Color color, {FontWeight weight = FontWeight.w400, double? spacing, TextAlign align = TextAlign.left, _Font font = _Font.song, int lines = 1, double height = ApprovalCardStyle.lineHeight}) => Text(
         text,
-        maxLines: wrap ? null : 1,
-        softWrap: wrap,
+        maxLines: lines,
+        softWrap: lines > 1,
         overflow: TextOverflow.clip,
         textAlign: align,
         textScaler: TextScaler.noScaling,
-        style: TextStyle(
-          fontSize: size,
-          height: height,
-          leadingDistribution: TextLeadingDistribution.even,
-          color: color,
-          fontWeight: weight,
-          letterSpacing: spacing,
-          fontFamily: arial ? ApprovalCardStyle.arial : _serif,
-          fontFamilyFallback: arial ? [...ApprovalCardStyle.arialFallback, ..._serifFallback] : _serifFallback,
-          decoration: TextDecoration.none,
-        ),
+        style: _style(size, color, weight, spacing, font, height),
       );
 }
 
 enum _Align { start, baseline }
 
+// 卡面三種字：宋體（正面）、黑體（背面）、Arial（正面的編號、流水號）
+enum _Font { song, hei, arial }
+
 class _Cell {
-  _Cell.label(this.text, {this.basis, required this.size, this.spacing, this.dy = 0, this.flex = false})
+  _Cell.label(this.text, {this.basis, required this.size, this.dy = 0, this.flex = false, this.font = _Font.song, this.spreadTo, this.spreadFill})
       : isLabel = true,
-        arial = false,
         bold = false,
+        spacing = null,
         right = false,
-        wrap = false;
-  _Cell.value(this.text, {this.basis, required this.size, this.arial = false, this.bold = false, this.spacing, this.dy = 0, this.right = false, this.wrap = false})
+        lines = 1,
+        lineHeight = ApprovalCardStyle.lineHeight;
+  _Cell.value(this.text, {this.basis, required this.size, this.font = _Font.song, this.bold = false, this.spacing, this.dy = 0, this.right = false, this.lines = 1, this.lineHeight = ApprovalCardStyle.lineHeight})
       : isLabel = false,
-        flex = false;
+        flex = false,
+        spreadTo = null,
+        spreadFill = null;
   final String text;
   final double? basis; // flex-basis：所在行寬的百分比
   final double size;
   final double? spacing;
   final double dy; // transform:translateY
-  final bool isLabel, arial, bold, right, wrap, flex;
+  final bool isLabel, bold, right, flex;
+  final _Font font;
+  final int lines;
+  final double lineHeight;
+  // 欄名字均勻拉開：拉到 spreadTo 這個欄名的寬度，或欄名欄寬的 spreadFill 倍
+  final String? spreadTo;
+  final double? spreadFill;
 }
 
 // .flip-controls：正面／背面兩個圓角鈕，右邊「點擊卡面翻轉」

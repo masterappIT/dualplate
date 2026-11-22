@@ -35,11 +35,16 @@ const double insideMin = 0.9;
 
 // ── 預覽上的判斷門檻（2b 新定，理由見各常數說明）──
 
-/// 卡邊離框線多遠仍算對齊：框內寬（或高）的 4%。
+/// 卡邊在框線以內多遠仍算對齊：框內寬（或高）的 4%。
 /// 569 寬的分析圖裏框內約 508 像素，4% 約 20 像素，畫面上（框寬 362pt）約 14pt。
-/// 框外只多截 6%：卡邊在框外 4% 內，整張卡仍在截圖範圍裏，伺服器照樣找得到邊；
 /// 卡邊在框內 4% 內，伺服器裁出的卡面縮放不到一成，辨識按位置讀字仍讀得到。
 const double edgeAlignTolerance = 0.04;
+
+/// 卡邊超出框線多遠仍算對齊：只容許 1%（階段 5b 真機結果）。
+/// 截圖只在框外多截 6%；2b 原本框外也容許 4%，真機上卡上邊超出框線約 3.6% 時已轉綠自動拍，
+/// 截圖上方只剩約 2% 背景，伺服器找錯卡的上邊、切進字裏，編號、商號、口岸都讀不到。
+/// 同一張卡放回框外留足背景後，編號、口岸、序號都讀對。
+const double edgeOutsideTolerance = 0.01;
 
 /// 自動拍可接受的傾斜角度（度）。伺服器會把 8° 以內的傾斜轉正，但轉正要重新取樣、字會變軟；
 /// 3° 時卡的上邊在中間四成寬度內只偏約 10 像素（分析圖），仍在對齊範圍內。
@@ -249,7 +254,9 @@ CardEdges detectCardEdges(Uint8List rgb, int w, int h) {
   if (0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2] > brightBackground) return CardEdges(sharpness: sharpness);
   final found = findEdges(map), tilt = findTilt(map);
   final lines = frameLines(w, h);
-  final tolX = (lines.right - lines.left) * edgeAlignTolerance, tolY = (lines.bottom - lines.top) * edgeAlignTolerance;
+  final frameW = lines.right - lines.left, frameH = lines.bottom - lines.top;
+  final inX = frameW * edgeAlignTolerance, inY = frameH * edgeAlignTolerance;
+  final outX = frameW * edgeOutsideTolerance, outY = frameH * edgeOutsideTolerance;
   // 卡和桌面分得清才可靠（伺服器同一檢查）：四邊都找到時，範圍內九成要是卡
   if (found.complete) {
     var inside = 0;
@@ -261,12 +268,17 @@ CardEdges detectCardEdges(Uint8List rgb, int w, int h) {
     final area = (found.right! - found.left! + 1) * (found.bottom! - found.top! + 1);
     if (inside / area < insideMin) return CardEdges(tilt: tilt, sharpness: sharpness);
   }
-  bool near(int? at, double line, double tolerance) => at != null && (at - line).abs() <= tolerance;
+  // inward：框線往卡中心的方向為正。框內最多 inside，框外最多 outside
+  bool near(int? at, double line, {required int inward, required double inside, required double outside}) {
+    if (at == null) return false;
+    final d = (at - line) * inward;
+    return d <= inside && d >= -outside;
+  }
   return CardEdges(
-    left: near(found.left, lines.left, tolX),
-    right: near(found.right == null ? null : found.right! + 1, lines.right, tolX),
-    top: near(found.top, lines.top, tolY),
-    bottom: near(found.bottom == null ? null : found.bottom! + 1, lines.bottom, tolY),
+    left: near(found.left, lines.left, inward: 1, inside: inX, outside: outX),
+    right: near(found.right == null ? null : found.right! + 1, lines.right, inward: -1, inside: inX, outside: outX),
+    top: near(found.top, lines.top, inward: 1, inside: inY, outside: outY),
+    bottom: near(found.bottom == null ? null : found.bottom! + 1, lines.bottom, inward: -1, inside: inY, outside: outY),
     tilt: tilt,
     sharpness: sharpness,
   );

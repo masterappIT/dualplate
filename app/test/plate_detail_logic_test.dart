@@ -150,7 +150,8 @@ void main() {
     test('欄位狀態文字', () => expect([fieldStatusText({'status': 'uncertain'}), fieldStatusText({'status': 'failed'}), fieldStatusText({'status': 'ok'})], ['請核對', '未能辨識，請手動填寫', '']));
     test('證件上傳提示：讀出欄位', () => expect(docToast({'recognizable': true}, {'applied': [{'label': '車架號碼'}, {'label': '到期日'}]}), '已讀出並填入車架號碼、到期日'));
     test('證件上傳提示：不能辨識的證件只寫已上傳', () => expect(docToast({}, {}), '已上傳'));
-    test('批文卡有效期：兩個日期用「–」連起', () => expect(ApprovalCard.validity('2026-01-01', '2027-01-01'), '2026.01.01–2027.01.01'));
+    // 階段 5b 管理者決定：照真卡改用短的「-」（原本照網頁組件用長的「–」）
+    test('批文卡有效期：兩個日期用「-」連起', () => expect(ApprovalCard.validity('2026-01-01', '2027-01-01'), '2026.01.01-2027.01.01'));
     test('批文卡有效期：只有一個日期', () => expect(ApprovalCard.validity('', '2027-01-01'), '2027.01.01'));
   });
 

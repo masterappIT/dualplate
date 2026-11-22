@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, TextInputType;
 import 'package:flutter/widgets.dart';
+import '../../business/card_log.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../business/approval_card.dart';
@@ -357,9 +358,11 @@ class PlateDetailPageState extends State<PlateDetailPage> {
     final photo = await PlateDetailPage.capture(context, side: side);
     if (photo == null || !mounted) return;
     showLoading(context, '正在上傳辨識');
+    final clock = Stopwatch()..start();
     try {
       final before = Map<String, dynamic>.from(cardData(p));
       final response = await api('/plate-assets/${p['id']}/card/$side', 'POST', {'image': photo});
+      cardLog('recognize $side ${clock.elapsedMilliseconds}ms fields=${((at(response, 'fieldStatus') as Map?) ?? const {}).length}');
       forgetCardOriginal(p['id']);
       _set(() => fieldStatus = Map<String, dynamic>.from((at(response, 'fieldStatus') as Map?) ?? const {}));
       final updated = Map<String, dynamic>.from(await api('/plate-assets/${p['id']}') as Map);
@@ -380,6 +383,7 @@ class PlateDetailPageState extends State<PlateDetailPage> {
     } catch (e) {
       // 現有 App：catch 裏先 uni.hideLoading() 再提示；漏了會令等待框一直蓋住畫面
       debugPrint('[PlateDetail] 上傳辨識失敗 $e');
+      cardLog('recognize $side failed ${clock.elapsedMilliseconds}ms $e');
       hideLoading();
       toast(e is ApiError && e.message.isNotEmpty ? e.message : '上傳失敗');
     }

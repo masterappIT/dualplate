@@ -46,3 +46,10 @@ flutter:
         - asset: assets/fonts/DualplateSong-Regular.otf
         - asset: assets/fonts/DualplateSong-Bold.otf
           weight: 700
+
+# 相機套件 iOS 部分的修改版（階段 5b，管理者 2026-11-23 批准）：先用後鏡頭的組合鏡頭，近距離拍卡自動轉微距。
+# 原版 camera_avfoundation 0.11.1，改動只在 CameraPlugin.swift 的 getAvailableCameras（註明「dualplate 修改」）。
+# 升級 camera 套件時，要把這段改動搬到新版本。
+dependency_overrides:
+  camera_avfoundation:
+    path: packages/camera_avfoundation

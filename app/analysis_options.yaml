@@ -5,3 +5,4 @@ analyzer:
     - build/**
     - android/**
     - ios/**
+    - packages/**  # 相機套件修改版（原樣照搬上游，不按本專案規則檢查）

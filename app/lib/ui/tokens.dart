@@ -471,6 +471,12 @@ abstract final class ApprovalCardStyle {
   static const songFallbackIos = ['PingFang TC'];
   static const arial = 'Arial';
   static const arialFallback = ['Helvetica Neue'];
+  // 背面的黑體（階段 5b 管理者決定，照真卡）：iOS 用蘋方中黑；Android 用系統字型（中文由系統黑體 Noto Sans CJK 補上），
+  //   指明簡體中文，系統黑體才選簡體字形
+  static const heiIos = 'PingFang SC';
+  static const heiAndroid = 'sans-serif';
+  static const heiLocale = Locale('zh', 'CN');
+  static const heiWeight = FontWeight.w500;
   // 翻面切換鈕（.flip-controls，詳情頁隱藏，新增牌照頁用）
   static const ctrlBorder = Color(0xFFC4D5CD);
   static const ctrlBg = Color(0xFFF5F8F6);

@@ -64,7 +64,7 @@ void main() {
       await tester.tap(find.bySemanticsLabel('批文卡正面，點擊翻到背面'));
       await tester.pump(); // 動畫從下一幀開始
       await tester.pump(const Duration(milliseconds: 700));
-      expect(find.text('2025.12.01–2026.12.01'), findsOneWidget);
+      expect(find.text('2025.12.01-2026.12.01'), findsOneWidget);
       expect(find.text('4400123456'), findsNothing);
     });
 
