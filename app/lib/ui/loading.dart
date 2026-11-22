@@ -30,11 +30,20 @@ Future<void> hideLoading() async {
 
 bool get loadingShown => _entry != null;
 
+// 已插入而還沒畫出來的也要拿走（階段 4 修正：連續兩次 showLoading 而中間沒有畫面更新時，舊的框會一直留着）
 void _remove() {
   final entry = _entry;
   _entry = null;
   _key = null;
-  if (entry != null && entry.mounted) entry.remove();
+  entry?.remove();
+}
+
+// 載入框開着時只換字（App 內更新的下載進度，business/app_update.dart）；沒有開着就照常打開。
+// 現有 App 每個百分比都 uni.showLoading（原生等待框），這裏不每次重建，免得每個百分比都重新淡入
+void updateLoading(BuildContext context, String title) {
+  final state = _key?.currentState;
+  if (state == null || state.closing) return showLoading(context, title);
+  state.setTitle(title);
 }
 
 class _LoadingView extends StatefulWidget {
@@ -50,6 +59,11 @@ class _LoadingViewState extends State<_LoadingView> with TickerProviderStateMixi
   late final _spin = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000))..repeat();
 
   bool closing = false;
+  late String title = widget.title;
+
+  void setTitle(String value) {
+    if (mounted) setState(() => title = value);
+  }
 
   // 收起時立即不再擋點擊（hideLoading 後馬上彈出的確認框要能按），框本身淡出
   Future<void> fadeOut() async {
@@ -78,7 +92,7 @@ class _LoadingViewState extends State<_LoadingView> with TickerProviderStateMixi
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
             SizedBox.square(dimension: LoadingStyle.spinner, child: CustomPaint(painter: _Spinner(_spin))),
             const SizedBox(height: 8),
-            Text(widget.title, maxLines: 2, textAlign: TextAlign.center, style: ts(ToastStyle.fs, color: ToastStyle.fg, height: ToastStyle.line)),
+            Text(title, maxLines: 2, textAlign: TextAlign.center, style: ts(ToastStyle.fs, color: ToastStyle.fg, height: ToastStyle.line)),
           ]),
         ),
       ),

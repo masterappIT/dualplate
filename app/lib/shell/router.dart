@@ -5,6 +5,7 @@
 // 頁面跳轉經 core/api.dart 的 AppNav（401 打開登入頁、條款頁），在這裏接上 GoRouter。
 // 返回時先關彈窗（mobile/src/lib/back-close.js）：Android 返回鍵由 go_router 先交給最上層導航器，
 // 打開中的確認框、選單先被關掉（等於點了框外），不離開頁面；鎖定提示框例外，和現有 App 一樣照常返回頁面（dialogs.dart）。
+// 分頁和第一頁（啟動時的登入頁）沒有上一頁：安卓返回鍵「再按一次退出」（back_quit.dart，階段 4）。
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import '../business/page_show.dart';
@@ -33,10 +34,13 @@ import '../pages/self_change/self_change_page.dart';
 import '../pages/signup/signup_page.dart';
 import '../pages/terms/terms_page.dart';
 import '../pages/vehicles/vehicles_page.dart';
+import '../ui/tokens.dart';
 import '../ui/base.dart';
 import '../ui/dialogs.dart';
 import '../ui/sample.dart';
+import 'back_quit.dart';
 import 'nav_bar.dart';
+import 'system_bars.dart';
 import 'page_route.dart';
 import 'tab_bar.dart';
 
@@ -87,7 +91,7 @@ GoRouter buildRouter({String initialLocation = '/sample'}) {
       GoRoute(path: '/sample', pageBuilder: (context, state) => PopInPage(key: state.pageKey, child: const SamplePage())),
       // 分頁只經 uni.switchTab／reLaunch 進入，現有 App 不播換頁動畫（showWebview 'none'）；之後在上面開的頁面照常左移
       StatefulShellRoute.indexedStack(
-        pageBuilder: (context, state, shell) => _TabsPage(key: state.pageKey, child: TabsShell(shell)),
+        pageBuilder: (context, state, shell) => _TabsPage(key: state.pageKey, child: QuitOnBack(child: TabsShell(shell))),
         branches: [
           for (final (path, title) in tabPages)
             StatefulShellBranch(routes: [
@@ -97,7 +101,7 @@ GoRouter buildRouter({String initialLocation = '/sample'}) {
       ),
       GoRoute(path: '/demo', parentNavigatorKey: root, pageBuilder: (context, state) => PopInPage(key: state.pageKey, child: const ShellDemoPage())),
       // 登入頁：沒有導航列（navigationStyle custom）。啟動時未登入直接打開；登入失效（401）時從當前頁面打開
-      GoRoute(path: '/login', parentNavigatorKey: root, pageBuilder: (context, state) => PopInPage(key: state.pageKey, child: const LoginPage())),
+      GoRoute(path: '/login', parentNavigatorKey: root, pageBuilder: (context, state) => PopInPage(key: state.pageKey, child: const QuitOnBack(child: BottomStrip(color: C.paper, child: LoginPage())))),
       // 牌照詳情（階段 2c）：/plate-detail?id=…（new=1 是登記現有批文卡的入口）。開發時：--dart-define=START=/plate-detail?id=<牌照 id>
       GoRoute(
         path: '/plate-detail',

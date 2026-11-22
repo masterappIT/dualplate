@@ -33,6 +33,8 @@ flutter:
   assets:
     - assets/tabbar/
     - assets/approval_card/
+    # 啟動動畫的分層和第一幀的啟動圖（階段 4；產生方法見 tool/launch_png.sh）
+    - assets/launch/
   # 批文卡宋體子集（只在 Android 用；Noto Serif SC，OFL；產生方法見 tool/song_subset.py）
   fonts:
     - family: DualplateSong

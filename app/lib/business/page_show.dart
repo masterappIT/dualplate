@@ -5,6 +5,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
+import '../ui/back_gate.dart';
 import '../ui/base.dart';
 
 mixin PageShow<T extends StatefulWidget> on State<T> {
@@ -115,8 +116,10 @@ mixin BackClose<T extends StatefulWidget> on State<T> {
     final route = pageRouteOf(context);
     if (route == _route) return;
     _route?.unregisterPopEntry(_entry);
+    if (_route != null) BackGate.remove(_route!, _entry.canPop);
     _route = route;
     route?.registerPopEntry(_entry);
+    if (route != null) BackGate.add(route, _entry.canPop);
   }
 
   // 每次畫面更新後同步「可以返回」（不在 build 裏改，免得通知路由時正在建畫面）
@@ -127,6 +130,7 @@ mixin BackClose<T extends StatefulWidget> on State<T> {
   @override
   void dispose() {
     _route?.unregisterPopEntry(_entry);
+    if (_route != null) BackGate.remove(_route!, _entry.canPop);
     _entry.canPop.dispose();
     super.dispose();
   }

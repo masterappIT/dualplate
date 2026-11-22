@@ -1,6 +1,6 @@
 // 車牌管家（首頁分頁）：一比一移植 mobile/src/pages/index/index.vue（App 端）。
 // 結構、文字、次序、各狀態照抄；計算在 index_logic.dart。每次顯示（onShow）都重新載入。
-// 未做（屬階段 4）：App 版載入頁先取好的首頁資料和安卓首頁緩存（takeHome／saveHome）、安卓檢查新版本（appUpdate.check）。
+// 階段 4：App 版載入頁先取好的首頁資料（安卓是上次存下的首頁緩存，core/launch.dart 的 takeHome／saveHome）、安卓檢查新版本（business/app_update.dart）。
 import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
@@ -10,7 +10,9 @@ import '../../business/page_show.dart';
 import '../../business/plate_chip.dart';
 import '../../business/welcome_guide.dart';
 import '../../core/api.dart';
+import '../../business/app_update.dart';
 import '../../core/js.dart';
+import '../../core/launch.dart';
 import '../../core/session.dart';
 import '../../core/wording.dart';
 import '../../shell/nav_bar.dart';
@@ -32,9 +34,12 @@ class IndexPage extends StatefulWidget {
 
 class IndexPageState extends State<IndexPage> with PageShow {
   Map<String, dynamic>? user = getUser();
-  bool guideReady = false, loaded = false;
-  J data = emptyOverview();
-  List<dynamic> notices = [];
+  // App 版載入頁已先取好的資料（只有第一次打開有；安卓 App 是上次存下的資料，下面 load() 再取最新），免得數字由 0 跳到實數
+  final HomeData? _home = takeHome();
+  bool guideReady = false;
+  late bool loaded = _home != null;
+  late J data = _home?.overview ?? emptyOverview();
+  late List<dynamic> notices = _home?.notices.toList() ?? [];
 
   @override
   String get showPath => '/index';
@@ -54,8 +59,11 @@ class IndexPageState extends State<IndexPage> with PageShow {
       unawaited(context.push('/login'));
       return;
     }
-    // 條款提示處理完才顯示導覽，免得兩個彈出層疊在一起
-    checkTerms(({required title, required msg, required ok, required cancel}) => ask(context, title: title, msg: msg, ok: ok, cancel: cancel)).then((result) {
+    // 安卓 App 先檢查新版本；條款提示等它關掉才出，條款提示處理完才顯示導覽，免得兩個彈出層疊在一起
+    appUpdate.check(context).then((_) {
+      if (!mounted) return null;
+      return checkTerms(({required title, required msg, required ok, required cancel}) => ask(context, title: title, msg: msg, ok: ok, cancel: cancel));
+    }).then((result) {
       if (result != 'opened') _set(() => guideReady = true);
     });
     try {
@@ -66,6 +74,7 @@ class IndexPageState extends State<IndexPage> with PageShow {
         data = overview;
         notices = listOf(at(r[1], 'items')).toList();
       });
+      saveHome(overview, notices);
     } catch (e) {
       if (mounted) showToast(context, e is ApiError ? e.message : '$e');
     } finally {

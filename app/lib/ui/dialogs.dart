@@ -13,9 +13,12 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import '../shell/system_bars.dart' show MaskNavBar;
+import 'back_gate.dart';
 import 'tokens.dart';
 
 const _overlay = Color(0xA6000000); // --wot-overlay-bg rgba(0,0,0,.65)
+// 安卓底部導航列那一條跟遮罩變暗（nav-bar.js；shell/system_bars.dart MaskNavBar）
 const _duration = Duration(milliseconds: 300); // wd-popup 預設 300ms，ease
 const _ease = Motion.ease;
 const _sheetGap = 10.0;
@@ -70,6 +73,7 @@ class _DialogAreaState extends State<DialogArea> {
       _route = route;
       if (route != null) {
         route.registerPopEntry(_entry);
+        BackGate.add(route, _entry.canPop);
         DialogArea._byRoute[route] = this;
       }
     }
@@ -79,6 +83,7 @@ class _DialogAreaState extends State<DialogArea> {
     final route = _route;
     if (route == null) return;
     route.unregisterPopEntry(_entry);
+    BackGate.remove(route, _entry.canPop);
     if (identical(DialogArea._byRoute[route], this)) DialogArea._byRoute.remove(route);
   }
 
@@ -177,6 +182,10 @@ Future<T> _messageBox<T>(BuildContext context, {required String title, required 
           ? null
           : (didPop, _) {
               if (didPop) return;
+              // 分頁或第一頁（沒有上一頁可回）：提示框不關，返回鍵交給「再按一次退出」（階段 4，back_gate.dart rootBack）
+              final page = ModalRoute.of(Navigator.of(context).context);
+              final rootBack = BackGate.rootBack;
+              if (page != null && page.isFirst && rootBack != null) return rootBack();
               final router = Router.maybeOf(context)?.routerDelegate; // 關掉提示框後，再照常返回一次（等於再按一次返回鍵）
               Navigator.of(context).pop(dismissValue);
               if (router != null) Future.microtask(router.popRoute);
@@ -203,7 +212,7 @@ class _MessageBox<T> extends StatelessWidget {
       actions.add(Expanded(child: _WotButton(text: text, type: type, onTap: () => Navigator.of(context).pop(value))));
     }
     return Stack(children: [
-      Positioned.fill(child: GestureDetector(onTap: onModal, child: FadeTransition(opacity: curve, child: const ColoredBox(color: _overlay)))),
+      Positioned.fill(child: MaskNavBar(animation: animation, child: GestureDetector(onTap: onModal, child: FadeTransition(opacity: curve, child: const ColoredBox(color: _overlay))))),
       Center(
         child: FadeTransition(
           opacity: curve,
@@ -309,7 +318,7 @@ class _Sheet extends StatelessWidget {
     void close([int index = -1]) => Navigator.of(context).pop(index);
     return LayoutBuilder(
       builder: (context, area) => Stack(children: [
-        Positioned.fill(child: GestureDetector(onTap: close, child: FadeTransition(opacity: curve, child: const ColoredBox(color: _overlay)))),
+        Positioned.fill(child: MaskNavBar(animation: animation, child: GestureDetector(onTap: close, child: FadeTransition(opacity: curve, child: const ColoredBox(color: _overlay))))),
         Align(
           alignment: Alignment.bottomCenter,
           child: SlideTransition(

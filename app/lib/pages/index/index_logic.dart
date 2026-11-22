@@ -2,7 +2,7 @@
 import '../../core/js.dart';
 import '../plate_detail/plate_detail_logic.dart' show J, at, listOf;
 
-// 首頁資料的初始值（App 版的載入頁緩存屬階段 4，這裏沒有）
+// 首頁資料的初始值（App 版載入頁先取好的資料見 core/launch.dart）
 J emptyOverview() => {
       'unreadNotifications': 0,
       'advisor': null,

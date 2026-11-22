@@ -1,18 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- Theme applied to the Android Window while the process is starting when the OS's Dark Mode setting is on -->
-    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
-        <!-- Show a splash screen on the activity. Automatically removed when
-             the Flutter engine draws its first frame -->
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- 深色模式同樣用淺色外觀（現有 App DCLOUD_DARK_MODE=light）。桌面圖示點開後到 Flutter 畫出第一幀之前：深綠啟動圖，狀態列和導航列也是深綠（照現有 App 的 DualplateEntryTheme） -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:navigationBarColor">@color/launch_jade</item>
+        <item name="android:statusBarColor">@color/launch_jade</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="23">false</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="29">false</item>
     </style>
-    <!-- Theme applied to the Android Window as soon as the process has started.
-         This theme determines the color of the Android Window while your
-         Flutter UI initializes, as well as behind your Flutter UI while its
-         running.
-
-         This Theme is only used starting with V2 of Flutter's Android embedding. -->
-    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
-        <item name="android:windowBackground">?android:colorBackground</item>
+    <!-- Flutter 畫面後面的視窗底：同一張深綠啟動圖（照現有 App 的 DualplateTheme） -->
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:navigationBarColor">@color/launch_jade</item>
+        <item name="android:statusBarColor">@color/launch_jade</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="23">false</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="29">false</item>
     </style>
 </resources>
