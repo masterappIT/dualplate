@@ -398,7 +398,7 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 | 首次打開條款同意框 | `androidPrivacy.json` | 4 | 未做 |
 | Android 底部導航條顏色 | `lib/nav-bar.js` | 4 | 未做 |
 | iOS TestFlight 自動上傳 | `.github/workflows/testflight.yml` | 5 | 未做 |
-| Android 簽名、APK 下載、`version.json` | `android/`、`deploy/web/download` | 5 | 完成（2026-11-23 發佈 1.1.0） |
+| Android 簽名、APK 下載、`version.json` | `android/`、`deploy/web/download` | 5 | 完成（2026-11-23 發佈 1.1.0、1.1.1） |
 
 不搬：微信登入和綁定（只在小程序）、網頁版專用處理（`#ifdef H5`）。
 
@@ -534,6 +534,14 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 - 模擬器（Android 16）：先裝網站上的 1.0.0，再覆蓋安裝 1.1.0 成功，App 打得開。舊版 App 內「立即更新」的下載安裝沒有重新試。
 - 正式主機 `/srv/dualplate/download/`：先傳 `/tmp`、核對 SHA-256 後改名換上；舊版留作 `dualplate-1.0.0.apk.bak`（網站讀不到）。之後才改 `version.json`（versionCode 2、`Bug Fixed`、`minVersionCode` 仍為 1，不強制）。
 - 同日管理者「1.1.0需要強制更新」：`minVersionCode` 改為 2。舊版打開 App 即彈出關不掉的「有新版本 1.1.0」（Bug Fixed／這個版本已停止使用，請先更新。〔立即更新〕）；Android 5、6 的手機裝不了新版，舊版也不能再用。
+
+### 2026-11-23（Android 1.1.1 APK 發佈到網站，強制更新）
+
+- 管理者「1.1.0 APK，推更新。需要強制更新」「想改成 1.1.1」「只是推apk」：帶上線上客服紅點（`9ac20f7`）的 Android 版，只發 APK，iOS 不動。
+- **`app/pubspec.yaml` 沒有改（仍是 `1.1.0+2`）**，免得觸發新的 TestFlight、把 iOS 版本變成 1.1.1。打包時臨時改成 `1.1.1+3` 跑 `app/tool/build_apk.sh`，打完改回。**下一次發 APK，versionCode 要用 4 以上**。
+- 簽名 SHA1 `0a116b44…711f`；APK SHA-256 `2eee3f5a…daca22`，約 70MB。
+- 模擬器（Android 16）：先裝網站上的 1.1.0，再覆蓋安裝 1.1.1 成功，App 打得開。
+- 正式主機 `/srv/dualplate/download/`：先傳 `/tmp`、核對 SHA-256 後換上；1.1.0 留作 `dualplate-1.1.0.apk.bak`（網站讀不到）。之後改 `version.json`：versionCode 3、`1.1.1`、`Bug Fixed`、`minVersionCode` 3（強制）。
 
 ### 2026-11-23（5b 讀卡收尾：管理者「目前可以接受」）
 
