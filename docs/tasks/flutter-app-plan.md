@@ -533,6 +533,7 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 - `app/tool/build_apk.sh` 打包：`1.1.0`／versionCode 2，簽名 SHA1 `0a116b44…711f`，約 70MB（舊版約 30MB）。
 - 模擬器（Android 16）：先裝網站上的 1.0.0，再覆蓋安裝 1.1.0 成功，App 打得開。舊版 App 內「立即更新」的下載安裝沒有重新試。
 - 正式主機 `/srv/dualplate/download/`：先傳 `/tmp`、核對 SHA-256 後改名換上；舊版留作 `dualplate-1.0.0.apk.bak`（網站讀不到）。之後才改 `version.json`（versionCode 2、`Bug Fixed`、`minVersionCode` 仍為 1，不強制）。
+- 同日管理者「1.1.0需要強制更新」：`minVersionCode` 改為 2。舊版打開 App 即彈出關不掉的「有新版本 1.1.0」（Bug Fixed／這個版本已停止使用，請先更新。〔立即更新〕）；Android 5、6 的手機裝不了新版，舊版也不能再用。
 
 ### 2026-11-23（5b 讀卡收尾：管理者「目前可以接受」）
 
