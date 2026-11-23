@@ -32,9 +32,9 @@
 
 - **驗收工具**：`scripts/lead-review.sh`、`scripts/shot-service.mjs` 和 `.review/`（`shot-requests.txt` 除外）屬負責人，不得讀取以外的用途、不得修改。負責人每輪會比對受保護檔案、測試與斷言數量；**不得刪除或放寬現有測試**，確有需要時在報告寫明理由，由負責人決定。
 
-- **客戶端兩份同步（管理者 2026-11-23 確定）**：iOS、Android App 用 Flutter（`app/`）；網頁版（H5）和微信小程序用 uni-app（`mobile/`）；伺服器（`api/`）兩邊共用。客戶端的畫面或流程改動**必須兩份都做**（`mobile/` 一份、`app/` 一份），兩邊畫面和流程保持一致；只改一邊的，報告要寫明另一邊為何不用改。業務規則放在伺服器，不要在客戶端各寫一份。`mobile/` 裏 App 專用的代碼（`#ifdef APP-PLUS` 等）已不再發佈到 App，不要再為它改動，等計劃階段 6 刪除（見 `docs/tasks/flutter-app-plan.md`）。
-- **客戶端由負責人親自設計**：`mobile/` 的頁面、`mobile/src/components/MainlandPlate.vue`、`HongKongPlate.vue` 和 `api/src/customer-routes.js` 是負責人按管理者意見做的，任務沒有明確要求時不要改動。
-- **批文卡前端效果必須保留**：不得修改 `admin/src/components/ApprovalCard.vue`、`mobile/src/components/ApprovalCard.vue` 的呈現；`App.vue` 中批文卡預覽、翻轉、上傳辨識、手動修改、原件核對等區塊不得刪改（版本選擇已由管理者決定移除，見 docs/tasks/card-latest-only-brief.md）。後端存檔邏輯可以改，但前端流程必須照常可用。
+- **客戶端兩份同步（管理者 2026-11-23 確定）**：iOS、Android App 用 Flutter（`app/`）；網頁版（H5）和微信小程序用 uni-app（`mobile/`）；伺服器（`api/`）兩邊共用。客戶端的畫面或流程改動**必須兩份都做**（`mobile/` 一份、`app/` 一份），兩邊畫面和流程保持一致；只改一邊的，報告要寫明另一邊為何不用改。業務規則放在伺服器，不要在客戶端各寫一份。`mobile/` 裏的 App 專用代碼和舊的 DCloud 專案（`android/`、`ios/`）已在 2026-11-23 階段 6 刪除，不要再加 `#ifdef APP-PLUS`；App 的發佈和簽名見 `app/RELEASE.md`。
+- **客戶端由負責人親自設計**：`mobile/` 的頁面、`mobile/src/components/MainlandPlate.vue`、`HongKongPlate.vue`，Flutter 版的頁面（`app/lib/pages/`）和車牌（`app/lib/business/plates.dart`），以及 `api/src/customer-routes.js` 是負責人按管理者意見做的，任務沒有明確要求時不要改動。
+- **批文卡前端效果必須保留**：不得修改 `admin/src/components/ApprovalCard.vue`、`mobile/src/components/ApprovalCard.vue`、`app/lib/business/approval_card.dart` 的呈現；`App.vue` 中批文卡預覽、翻轉、上傳辨識、手動修改、原件核對等區塊不得刪改（版本選擇已由管理者決定移除，見 docs/tasks/card-latest-only-brief.md）。後端存檔邏輯可以改，但前端流程必須照常可用。
 - 不讀取或修改 `api/data/`、`data/`、任何 `*.sqlite`；`api/test/fixtures/cards/` 只可在測試中讀取，不得複製到其他位置。
 - 不新增 npm 依賴（任務另有說明除外）；不 git commit、不建立分支。
 - 不改動與任務無關的程式碼；後端風格與 `api/src/server.js` 一致。

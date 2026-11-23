@@ -54,23 +54,17 @@ import { useBackClose } from '../../lib/back-close'
 useBackClose()
 import { useConfirm } from '../../lib/choice'
 const confirmBox=useConfirm()
-// 安卓 App 檢查新版本（lib/app-update.js）；條款提示等它關掉才出，兩個提示框不會疊在一起
-import { useAppUpdate } from '../../lib/app-update'
-const appUpdate=useAppUpdate()
 import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { api, getUser, openPlate, startRequest, requestTone, clientStage, checkTerms, rememberMode } from '../../lib/api'
 import DueDate from '../../components/DueDate.vue'
 import PlateChip from '../../components/PlateChip.vue'
 import WelcomeGuide from '../../components/WelcomeGuide.vue'
-import { takeHome, saveHome } from '../../lib/launch'
 const user=ref(getUser()),guideReady=ref(false)
-// App 版載入頁已先取好的資料（只有第一次打開有；安卓 App 是上次存下的資料，下面 load() 再取最新），免得數字由 0 跳到實數
-const home=takeHome()
-const data=ref(home?.overview||{unreadNotifications:0,advisor:null,customerName:'',counts:{pending:0,ok:0,due:0,overdue:0},plates:[],deadlines:[],todos:[],activeRequests:[]})
-const notices=ref(home?.notices||[]),loaded=ref(!!home)
+const data=ref({unreadNotifications:0,advisor:null,customerName:'',counts:{pending:0,ok:0,due:0,overdue:0},plates:[],deadlines:[],todos:[],activeRequests:[]})
+const notices=ref([]),loaded=ref(false)
 const selfManaged=computed(()=>data.value.serviceMode==='自管')
-async function load(){user.value=getUser();if(!user.value)return uni.navigateTo({url:'/pages/login/login'});appUpdate.check().then(()=>checkTerms(confirmBox.ask)).then(result=>{if(result!=='opened')guideReady.value=true});try{const [overview,list]=await Promise.all([api('/my/overview'),api('/my/notifications').catch(()=>({items:[]}))]);data.value=overview;rememberMode(overview.serviceMode);notices.value=list.items||[];saveHome(overview,notices.value)}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
+async function load(){user.value=getUser();if(!user.value)return uni.navigateTo({url:'/pages/login/login'});checkTerms(confirmBox.ask).then(result=>{if(result!=='opened')guideReady.value=true});try{const [overview,list]=await Promise.all([api('/my/overview'),api('/my/notifications').catch(()=>({items:[]}))]);data.value=overview;rememberMode(overview.serviceMode);notices.value=list.items||[]}catch(e){uni.showToast({title:e.message,icon:'none'})}finally{loaded.value=true}}
 // 待辦只放要客戶動手的：要你提供的資料、你自理（或要你過關）而快到期／已逾期的事項、要你處理的未讀通知
 // 通知只有兩類要客戶動手：文件需重交、自辦更新被顧問退回；辦理進度、到期、改回等只是告知，留在鈴鐺
 const actionNotices=new Set(['attachment','self_handled_returned'])

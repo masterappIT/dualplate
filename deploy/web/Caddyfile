@@ -48,7 +48,7 @@ http://{$MOBILE_DOMAIN}:80 {
     # App 下載頁（靜態網頁，deploy/web/download/）：沿用本網域，不開新子網域
     redir /download /download/ 308
     # 安卓 APK（約 32MB）不入 git、不入映像：放在主機 /srv/dualplate/download/，唯讀掛進容器的 /srv/apk（deploy/compose.yaml）。
-    # 檔案不在就回 404，不能落到下面的客戶端首頁。上傳步驟見 android/README.md「發新版本」
+    # 檔案不在就回 404，不能落到下面的客戶端首頁。上傳步驟見 app/RELEASE.md「Android」
     handle /download/dualplate.apk {
         root * /srv/apk
         rewrite * /dualplate.apk

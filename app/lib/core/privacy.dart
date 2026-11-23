@@ -1,8 +1,8 @@
-// 安卓第一次打開的條款同意框：對應 DCloud 的私隱同意框（android/ 的 AndroidManifest.xml DCLOUD_PRIVACY_PROMPT=template，
-// 內容在 mobile/src/androidPrivacy.json；android/README.md「私隱同意框和權限」）。iOS 沒有這個框。
+// 安卓第一次打開的條款同意框：照搬以前 DCloud 版的私隱同意框（DCLOUD_PRIVACY_PROMPT=template；DCloud 版已在階段 6 移除，
+// 原文留在 test/fixtures/android_privacy.json）。iOS 沒有這個框。
 // 同意前不載入 App（不讀登入資料、不連網絡）；按「不同意」再問一次（second），再不同意就退出 App；返回鍵不起作用（backToExit:false）。
 // 同意後記下 version，以後不再問；version 加 1 時要所有人重新同意。
-// 文字照抄 androidPrivacy.json（test/privacy_test.dart 讀原檔逐字核對）。
+// 文字照抄原文（test/privacy_test.dart 讀 test/fixtures/android_privacy.json 逐字核對）。改了私隱聲明要所有人重新同意時，兩邊一起改，version 加 1。
 import 'session.dart';
 
 const privacyVersion = '1';

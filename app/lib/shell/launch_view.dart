@@ -1,6 +1,6 @@
-// App 版第一頁（啟動畫面）：一比一移植 mobile/src/pages/launch/launch.vue，和接手的原生層（android/ 的 LaunchCover、LaunchNavBar）。
+// App 版第一頁（啟動畫面）：一比一移植以前 DCloud 版的 pages/launch/launch.vue，和接手的原生層（LaunchCover、LaunchNavBar；DCloud 版已在階段 6 移除）。
 //
-// iOS：第一幀與原生啟動圖（ios/Runner/Base.lproj/LaunchScreen.storyboard，= 現有 App 的 ios/app/HBuilder-Hello/LaunchScreen.storyboard）
+// iOS：第一幀與原生啟動圖（ios/Runner/Base.lproj/LaunchScreen.storyboard，= 以前 DCloud 版的 LaunchScreen.storyboard）
 // 同一張圖、同一位置：深翠綠 #0B3B30，正中 180pt 的 launch-logo.png（整個螢幕正中，不按安全區）。原生啟動畫面要等 Flutter 畫出第一幀才拿走，
 // 所以第一幀等這張圖載入好才畫（main.dart deferFirstFrame），切換時看不出來。之後換上分層（assets/launch/，由 SVG 原樣渲染）播「雙牌合位」：
 // 黃色香港牌與黑色內地牌分開再彈回合上，螺絲一閃；等候時反光掃過兩塊玻璃牌。至少停留 2 秒；資料慢就繼續反光等資料；

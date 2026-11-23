@@ -11,7 +11,6 @@
 #
 # 注意：Flutter 版和現有 App 的包名相同（com.masterappinc.dualplate），但除錯版簽名不同。
 # 每次安裝前都先移除模擬器上的舊 App（App 內資料會清空），連同 HBuilder 基座和 uni-app 舊版（管理者 11-23「HBuilder 我不想再看到」）。
-# 不要再用 android/emu-run.sh：那是 uni-app 舊版，會裝回 HBuilder 的東西。
 set -eu
 
 APP=$(cd "$(dirname "$0")" && pwd)

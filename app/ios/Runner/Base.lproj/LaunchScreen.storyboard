@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!-- 啟動畫面：深通行綠底（jade-deep #0B3B30）＋兩塊車牌居中（180pt 畫布，沒有圖示外框），照現有 App 的 ios/app/HBuilder-Hello/LaunchScreen.storyboard。
+<!-- 啟動畫面：深通行綠底（jade-deep #0B3B30）＋兩塊車牌居中（180pt 畫布，沒有圖示外框），照以前 DCloud 版的 LaunchScreen.storyboard。
      Flutter 的第一幀 lib/shell/launch_view.dart LaunchAnimation 用同一張圖（assets/launch/launch-logo.png）、同一位置接上，切換時看不出來；改這裏要一併改那邊。 -->
 <document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="16096" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="01J-lp-oVM">
     <device id="retina6_1" orientation="portrait" appearance="light"/>

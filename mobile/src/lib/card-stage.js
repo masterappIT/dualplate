@@ -1,5 +1,5 @@
 // 批文卡對準框的畫面部分（鏡頭預覽、相片拖動縮放、截取框內卡面），只用瀏覽器 DOM。
-// 網頁版由 CardCapture.vue 直接使用；App 版的邏輯層沒有 DOM，由 CardCapture.vue 的 renderjs 在視圖層（WebView）使用。
+// 網頁版由 CardCapture.vue 直接使用。
 // 只上傳框內卡面連框外一圈（每邊 6%，固定 2274×1445 JPEG），伺服器再找卡的真正邊界（api/src/card-face.js）。
 export const OUT_W = 2030, OUT_H = 1290, MARGIN = 0.06, FULL_W = Math.round(OUT_W * (1 + 2 * MARGIN)), FULL_H = Math.round(OUT_H * (1 + 2 * MARGIN))
 

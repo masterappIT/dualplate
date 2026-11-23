@@ -1,6 +1,6 @@
 #!/bin/sh
 # iOS 啟動動畫的分層圖（階段 4）：把 mobile/src/static/launch/ 的五個 SVG 原樣渲染成透明 PNG，放 app/assets/launch/。
-# Flutter 不加 svg 套件；分層有濾鏡（陰影、內陰影），用 Google Chrome 無頭模式渲染（做法同 android/art/make-splash.sh）。
+# Flutter 不加 svg 套件；分層有濾鏡（陰影、內陰影），用 Google Chrome 無頭模式渲染。
 # 每層按 SVG 自己的寬高（即 launch.vue 以 1024 設計畫布排版時的大小）渲染，畫面上縮到 180pt 畫布，3 倍螢幕上仍有約 1.9 倍餘量。
 # 另把第一幀的靜態圖 launch-logo.png（iOS 原生啟動圖 LaunchLogo 同一張）抄成 1x／2x／3x 三個檔。
 # 用法：sh app/tool/launch_png.sh

@@ -1,15 +1,11 @@
 <template>
   <view class="login">
-    <!-- #ifdef APP-PLUS -->
-    <!-- App 全螢幕：狀態列下面固定一條深綠，往下滑時內容不會壓在時間、訊號上 -->
-    <view v-if="scrolled" class="status-cover" />
-    <!-- #endif -->
     <!-- 上半：深通行綠畫布，口岸節點網絡＋牌照黃脈衝（交互取自管理者腳手架的節點網絡，外觀為本產品證件感） -->
     <view class="hero guilloche">
       <!-- #ifdef MP -->
       <canvas id="ports" type="2d" class="ports" />
       <!-- #endif -->
-      <!-- H5、App 的畫布由下方 renderjs 在畫面層建立；burstKey 變動時播放登入成功的擴散 -->
+      <!-- H5 的畫布由下方 renderjs 在畫面層建立；burstKey 變動時播放登入成功的擴散 -->
       <!-- #ifndef MP -->
       <view id="ports" class="ports" :prop="burstKey" :change:prop="portsView.burst" />
       <!-- #endif -->
@@ -65,23 +61,11 @@
       <view class="terms-links"><text class="link" @click="openTerms('terms')">服務條款</text><text class="terms-dot">·</text><text class="link" @click="openTerms('privacy')">私隱聲明</text></view>
       <view v-if="done" class="done"><StampMark text="已登入" tone="jade" play /></view>
     </view>
-    <!-- #ifdef APP-PLUS -->
-    <wd-message-box />
-    <!-- #endif -->
   </view>
 </template>
 <script setup>
 import { ref, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
 import { api, saveSession } from '../../lib/api'
-// #ifdef APP-PLUS
-import { onPageScroll, onShow } from '@dcloudio/uni-app'
-// 安卓 App 檢查新版本（lib/app-update.js）：沒登入也要收到必須更新的通知
-import { useAppUpdate } from '../../lib/app-update'
-import { useBackClose } from '../../lib/back-close'
-const appUpdate = useAppUpdate()
-useBackClose()
-onShow(() => appUpdate.check())
-// #endif
 function openTerms(tab){uni.navigateTo({url:'/pages/terms/terms?tab='+tab})}
 function goSignup(){uni.navigateTo({url:'/pages/signup/signup'})}
 import MainlandPlate from '../../components/MainlandPlate.vue'
@@ -93,17 +77,6 @@ import { startPorts } from '../../lib/ports-canvas'
 
 const email = ref(''), phone = ref(''), mode = ref('phone'), password = ref(''), binding = ref(false), bindCode = ref(''), loading = ref(false), error = ref(''), shake = ref(false), done = ref(false), application = ref(null)
 const top = (uni.getSystemInfoSync().statusBarHeight || 20) + 28
-// 只在往下滑後顯示狀態列底色，靜止時保留花紋背景
-const scrolled = ref(false)
-// #ifdef APP-PLUS
-let scrollTop = 0, keyboard = 0
-const cover = () => { scrolled.value = scrollTop > 4 || keyboard > 0 }
-onPageScroll(event => { scrollTop = event.scrollTop; cover() })
-// 鍵盤彈出時頁面被推上去，不算滑動，也要蓋住狀態列
-const onKeyboard = ({ height }) => { keyboard = height; cover() }
-uni.onKeyboardHeightChange(onKeyboard)
-onBeforeUnmount(() => uni.offKeyboardHeightChange?.(onKeyboard))
-// #endif
 // 仿真車牌以 rpx 定寬，寬螢幕會跟着放大；換算成固定像素，任何寬度都一樣大。高度都約 34px：內地 440×140 → 107px 寬，港澳 → 159px 寬
 const toRpx = value => value * 10000 / uni.upx2px(10000), mainlandWidth = toRpx(107), localWidth = toRpx(159)
 const instance = getCurrentInstance()
@@ -157,7 +130,7 @@ async function bindWechat() {
 }
 function fail(message) { error.value = message; shake.value = false; setTimeout(() => { shake.value = true }, 10) }
 
-// ── 口岸網絡畫布（繪圖見 lib/ports-canvas.js）：H5、App 由 renderjs 在畫面層畫，小程序在這裏取畫布節點畫
+// ── 口岸網絡畫布（繪圖見 lib/ports-canvas.js）：H5 由 renderjs 在畫面層畫，小程序在這裏取畫布節點畫
 let reduced = false, network = null
 const burstKey = ref(0)
 function burst() { network?.burst(); burstKey.value++ }
@@ -209,9 +182,6 @@ export default {
 <!-- #endif -->
 <style scoped>
 .login{min-height:100vh;background:var(--paper);display:flex;flex-direction:column}
-/* #ifdef APP-PLUS */
-.status-cover{position:fixed;top:0;left:0;right:0;height:var(--status-bar-height);background:var(--jade-deep);z-index:20}
-/* #endif */
 .hero{position:relative;height:calc(52vh + 30px);min-height:350px;background:var(--jade-deep);color:#E3EFEA}
 .ports{position:absolute;left:0;top:0;width:100%;height:100%}
 .hero-text{position:relative;padding:0 24px;pointer-events:none}

@@ -6,10 +6,10 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// 正式簽名金鑰：和現有 App 同一把（android/signing/，不入庫），網站 APK 每一版都要用它簽，用戶才能覆蓋更新。
-// 檔案在 android/signing/release.properties；CI 可用同名環境變數代替。除錯版照舊用除錯金鑰（app/run.sh 會先移除簽名不同的 App）。
+// 正式簽名金鑰：和以前 DCloud 版同一把（app/signing/android/，不入庫），網站 APK 每一版都要用它簽，用戶才能覆蓋更新。
+// 檔案在 app/signing/android/release.properties；CI 可用同名環境變數代替。除錯版照舊用除錯金鑰（app/run.sh 會先移除簽名不同的 App）。
 val releaseProps = Properties().apply {
-    val file = rootProject.file("../../android/signing/release.properties")
+    val file = rootProject.file("../signing/android/release.properties")
     if (file.exists()) file.inputStream().use { load(it) }
 }
 fun secret(key: String): String = System.getenv(key) ?: releaseProps.getProperty(key, "")
@@ -43,7 +43,7 @@ android {
     signingConfigs {
         create("release") {
             if (hasReleaseKey) {
-                storeFile = rootProject.file("../../android/signing/${secret("RELEASE_STORE_FILE")}")
+                storeFile = rootProject.file("../signing/android/${secret("RELEASE_STORE_FILE")}")
                 storePassword = secret("RELEASE_STORE_PASSWORD")
                 keyAlias = secret("RELEASE_KEY_ALIAS")
                 keyPassword = secret("RELEASE_KEY_PASSWORD")

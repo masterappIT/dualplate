@@ -5,6 +5,7 @@
 - 方案、六個階段、代替清單和進度記錄：`docs/tasks/flutter-app-plan.md`
 - 必須按目前 App 的 UI **一比一**完成：畫面、各種狀態、互動和動畫都要和現在相同，移植期間不做改良。
 - 後端不改，連 `https://dualplate.masterappinc.com`。
+- 發佈 iOS（TestFlight、App Store）和 Android（網站 APK）、簽名檔案：`RELEASE.md`。
 
 ## 目錄
 

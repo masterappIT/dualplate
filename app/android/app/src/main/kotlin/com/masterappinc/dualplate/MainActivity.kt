@@ -34,7 +34,7 @@ class MainActivity : FlutterActivity() {
                     finishAffinity()
                     Process.killProcess(Process.myPid())
                 }
-                // App 內更新（lib/business/app_update.dart，照 mobile/src/lib/app-update.js）
+                // App 內更新（lib/business/app_update.dart，照以前 DCloud 版的 app-update.js）
                 "versionCode" -> result.success(installedVersion())
                 // 線上客服帶入的「來自」（lib/business/support.dart）：Android App 1.1.0
                 "versionName" -> result.success(try { packageManager.getPackageInfo(packageName, 0).versionName } catch (e: PackageManager.NameNotFoundException) { null })

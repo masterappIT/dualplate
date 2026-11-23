@@ -1,5 +1,5 @@
 // 安卓第一次打開的條款同意框（lib/core/privacy.dart、lib/shell/launch_view.dart PrivacyDialog）：
-// 文字逐字對照 mobile/src/androidPrivacy.json；同意狀態按 version 記下。一個情況一個測試。
+// 文字逐字對照 test/fixtures/android_privacy.json（以前 DCloud 版的 mobile/src/androidPrivacy.json，階段 6 刪除時搬來這裏）；同意狀態按 version 記下。一個情況一個測試。
 import 'dart:convert';
 import 'dart:io';
 import 'package:dualplate/core/external.dart' show debugLaunchUrl;
@@ -12,7 +12,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-final Map<String, dynamic> source = jsonDecode(File('../mobile/src/androidPrivacy.json').readAsStringSync());
+final Map<String, dynamic> source = jsonDecode(File('test/fixtures/android_privacy.json').readAsStringSync());
 
 // <a href="x">t</a> → (t, x)；<br/> 分行
 List<List<PrivacySpan>> parse(String html) => html.split('<br/>').map((line) {

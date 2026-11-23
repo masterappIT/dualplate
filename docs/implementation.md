@@ -64,10 +64,9 @@ npm run dev:h5
 ```bash
 cd /Users/vincentw/development/dualplate/admin && npm run build
 cd /Users/vincentw/development/dualplate/mobile && npm run build:mp-weixin
-cd /Users/vincentw/development/dualplate/mobile && npm run build:app-plus
 ```
 
-小程序產物在 `mobile/dist/build/mp-weixin`，App 資源在 `mobile/dist/build/app`。發布前須填寫 `mobile/src/manifest.json` 的微信 AppID 和 App 識別配置，將 `VITE_API_BASE_URL` 指向可訪問的 HTTPS API，並完成微信平台與 iOS／Android 的簽名、審核。此倉庫沒有官方政務系統 API 接入，也不會代客戶自動向政府提交申請。
+小程序產物在 `mobile/dist/build/mp-weixin`。發布前須填寫 `mobile/src/manifest.json` 的微信 AppID，將 `VITE_API_BASE_URL` 指向可訪問的 HTTPS API，並完成微信平台的審核。iOS、Android App 是 Flutter 版（`app/`），打包和發佈見 `app/RELEASE.md`。此倉庫沒有官方政務系統 API 接入，也不會代客戶自動向政府提交申請。
 
 ## 資料和規則邊界
 

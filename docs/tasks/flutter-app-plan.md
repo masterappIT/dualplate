@@ -113,8 +113,8 @@
 | 2 | 掃描批文卡和牌照詳情（關卡） | 同一批實卡，Flutter 版讀對的欄數不低於現有 App；管理者決定繼續 | 約 1 週 | 收尾（管理者 2026-11-17 決定）：2a–2c 已合併；2d 真機讀卡未過，問題見第九節；Flutter 其餘部分全部完成後再回來調整讀卡 |
 | 3 | 其餘頁面（3-0 預備、3a–3d 四批、3e 收尾） | 第八節清單的頁面和組件全部一比一，三種帳號走過 | 2–3 週 | 完成：管理者 2026-11-21 批准，逐批做；3-0 完成（1a49ad9）；3a 已合併（331da7c）；3b 已合併（2c2cabd）；3c 已合併（0d7c356）；3d 已合併（a691b0c）；3e 收尾完成（2026-11-22），22 頁全部搬完；待決定事項見第七節 |
 | 4 | App 專用功能 | 啟動畫面、首頁緩存、App 內更新、條款同意框、返回鍵全部和現在一樣 | 3–4 天 | 完成：flutter-4 一次做完五項並補斷網檢查，已合併 |
-| 5 | 發布 | iOS 1.1.0 通過審核上架；Android 新 APK 放上網站；真機從舊版升級成功 | 約 1 週 | 進行中：5b 讀卡收尾（管理者 2026-11-23「目前可以接受」）；5a 已推送（TestFlight 打包 Flutter 版；APK 未發佈）；5c、5d 未開始 |
-| 6 | 清理 | `mobile/` 不再有 App 專用代碼；舊 DCloud 專案移除 | 1–2 天（上線穩定約兩週後） | 未開始 |
+| 5 | 發布 | iOS 1.1.0 通過審核上架；Android 新 APK 放上網站；真機從舊版升級成功 | 約 1 週 | 進行中：5a 完成（TestFlight 打包 Flutter 版；網站 APK 2026-11-23 發佈 1.1.0、1.1.1）；5b 讀卡收尾（管理者 2026-11-23「目前可以接受」）；5c 真機從舊版升級、5d iOS 1.1.0 送審等管理者 |
+| 6 | 清理 | `mobile/` 不再有 App 專用代碼；舊 DCloud 專案移除 | 1–2 天（上線穩定約兩週後） | 完成（2026-11-23，管理者「整個 flutter 可以收尾了」「照建議現在做」，提早做，不等兩週）；見第九節 |
 
 **甚麼時候算「代替了 uni-app」**：
 - **階段 5 完成**：用戶手上的 iOS、Android App 已經是 Flutter 版，uni-app 不再用在 App 上。
@@ -392,12 +392,12 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 | 返回鍵先關彈窗 | `lib/back-close.js` | 1 | 完成（返回箭頭、Android 返回鍵先關彈窗；子頁 iOS 右滑連彈窗一起返回，和現有 App 一樣） |
 | 相機和相片權限、用途說明卡 | `lib/pick-image.js` | 2 | 已合併，Android 相冊路徑未截圖 |
 | 口岸圖 | `lib/ports-canvas.js` | 3 | 已做（1d，登入頁用）；首頁用時再對照 |
-| iOS 雙牌合位啟動動畫、Android 靜態 M 雲 | `pages/launch`、`lib/launch.js` | 4 | 未做 |
-| 首頁緩存 | `homeCache` | 4 | 未做 |
-| Android App 內更新 | `lib/app-update.js` | 4 | 未做 |
-| 首次打開條款同意框 | `androidPrivacy.json` | 4 | 未做 |
-| Android 底部導航條顏色 | `lib/nav-bar.js` | 4 | 未做 |
-| iOS TestFlight 自動上傳 | `.github/workflows/testflight.yml` | 5 | 未做 |
+| iOS 雙牌合位啟動動畫、Android 靜態 M 雲 | `pages/launch`、`lib/launch.js` | 4 | 完成（flutter-4） |
+| 首頁緩存 | `homeCache` | 4 | 完成（flutter-4） |
+| Android App 內更新 | `lib/app-update.js` | 4 | 完成（flutter-4；2026-11-23 實際發佈 1.1.0、1.1.1 用過） |
+| 首次打開條款同意框 | `androidPrivacy.json` | 4 | 完成（flutter-4；原文搬到 `app/test/fixtures/android_privacy.json`） |
+| Android 底部導航條顏色 | `lib/nav-bar.js` | 4 | 完成（flutter-4） |
+| iOS TestFlight 自動上傳 | `.github/workflows/testflight.yml` | 5 | 完成（5a，`app/` 有改動才打包） |
 | Android 簽名、APK 下載、`version.json` | `android/`、`deploy/web/download` | 5 | 完成（2026-11-23 發佈 1.1.0、1.1.1） |
 
 不搬：微信登入和綁定（只在小程序）、網頁版專用處理（`#ifdef H5`）。
@@ -542,6 +542,17 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 - 簽名 SHA1 `0a116b44…711f`；APK SHA-256 `2eee3f5a…daca22`，約 70MB。
 - 模擬器（Android 16）：先裝網站上的 1.1.0，再覆蓋安裝 1.1.1 成功，App 打得開。
 - 正式主機 `/srv/dualplate/download/`：先傳 `/tmp`、核對 SHA-256 後換上；1.1.0 留作 `dualplate-1.1.0.apk.bak`（網站讀不到）。之後改 `version.json`：versionCode 3、`1.1.1`、`Bug Fixed`、`minVersionCode` 3（強制）。
+
+### 2026-11-23（階段 6 清理完成，提早做）
+
+- 管理者「整個 flutter 可以收尾了」，負責人建議現在就做階段 6（不等上線穩定兩週：線上 App 已不用這些代碼，代碼留在 git 歷史；代價是真要退回 DCloud 版時要重新下載約 2.4 GB 的 SDK），管理者「照建議現在做」。
+- 簽名檔案先搬再刪：`android/signing/` → `app/signing/android/`，`ios/signing/` → `app/signing/ios/`（`.gitignore` 改為排除 `app/signing/`）。`app/android/app/build.gradle.kts`、`app/tool/build_apk.sh` 改用新位置；打包正式 APK（不發佈）核對簽名 SHA1 仍是 `0a116b44…711f`。TestFlight 用 GitHub 的 secret，不受影響。
+- 搬到 `app/`：`ios/create-signing.mjs` → `app/tool/create-signing.mjs`（證書 2027-11-03 到期要重跑）；`android/art/` → `app/art/`（圖示母版；DCloud 專用的 `make-splash.sh` 刪除）；`mobile/src/androidPrivacy.json` → `app/test/fixtures/android_privacy.json`（`test/privacy_test.dart` 照舊逐字核對）。兩份舊 README 仍有用的部分（簽名、發佈步驟、TestFlight secret）寫進新的 `app/RELEASE.md`。
+- `mobile/` 刪除 App 專用代碼：所有 `#ifdef APP-PLUS`，`lib/launch.js`、`lib/nav-bar.js`、`lib/app-update.js`、`pages/launch`、`pages/card-capture`、`androidPrivacy.json`，`pick-image.js` 的安卓部分（只剩 `uni.chooseImage`），`back-close.js` 給導航條用的遮罩顏色，`manifest.json` 的 `app-plus` 設定，`build:app-plus` 指令和 `@dcloudio/uni-app-plus` 依賴。首頁不再讀 App 載入頁和首頁緩存的資料（網頁版本來就沒有）。
+- 刪除舊的 DCloud 專案 `android/`、`ios/`（入庫 126 個檔案，另有本機不入庫的 DCloud SDK 約 2.4 GB）。
+- `AGENTS.md`：受保護檔案加入 Flutter 版的頁面、車牌（`plates.dart`）和批文卡（`approval_card.dart`）；兩份同步一條改寫為 App 代碼已刪除。
+- 檢查：`mobile` 網頁版、微信小程序打包成功；`api` 測試 1744 個全部通過；`flutter analyze` 無問題、`flutter test` 1624 個全部通過；本機網頁版（390 寬）登入、首頁（含使用導覽）、拍批文卡畫面正常，1366 寬首頁正常，主控台沒有錯誤（瀏覽器沒有鏡頭，只看到「無法開啟鏡頭」的畫面）。
+- 未做：GitHub 上舊 DCloud 版用的 secret（`DCLOUD_APPKEY`、`IOS_SDK_PASSPHRASE`）、變數 `IOS_SDK_ENC_SHA256` 和加密 SDK 的 Release（`ios-sdk-*`）已用不到，要管理者同意才刪。
 
 ### 2026-11-23（5b 讀卡收尾：管理者「目前可以接受」）
 

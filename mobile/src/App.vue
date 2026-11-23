@@ -30,11 +30,6 @@ page{
 view,text,input,textarea,button{box-sizing:border-box}
 button::after{border:0}
 .page{min-height:100vh;padding:16px 16px calc(96px + env(safe-area-inset-bottom))}
-/* #ifdef APP-PLUS */
-/* 安卓 App：網頁停在原生導航列上面，env(safe-area-inset-bottom) 卻仍回報導航列高度（Android 17 為 24px），不再多留這一段。
-   App 裏只有 iPhone 的 WebView 支援 -webkit-touch-callout，用它分辨，iPhone 照舊加上底部安全區（WelcomeGuide.vue、CardCapture.vue 同樣做法） */
-@supports not (-webkit-touch-callout:none){.page{padding-bottom:96px}}
-/* #endif */
 .page-title{display:block;margin:0 0 4px;font-size:var(--fs-title);font-weight:800;line-height:1.3;color:var(--jade-deep)}
 .subtle{display:block;color:var(--ink-2);font-size:var(--fs-meta);line-height:1.6}
 .intro{display:block;color:var(--ink-2);font-size:var(--fs-body);line-height:1.6;margin-bottom:16px}
