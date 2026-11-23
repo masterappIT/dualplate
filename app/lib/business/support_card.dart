@@ -7,9 +7,11 @@
 // 外距（.support margin-top 16、.card margin-bottom 12）由所在頁面按外距合併處理，這裏只畫卡本身。
 import 'package:flutter/widgets.dart';
 
+import 'num_text.dart';
 import '../ui/base.dart';
 import '../ui/tokens.dart';
 import 'support.dart';
+import 'support_unread.dart';
 
 const supportIntro = '有問題直接發訊息，可以傳相片和文件。下班後也可以留言，我們上班後回覆。';
 const supportPublicIntro = '發訊息給客服，我們會盡快回覆。';
@@ -57,17 +59,37 @@ class SupportCard extends StatelessWidget {
           // .open-btn：撐滿、上距 12；已登入用主按鈕，未登入用線框按鈕
           Padding(
             padding: const EdgeInsets.only(top: 12),
-            child: Btn(
-              '聯絡客服',
-              kind: public ? BtnKind.line : BtnKind.primary,
-              expand: true,
-              onTap: () => openSupport(context, public: public),
+            // 已登入版：客服回覆了有紅點（未讀數，超過 99 寫 99+；business/support_unread.dart）；未登入版沒有
+            child: ValueListenableBuilder<int>(
+              valueListenable: SupportUnread.count,
+              builder: (context, unread, _) => Btn(
+                '聯絡客服',
+                kind: public ? BtnKind.line : BtnKind.primary,
+                expand: true,
+                trailing: !public && unread > 0 ? UnreadDot(unread) : null,
+                onTap: () => openSupport(context, public: public),
+              ),
             ),
           ),
         ],
       ),
     );
   }
+}
+
+// 「聯絡客服」按鈕上的紅點：照 SupportCard.vue 的 .dot（最少寬 20、高 20、圓角 10、左右內距 6、紅底白字 12 號）
+class UnreadDot extends StatelessWidget {
+  const UnreadDot(this.count, {super.key});
+  final int count;
+  @override
+  Widget build(BuildContext context) => Container(
+        key: const ValueKey('support-dot'),
+        constraints: const BoxConstraints(minWidth: 20),
+        height: 20,
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        decoration: BoxDecoration(color: C.overdue, borderRadius: BorderRadius.circular(10)),
+        child: Center(widthFactor: 1, child: Text(badgeText(count), softWrap: false, style: numStyle(ts(Fs.cap, weight: w700, color: C.card, height: 1)))),
+      );
 }
 
 // mobile/src/static/chat.svg：viewBox 24、綠色 2px 線、圓角接點的對話泡泡

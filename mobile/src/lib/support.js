@@ -1,6 +1,6 @@
 // 線上客服：MasterBox 網站小視窗（docs/tasks/support-masterbox-plan.md 第 1 部分）
 // 只在 H5 網頁版運作；微信小程序打不開 MasterBox 的網域（未備案），supportAvailable 為 false，畫面不放客服卡
-// 不用小視窗的角落按鈕（data-button="none"），由本產品自己的「聯絡客服」按鈕打開；紅點用 unread 事件
+// 不用小視窗的角落按鈕（data-button="none"），由本產品自己的「聯絡客服」按鈕打開；紅點用 unread 事件（「聯絡客服」按鈕和底部「我的」分頁）
 // 已登入時用 setData 帶入客戶資料給客服參考（訪客改得到，不算已驗證；第二步改用伺服器簽的憑證）
 import { api, getUser } from './api'
 
@@ -18,6 +18,24 @@ let loaded = false
 const unreadListeners = new Set()
 let unreadCount = 0
 
+// 底部「我的」分頁的紅點（客服回覆了）：只在已登入時顯示
+// uni H5 只有正在顯示分頁頁面時才能設分頁紅點（不然回 not TabBar page），設不到就記着，轉到分頁頁面後再設
+const ME_TAB = 3
+let badgePending = false
+function applyBadge() {
+  // #ifdef H5
+  const count = getUser() ? unreadCount : 0
+  const done = { success: () => { badgePending = false }, fail: () => { badgePending = true } }
+  if (count > 0) uni.setTabBarBadge({ index: ME_TAB, text: count > 99 ? '99+' : String(count), ...done })
+  else uni.removeTabBarBadge({ index: ME_TAB, ...done })
+  // #endif
+}
+// #ifdef H5
+for (const name of ['switchTab', 'navigateBack', 'reLaunch', 'redirectTo']) {
+  uni.addInterceptor(name, { complete: () => { if (badgePending) setTimeout(applyBadge, 0) } })
+}
+// #endif
+
 function queue(...command) {
   // #ifdef H5
   window.MasterBoxChat = window.MasterBoxChat || []
@@ -31,7 +49,7 @@ export function loadSupport() {
   loaded = true
   // #ifdef H5
   window.MasterBoxChat = window.MasterBoxChat || []
-  queue('on', 'unread', count => { unreadCount = Number(count) || 0; unreadListeners.forEach(fn => fn(unreadCount)) })
+  queue('on', 'unread', count => { unreadCount = Number(count) || 0; unreadListeners.forEach(fn => fn(unreadCount)); applyBadge() })
   const script = document.createElement('script')
   script.src = WIDGET
   script.async = true
@@ -90,8 +108,17 @@ export async function syncSupportData() {
   queue('setData', data)
 }
 
-// 退出登入：清掉帶入的資料，換人用不會混（clearSession 呼叫）
+// 已登入就載入小視窗（App.vue 啟動時、登入成功時呼叫），不等打開「我的」頁：客服回覆了，底部「我的」分頁馬上有紅點
+// MasterBox 記得回訪的訪客，一載入就給出他離開期間的未讀數。網頁關着時沒有提示（要第二步的 Webhook）
+export function startSupport() {
+  if (!supportAvailable || !getUser()) return
+  loadSupport()
+  syncSupportData()
+}
+
+// 退出登入：清掉帶入的資料，換人用不會混；拿走分頁紅點（clearSession 呼叫）
 export function clearSupportData() {
   if (!supportAvailable || !loaded) return
   queue('clearData')
+  applyBadge()
 }

@@ -7,6 +7,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'business/app_update.dart' show UpdatePlatform;
 import 'business/company_editor.dart';
+import 'business/support_unread.dart';
 import 'core/session.dart';
 import 'pages/companies/companies_page.dart';
 import 'shell/launch_view.dart';
@@ -67,7 +68,8 @@ class _DualplateAppState extends State<DualplateApp> {
         routerConfig: router,
         // 紙色墊底：Android 換頁時上一頁變淡，透出的是頁面底色（uni-app animationAlphaBGColor = backgroundColor #F7F6F1）
         // 安卓底部導航列那一條按頁面底色配按鍵深淺（shell/system_bars.dart，階段 4）
-        builder: (context, child) => navBarDefault(ColoredBox(color: C.paper, child: child!)),
+        // 線上客服的紅點：已登入時在最底下放一個看不見的背景客服網頁（business/support_unread.dart）
+        builder: (context, child) => navBarDefault(ColoredBox(color: C.paper, child: SupportBackground(child: child!))),
         // 繁體字形：不指定時部分 Android 手機會用簡體或日文字形
         locale: const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant', countryCode: 'HK'),
         localizationsDelegates: GlobalMaterialLocalizations.delegates,

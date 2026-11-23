@@ -311,8 +311,10 @@ class Segmented<T> extends StatelessWidget {
 enum BtnKind { primary, secondary, small, line }
 
 class Btn extends StatelessWidget {
-  const Btn(this.text, {super.key, this.kind = BtnKind.primary, this.onTap, this.danger = false, this.solid = false, this.enabled = true, this.expand});
+  const Btn(this.text, {super.key, this.kind = BtnKind.primary, this.onTap, this.danger = false, this.solid = false, this.enabled = true, this.expand, this.trailing});
   final String text;
+  // 文字後面的小東西（例如「聯絡客服」的未讀數），間距 8；沒有時照舊
+  final Widget? trailing;
   final BtnKind kind;
   final VoidCallback? onTap;
   final bool danger, solid, enabled;
@@ -330,7 +332,12 @@ class Btn extends StatelessWidget {
       height: height,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(R.control), border: kind == BtnKind.line ? Border.all(color: C.rule) : null),
-      child: Center(widthFactor: 1, child: Text(text, softWrap: false, style: ts(size, weight: w700, color: fg, height: 1))),
+      child: Center(
+        widthFactor: 1,
+        child: trailing == null
+            ? Text(text, softWrap: false, style: ts(size, weight: w700, color: fg, height: 1))
+            : Row(mainAxisSize: MainAxisSize.min, children: [Text(text, softWrap: false, style: ts(size, weight: w700, color: fg, height: 1)), const SizedBox(width: 8), trailing!]),
+      ),
     );
     final full = expand ?? kind == BtnKind.primary;
     return Pressable(onTap: onTap, enabled: enabled, child: full ? box : Align(alignment: Alignment.centerLeft, widthFactor: 1, child: box));

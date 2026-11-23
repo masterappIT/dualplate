@@ -12,6 +12,11 @@
     text：預先放進輸入框的第一句（「問客服」），客戶自己按送出
   對話被關上（close 事件）時經 App 的 DualplateSupport 通道通知 App 回到原頁。
   # 後面的內容不會送到伺服器；讀完即從網址拿掉，不留在瀏覽記錄。
+
+  背景模式（網址加 ?bg=1，管理者 11-23「先做第一種」）：App 登入後在看不見的內嵌網頁開這一頁，只為拿未讀數給「我的」分頁和「聯絡客服」按鈕的紅點。
+    不打開對話、頁面上沒有 #support-chat 區塊（區塊算訪客看得見，會當作已讀），角落按鈕也不放（data-button="none"、不寫 data-container）。
+    未讀數變了就經 DualplateSupport 通道送「unread:數字」；setData 照前景一樣寫，客戶未打開對話前來自、客戶編號等已經記下。
+    和前景同一網域、同一個 localStorage，所以是同一位訪客、同一段對話。
 -->
 <style>
 html,body{margin:0;height:100%;background:#F7F6F1;font-family:-apple-system,"PingFang HK","Noto Sans TC",sans-serif}
@@ -20,12 +25,14 @@ html,body{margin:0;height:100%;background:#F7F6F1;font-family:-apple-system,"Pin
 </style>
 </head>
 <body>
-<div id="support-chat"></div>
 <button class="again" id="again" type="button">聯絡客服</button>
 <script>
 (function () {
+  var WIDGET = 'https://masterboxapp.masterappinc.com/c/widget.js'
+  var LINK = 'DaZ-K0ltDZ--4uZd9hNXXYI_'
   // App 帶入的欄位：寫入前先把這幾項都列出來，沒有值的寫 null，免得換了帳戶還留著上一位的顧問、牌照
   var KEYS = ['name', 'email', 'phone', '客戶編號', '後台連結', '管理方式', '顧問', '牌照', '來自']
+  var background = /(^|[?&])bg=1(&|$)/.test(location.search.slice(1))
   var payload = {}
   try {
     var b64 = location.hash.slice(1).replace(/-/g, '+').replace(/_/g, '/')
@@ -54,17 +61,38 @@ html,body{margin:0;height:100%;background:#F7F6F1;font-family:-apple-system,"Pin
   } else {
     chat.push(['clearData'])
   }
-  chat.push(text ? ['open', { text: text }] : ['open'])
-  chat.push(['on', 'close', function () {
-    if (inApp) return tellApp('close')
-    // 不是在 App 裏打開（例如直接在瀏覽器打開這個網址）：留一個按鈕可以再打開
-    document.getElementById('again').style.display = 'block'
+  chat.push(['on', 'unread', function (count) { tellApp('unread:' + (Math.max(0, Math.floor(Number(count))) || 0)) }])
+  // unread 只在數字變了時送；準備好時也送一次現在的數字（回來過的訪客一載入就有未讀）
+  chat.push(['on', 'ready', function () {
+    tellApp('ready')
+    var api = window.MasterBoxChat
+    if (api && typeof api.getUnread === 'function') tellApp('unread:' + (Math.max(0, Math.floor(Number(api.getUnread()))) || 0))
   }])
-  chat.push(['on', 'open', function () { document.getElementById('again').style.display = 'none' }])
-  chat.push(['on', 'ready', function () { tellApp('ready') }])
-  document.getElementById('again').addEventListener('click', function () { window.MasterBoxChat.push(['open']) })
+
+  var script = document.createElement('script')
+  script.src = WIDGET
+  script.async = true
+  script.setAttribute('data-link', LINK)
+  script.setAttribute('data-src', 'app')
+  script.setAttribute('data-button', 'none')
+
+  if (!background) {
+    // 前景：對話放進全屏的 #support-chat 區塊並打開
+    var block = document.createElement('div')
+    block.id = 'support-chat'
+    document.body.insertBefore(block, document.body.firstChild)
+    script.setAttribute('data-container', '#support-chat')
+    chat.push(text ? ['open', { text: text }] : ['open'])
+    chat.push(['on', 'close', function () {
+      if (inApp) return tellApp('close')
+      // 不是在 App 裏打開（例如直接在瀏覽器打開這個網址）：留一個按鈕可以再打開
+      document.getElementById('again').style.display = 'block'
+    }])
+    chat.push(['on', 'open', function () { document.getElementById('again').style.display = 'none' }])
+    document.getElementById('again').addEventListener('click', function () { window.MasterBoxChat.push(['open']) })
+  }
+  document.body.appendChild(script)
 })()
 </script>
-<script src="https://masterboxapp.masterappinc.com/c/widget.js" data-link="DaZ-K0ltDZ--4uZd9hNXXYI_" data-src="app" data-button="none" data-container="#support-chat" async></script>
 </body>
 </html>

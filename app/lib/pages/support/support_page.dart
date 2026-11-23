@@ -15,6 +15,7 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../../business/pick_image.dart';
 import '../../business/support.dart';
+import '../../business/support_unread.dart';
 import '../../core/external.dart';
 import '../../shell/nav_bar.dart';
 import '../../ui/base.dart';
@@ -34,12 +35,6 @@ AcceptKind acceptKind(List<String> acceptTypes) {
   return AcceptKind.file;
 }
 
-// 客服頁網址是不是本頁（換頁時只有本頁留在內嵌網頁裏，其他連結用瀏覽器打開）
-bool isSupportPage(String url) {
-  final u = Uri.tryParse(url), s = Uri.parse(supportUrl);
-  return u != null && u.scheme == s.scheme && u.host == s.host && u.port == s.port && u.path == s.path;
-}
-
 class SupportPage extends StatefulWidget {
   const SupportPage({super.key, this.query = const {}});
   final Map<String, String> query;
@@ -57,7 +52,17 @@ class SupportPageState extends State<SupportPage> {
   @override
   void initState() {
     super.initState();
+    // 客戶正在看對話：紅點歸零；關上後重新拿未讀數（business/support_unread.dart）
+    if (!_public) SupportUnread.viewingStarted();
     unawaited(_start());
+  }
+
+  bool get _public => widget.query['public'] == '1';
+
+  @override
+  void dispose() {
+    if (!_public) SupportUnread.viewingEnded();
+    super.dispose();
   }
 
   Future<void> _start() async {

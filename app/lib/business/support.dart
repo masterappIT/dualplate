@@ -65,7 +65,17 @@ String supportPayload({Map<String, String>? data, String text = ''}) {
   return base64Url.encode(utf8.encode(jsonEncode(body))).replaceAll('=', '');
 }
 
-String supportPageUrl(String payload) => payload.isEmpty ? supportUrl : '$supportUrl#$payload';
+// background：背景模式（?bg=1），只拿未讀數、不打開對話（business/support_unread.dart）
+String supportPageUrl(String payload, {bool background = false}) {
+  final base = background ? '$supportUrl?bg=1' : supportUrl;
+  return payload.isEmpty ? base : '$base#$payload';
+}
+
+// 客服頁網址是不是本頁（換頁時只有本頁留在內嵌網頁裏，其他連結用瀏覽器打開）
+bool isSupportPage(String url) {
+  final u = Uri.tryParse(url), s = Uri.parse(supportUrl);
+  return u != null && u.scheme == s.scheme && u.host == s.host && u.port == s.port && u.path == s.path;
+}
 
 // App 頁面路徑：/support?text=…（預填句子）&public=1（未登入的畫面，不帶資料）
 String supportPath({String text = '', bool public = false}) {
@@ -91,10 +101,10 @@ Future<String> appVersion() async {
 }
 
 // 打開客服頁時的網址：public 或未登入時不帶資料（客服頁會 clearData）；已登入時讀三個接口，任何一個讀不到就少寫那幾項，不擋客服。
-// 每個接口最多等 4 秒，免得網絡慢時客服頁一直空白
-Future<String> buildSupportUrl({String text = '', bool public = false}) async {
+// 每個接口最多等 4 秒，免得網絡慢時客服頁一直空白。background：背景模式的網址（只在已登入時用），帶同樣的資料、沒有預填句子
+Future<String> buildSupportUrl({String text = '', bool public = false, bool background = false}) async {
   final user = getUser();
-  if (public || !signedIn || user == null) return supportPageUrl(supportPayload(text: text));
+  if (public || !signedIn || user == null) return supportPageUrl(supportPayload(text: background ? '' : text), background: background);
   Future<Object?> read(String path) => api(path).timeout(const Duration(seconds: 4)).then<Object?>((v) => v, onError: (Object _) => null);
   final r = await Future.wait([read('/my/profile'), read('/my/overview'), read('/plate-assets'), appVersion()]);
   final data = supportData(
@@ -104,5 +114,5 @@ Future<String> buildSupportUrl({String text = '', bool public = false}) async {
     plates: r[2],
     source: supportSource(ios: defaultTargetPlatform == TargetPlatform.iOS, version: r[3] as String),
   );
-  return supportPageUrl(supportPayload(data: data, text: text));
+  return supportPageUrl(supportPayload(data: data, text: background ? '' : text), background: background);
 }

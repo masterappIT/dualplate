@@ -3,6 +3,7 @@
 // token 放 Keychain／Keystore（flutter_secure_storage），其餘放 shared_preferences（docs/tasks/flutter-app-plan.md 第三節）。
 // iOS 刪除 App 後 Keychain 不會清空；登入判斷照 lib/launch.js 要求 user 和 token 同時存在，user 在 shared_preferences，重裝後就會清空。
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api.dart' show resetTermsCheck;
@@ -15,6 +16,8 @@ abstract final class Session {
   static String? _mode;
   static String? _loginArea;
   static Future<void> _writing = Future.value();
+  // 登入、退出登入、登入失效時加一：線上客服的背景網頁聽這個，登入後開始、退出後收起（business/support_unread.dart）
+  static final changes = ValueNotifier<int>(0);
 
   // 啟動時讀入；測試可重複呼叫
   static Future<void> load() async {
@@ -29,6 +32,7 @@ abstract final class Session {
     }
     _mode = _prefs!.getString('serviceMode');
     _loginArea = _prefs!.getString('loginArea');
+    changes.value++;
   }
 
   // 等背景寫入完成（測試用）
@@ -47,6 +51,7 @@ abstract final class Session {
     _token = token?.toString();
     _user = user is Map<String, dynamic> ? user : null;
     _mode = null;
+    changes.value++;
     _write(() async {
       await (_token == null ? _secure.delete(key: 'token') : _secure.write(key: 'token', value: _token));
       await (_user == null ? _prefs?.remove('user') : _prefs?.setString('user', jsonEncode(_user)));
@@ -60,6 +65,7 @@ abstract final class Session {
     _token = null;
     _user = null;
     _mode = null;
+    changes.value++;
     _write(() async {
       await _secure.delete(key: 'token');
       await _prefs?.remove('user');
@@ -96,6 +102,7 @@ abstract final class Session {
     _token = token;
     _user = user;
     _mode = mode;
+    changes.value++;
   }
 }
 

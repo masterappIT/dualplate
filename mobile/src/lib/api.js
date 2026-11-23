@@ -1,8 +1,8 @@
 import { pickImage } from './pick-image'
-import { clearSupportData } from './support'
+import { clearSupportData, startSupport } from './support'
 const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4100'
 export function getToken() { return uni.getStorageSync('token') }
-export function saveSession(result) { uni.setStorageSync('token', result.token); uni.setStorageSync('user', result.user); try { uni.removeStorageSync('serviceMode') } catch {}; resetTermsCheck() }
+export function saveSession(result) { uni.setStorageSync('token', result.token); uni.setStorageSync('user', result.user); try { uni.removeStorageSync('serviceMode') } catch {}; resetTermsCheck(); startSupport() }
 // homeCache：安卓 App 上次的首頁資料（lib/launch.js），退出登入時一併刪掉
 export function clearSession() { uni.removeStorageSync('token'); uni.removeStorageSync('user'); uni.removeStorageSync('serviceMode'); try { uni.removeStorageSync('homeCache') } catch {}; resetTermsCheck(); clearSupportData() }
 // 自管客戶（docs/requirements.md 5.6.2）：首頁、我的資料載入時記下，其他頁面據此改寫用語、隱藏用不到的區塊

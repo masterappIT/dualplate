@@ -1,5 +1,7 @@
 <script>
-export default { onLaunch() {} }
+// 已登入就載入線上客服小視窗，客服回覆時底部「我的」分頁有紅點（lib/support.js；只在 H5 運作）
+import { startSupport } from './lib/support'
+export default { onLaunch() { startSupport() } }
 </script>
 <style>
 /* 車牌管家視覺識別「證件感」：見 docs/design-system.md 第二節。頁面只引用這裏的變量與類別。

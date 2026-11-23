@@ -36,6 +36,8 @@ abstract final class C {
   // 底部分頁（pages.json tabBar）
   static const tabText = Color(0xFF85918A);
   static const tabSelected = Color(0xFF0F5C4A);
+  // 分頁紅點：uni-app H5 的 uni.setTabBarBadge（@dcloudio/uni-h5 style/framework/tabBar.css .uni-tabbar__reddot #f43530、白字）
+  static const tabBadge = Color(0xFFF43530);
   static const tabBg = Color(0xFFFFFFFF);
 }
 
