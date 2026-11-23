@@ -18,6 +18,9 @@ import UIKit
         if call.method == "dial", let number = call.arguments as? String, let url = URL(string: "tel:\(number)") {
           UIApplication.shared.open(url)
           result(nil)
+        } else if call.method == "versionName" {
+          // 線上客服帶入的「來自」（lib/business/support.dart）：iPhone App 1.1.0
+          result(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)
         } else {
           result(FlutterMethodNotImplemented)
         }

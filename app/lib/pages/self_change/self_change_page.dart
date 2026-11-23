@@ -188,7 +188,7 @@ class SelfChangePageState extends State<SelfChangePage> {
       if (f.loaded && f.pendingHere)
         Blk(_warn('已提交「${f.kindName}」，顧問核對中', '核對完成前不能再提交同一類更新；如需修改請聯絡你的顧問。'), bottom: 12)
       else if (f.loaded && f.stopped)
-        Blk(_warn('這個牌照已標記為不再續期', '如要恢復，${forMode('請聯絡你的顧問', '請在「我的 › 聯絡我們」發訊息給我們')}。'), bottom: 12)
+        Blk(_warn('這個牌照已標記為不再續期', '如要恢復，${forMode('請聯絡你的顧問', '請按「我的 › 線上客服」問我們')}。'), bottom: 12)
       else if (f.loaded) ...[
         if (f.showCardUpload) _card(_cardUpload()),
         if (f.kind == 'vehicle_change') ...[_card(_vehicleInfo()), _card(_vehicleDates())],

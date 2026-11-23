@@ -1,9 +1,8 @@
 // 登入頁：一比一照搬 mobile/src/pages/login/login.vue（App 端）。文字逐字照抄，數值見 tokens.dart 的 LoginStyle。
-// 上半：深通行綠畫布（扭索紋、口岸網絡、立體車牌示例）；下半：證件式登入卡（手機號碼／電郵、密碼、錯誤提示、聯絡方式、條款連結）。
+// 上半：深通行綠畫布（扭索紋、口岸網絡、立體車牌示例）；下半：證件式登入卡（手機號碼／電郵、密碼、錯誤提示、線上客服、條款連結）。
 // 登入成功：卡右上蓋「已登入」印章、畫布擴散，700ms 後轉到首頁分頁（uni.switchTab）。
 // 不搬：微信登入和綁定（只在小程序）。安卓 App 每次顯示本頁時檢查新版本（business/app_update.dart，階段 4）。
 import 'package:flutter/material.dart' show Material, MaterialType, TextField, InputDecoration, InputBorder;
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +10,7 @@ import '../../business/app_update.dart';
 import '../../business/page_show.dart';
 import '../../business/plates.dart';
 import '../../business/stamp_mark.dart';
+import '../../business/support_card.dart';
 import '../../core/api.dart';
 import '../../core/session.dart';
 import '../../ui/base.dart';
@@ -18,7 +18,6 @@ import '../../ui/keyboard_bar.dart';
 import '../../ui/tokens.dart';
 import '../../shell/system_bars.dart' show pageStyle;
 import 'area_picker.dart';
-import 'contact_card.dart';
 import 'ports_canvas.dart';
 import 'svg_icon.dart';
 
@@ -320,7 +319,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                       Padding(padding: const EdgeInsets.only(bottom: 4), child: Text(application!.text, style: ts(Fs.h, weight: w800, color: C.jadeDeep))),
                       if (application!.pending) const Subtle('我們會先聯絡你核實手機號碼。'),
-                      const ContactCard(),
+                      // 線上客服（未登入版，不帶客戶資料）：.support 上距 16、.card 下距 12
+                      const Padding(padding: EdgeInsets.only(top: 16, bottom: 12), child: SupportCard(public: true)),
                     ]),
                   ),
                 const SizedBox(height: 20),
@@ -329,10 +329,10 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                 Btn('沒有帳戶？申請使用', kind: BtnKind.line, expand: true, onTap: () => context.push('/signup')),
                 Padding(
                   padding: const EdgeInsets.only(top: 16),
-                  child: Text('托管客戶的帳戶由顧問開通。忘記密碼請聯絡我們。', textAlign: TextAlign.center, style: ts(Fs.meta, color: C.ink3)),
+                  child: Text('托管客戶的帳戶由顧問開通。', textAlign: TextAlign.center, style: ts(Fs.meta, color: C.ink3)),
                 ),
-                // 忘記密碼：列出已設定的 WhatsApp／微信；都沒有設定時不顯示。卡的下距 12 和條款連結的上距 12 重疊（CSS 外距合併）
-                if (application == null) const _CollapsedContact(),
+                // 忘記密碼：線上客服（未登入版，不帶客戶資料）。卡的下距 12 和條款連結的上距 12 重疊（CSS 外距合併），所以這裏不加下距
+                if (application == null) const Padding(padding: EdgeInsets.only(top: 16), child: SupportCard(public: true, title: '忘記密碼？', intro: '發訊息給客服，我們幫你重設。')),
                 Padding(
                   padding: const EdgeInsets.only(top: 12),
                   child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -349,29 +349,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
           ]),
         ),
       );
-}
-
-// ContactCard 的 margin-bottom 12 和條款連結的 margin-top 12 合併成 12：這裏去掉卡的下距
-class _CollapsedContact extends StatelessWidget {
-  const _CollapsedContact();
-  @override
-  Widget build(BuildContext context) => const _NoBottomMargin(child: ContactCard(title: '忘記密碼？'));
-}
-
-class _NoBottomMargin extends SingleChildRenderObjectWidget {
-  const _NoBottomMargin({required super.child});
-  @override
-  RenderObject createRenderObject(BuildContext context) => _RenderNoBottomMargin();
-}
-
-// 子組件高度減 12（CardBox 的下距），沒有內容時高度 0
-class _RenderNoBottomMargin extends RenderProxyBox {
-  @override
-  void performLayout() {
-    child!.layout(constraints.loosen(), parentUsesSize: true);
-    final h = child!.size.height;
-    size = constraints.constrain(Size(child!.size.width, h > 12 ? h - 12 : h));
-  }
 }
 
 class _TermsLink extends StatelessWidget {

@@ -36,6 +36,8 @@ class MainActivity : FlutterActivity() {
                 }
                 // App 內更新（lib/business/app_update.dart，照 mobile/src/lib/app-update.js）
                 "versionCode" -> result.success(installedVersion())
+                // 線上客服帶入的「來自」（lib/business/support.dart）：Android App 1.1.0
+                "versionName" -> result.success(try { packageManager.getPackageInfo(packageName, 0).versionName } catch (e: PackageManager.NameNotFoundException) { null })
                 "downloadDir" -> {
                     val dir = File(filesDir, "_downloads")
                     dir.mkdirs()

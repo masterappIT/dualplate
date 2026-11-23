@@ -5,7 +5,7 @@
       <text class="intro">免費使用，自己管理牌照、公司和到期日。提交後我們會先聯絡你核實手機號碼，批准後即可登入。</text>
       <view v-if="loaded && !terms" class="card notice">
         <text class="notice-title">暫時不能在網上申請</text>
-        <text class="subtle">請用 WhatsApp 或微信聯絡我們，我們會為你開通帳戶。</text>
+        <text class="subtle">請按下面「聯絡客服」找我們，我們會為你開通帳戶。</text>
       </view>
       <!-- 條款載入完才決定顯示表格或提示，避免表格先閃出再換成提示 -->
       <view v-else-if="terms" class="card">
@@ -35,14 +35,14 @@
       <text class="subtle">我們會先聯絡你核實手機號碼，管理員批准後，即可用這個號碼和密碼登入。</text>
       <button class="btn-line back" @click="goLogin">返回登入</button>
     </view>
-    <ContactCard v-if="sent || (loaded && !terms)" public :messages="false" />
+    <SupportCard v-if="sent || (loaded && !terms)" public />
     <text v-if="!sent && loaded" class="help">已有帳戶？<text class="link" @click="goLogin">返回登入</text></text>
   </view>
 </template>
 <script setup>
 import { ref, onMounted } from 'vue'
 import { api, publicApi } from '../../lib/api'
-import ContactCard from '../../components/ContactCard.vue'
+import SupportCard from '../../components/SupportCard.vue'
 import StampMark from '../../components/StampMark.vue'
 
 // 區號與登入頁相同：香港、澳門 8 位，內地 1 字頭 11 位

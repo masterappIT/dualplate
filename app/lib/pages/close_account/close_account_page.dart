@@ -1,12 +1,13 @@
 // 註銷帳號：一比一移植 mobile/src/pages/close-account/close-account.vue（App 端）。
 // 自管客戶註銷帳號（docs/requirements.md 5.6.2）：不設冷靜期，輸入密碼確認後即時刪除，不能復原。
 // 照現在的行為搬，不送 retain（「停用 30 天後刪除」計劃未批准）。每次顯示都重新載入（onShow）。
-// 有未完成的委託時伺服器回 allowed:false，列出委託和「聯絡我們」。送出內容在 close_account_logic.dart。
+// 有未完成的委託時伺服器回 allowed:false，列出委託和「問客服」（打開線上客服並預填第一句）。送出內容在 close_account_logic.dart。
 import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import '../../business/num_text.dart';
 import '../../business/page_show.dart';
+import '../../business/support.dart';
 import '../../business/uni_textarea.dart';
 import '../../core/api.dart';
 import '../../core/js.dart';
@@ -68,7 +69,6 @@ class CloseAccountPageState extends State<CloseAccountPage> with PageShow {
   }
 
   void openRequest(Object? id) => context.push('/request-detail?id=${jsString(id)}');
-  void goMessages() => context.push('/messages');
 
   Future<void> submit() async {
     _set(() => error = '');
@@ -100,7 +100,7 @@ class CloseAccountPageState extends State<CloseAccountPage> with PageShow {
   Blk card(List<Widget> children) => Blk(CardBox(margin: EdgeInsets.zero, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children)), bottom: 12);
   Blk section(String text) => Blk(SectionTitle(text, bare: true), top: 28, bottom: 12);
 
-  // .blocked：紅色標題（下距 8）、未完成的委託逐行（上下 12、底線，最後一行沒有）、「聯絡我們」撐滿上距 12
+  // .blocked：紅色標題（下距 8）、未完成的委託逐行（上下 12、底線，最後一行沒有）、「問客服」撐滿上距 12
   Blk blockedCard(Map i) {
     final open = i['openRequests'] is List ? i['openRequests'] as List : const [];
     return card([
@@ -119,7 +119,7 @@ class CloseAccountPageState extends State<CloseAccountPage> with PageShow {
             ]),
           ),
         ),
-      Padding(padding: const EdgeInsets.only(top: 12), child: Btn('聯絡我們', kind: BtnKind.line, expand: true, onTap: goMessages)),
+      Padding(padding: const EdgeInsets.only(top: 12), child: Btn('問客服', kind: BtnKind.line, expand: true, onTap: () => openSupport(context, text: closeAccountAsk(open.isNotEmpty)))),
     ]);
   }
 

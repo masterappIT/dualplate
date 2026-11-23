@@ -2,6 +2,7 @@
 // 口岸畫布一直在動，不能用 pumpAndSettle，一律 pump 固定時間。
 import 'dart:convert';
 import 'dart:io';
+import 'package:dualplate/business/support.dart' show supportUrl;
 import 'package:dualplate/core/api.dart';
 import 'package:dualplate/core/external.dart';
 import 'package:dualplate/core/session.dart';
@@ -10,6 +11,7 @@ import 'package:dualplate/pages/login/contact_card.dart';
 import 'package:dualplate/pages/login/login_page.dart';
 import 'package:dualplate/pages/login/ports_canvas.dart';
 import 'package:dualplate/pages/login/svg_icon.dart';
+import 'package:dualplate/pages/support/support_page.dart';
 import 'package:dualplate/shell/tab_bar.dart';
 import 'package:dualplate/ui/tokens.dart';
 import 'package:flutter/services.dart';
@@ -209,61 +211,65 @@ void main() {
   group('登入頁畫面', () {
     testWidgets('空白狀態的文字逐字照舊', (tester) async {
       await openLogin(tester);
-      for (final t in ['車牌管家', '兩地牌、公司與到期事項', '一處管好。', '登入客戶帳戶', '查看你的牌照、公司和辦理進度', '電郵', '香港 +852', '密碼', '登入', '沒有帳戶？申請使用', '托管客戶的帳戶由顧問開通。忘記密碼請聯絡我們。', '服務條款', '·', '私隱聲明']) {
+      for (final t in ['車牌管家', '兩地牌、公司與到期事項', '一處管好。', '登入客戶帳戶', '查看你的牌照、公司和辦理進度', '電郵', '香港 +852', '密碼', '登入', '沒有帳戶？申請使用', '托管客戶的帳戶由顧問開通。', '服務條款', '·', '私隱聲明']) {
         expect(find.text(t), findsWidgets, reason: t);
       }
       expect(find.text('手機號碼'), findsNWidgets(2)); // 分段和欄位標題
       expect([find.text('8 位手機號碼'), find.text('輸入密碼')].map((f) => f.evaluate().length), [1, 1]);
     });
 
-    testWidgets('「忘記密碼？」卡列出 WhatsApp', (tester) async {
+    // 客服改用 MasterBox（docs/tasks/support-masterbox-plan.md，管理者 2026-11-23）：「忘記密碼？」卡換成線上客服，不再有 WhatsApp、微信
+    testWidgets('「忘記密碼？」卡是線上客服，不列 WhatsApp、微信', (tester) async {
       await openLogin(tester);
-      expect([find.text('忘記密碼？'), find.text('可以用 WhatsApp 找我們。'), find.text('WhatsApp +853 6671 4829')].map((f) => f.evaluate().length), [1, 1, 1]);
+      expect([find.text('忘記密碼？'), find.text('發訊息給客服，我們幫你重設。'), find.text('聯絡客服'), find.textContaining('WhatsApp'), find.textContaining('微信')].map((f) => f.evaluate().length), [1, 1, 1, 0, 0]);
     });
 
-    testWidgets('沒有設定聯絡渠道時不顯示「忘記密碼？」卡', (tester) async {
+    testWidgets('不再讀 /public/contact：沒有設定聯絡渠道也顯示「忘記密碼？」卡', (tester) async {
       serve(contact: noChannel);
       await openLogin(tester);
-      expect(find.text('忘記密碼？'), findsNothing);
+      expect([find.text('忘記密碼？').evaluate().length, sent.where((r) => r.url.path == '/api/public/contact').length], [1, 0]);
     });
 
-    testWidgets('聯絡方式取不到時不顯示、不提示', (tester) async {
+    testWidgets('連不上伺服器時「忘記密碼？」卡照樣顯示、不提示', (tester) async {
       Api.client = MockClient((r) async => throw http.ClientException('offline'));
       await openLogin(tester);
-      expect([find.text('忘記密碼？').evaluate().length, find.text('連不上伺服器，請檢查網絡後再試').evaluate().length], [0, 0]);
+      expect([find.text('忘記密碼？').evaluate().length, find.text('連不上伺服器，請檢查網絡後再試').evaluate().length], [1, 0]);
     });
 
-    // 計劃第七節管理者決定（2026-11-22）：按 WhatsApp 直接打開；打不開才複製連結
-    testWidgets('按 WhatsApp 直接打開連結，不複製', (tester) async {
+    testWidgets('按「聯絡客服」打開線上客服頁，不帶客戶資料', (tester) async {
+      SupportPage.debugView = (url) => Text(url, key: const ValueKey('support-url'));
+      addTearDown(() => SupportPage.debugView = null);
+      await openLogin(tester);
+      await tester.ensureVisible(find.text('聯絡客服'));
+      await tester.tap(find.text('聯絡客服'));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect([tester.widget<Text>(find.byKey(const ValueKey('support-url'))).data, find.text('線上客服').evaluate().length], [supportUrl, 1]);
+    });
+
+    testWidgets('按「聯絡客服」不打開外部連結、不複製', (tester) async {
+      SupportPage.debugView = (url) => Text(url, key: const ValueKey('support-url'));
       final opened = <Uri>[];
       debugLaunchUrl = (uri) async {
         opened.add(uri);
         return true;
       };
-      addTearDown(() => debugLaunchUrl = null);
-      await openLogin(tester);
-      await tester.ensureVisible(find.text('WhatsApp +853 6671 4829'));
-      await tester.tap(find.text('WhatsApp +853 6671 4829'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-      expect([opened.map((u) => '$u').toList(), find.text('連結已複製，請在瀏覽器打開').evaluate().length], [['https://wa.me/85366714829'], 0]);
-    });
-
-    testWidgets('打不開 WhatsApp 時複製連結並提示', (tester) async {
-      debugLaunchUrl = (_) async => false;
-      addTearDown(() => debugLaunchUrl = null);
+      addTearDown(() {
+        debugLaunchUrl = null;
+        SupportPage.debugView = null;
+      });
       String? copied;
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
         if (call.method == 'Clipboard.setData') copied = (call.arguments as Map)['text'] as String;
         return null;
       });
       await openLogin(tester);
-      await tester.ensureVisible(find.text('WhatsApp +853 6671 4829'));
-      await tester.tap(find.text('WhatsApp +853 6671 4829'));
+      await tester.ensureVisible(find.text('聯絡客服'));
+      await tester.tap(find.text('聯絡客服'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
-      expect([copied, find.text('連結已複製，請在瀏覽器打開').evaluate().length], ['https://wa.me/85366714829', 1]);
-      await tester.pump(const Duration(seconds: 2));
+      expect([opened.length, copied], [0, null]);
     });
 
     testWidgets('記下的區號：澳門', (tester) async {
@@ -534,7 +540,7 @@ void main() {
       await tapLogin(tester);
       await tester.pump(const Duration(milliseconds: 50));
       await tester.pump(const Duration(milliseconds: 50));
-      expect([find.text('你的申請正在審批中'), find.text('我們會先聯絡你核實手機號碼。'), find.text('其他聯絡方式'), find.text('也可以用 WhatsApp 找我們。'), find.text('忘記密碼？')].map((f) => f.evaluate().length), [1, 1, 1, 1, 0]);
+      expect([find.text('你的申請正在審批中'), find.text('我們會先聯絡你核實手機號碼。'), find.text('線上客服'), find.text('發訊息給客服，我們會盡快回覆。'), find.text('忘記密碼？')].map((f) => f.evaluate().length), [1, 1, 1, 1, 0]);
     });
 
     testWidgets('申請未獲批准：沒有「核實手機號碼」一句', (tester) async {

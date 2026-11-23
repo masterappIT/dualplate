@@ -1,5 +1,6 @@
 // 我的（分頁）：一比一移植 mobile/src/pages/me/me.vue（App 端）。
-// 托管客戶：委託內容、帳單、月報、辦理記錄、你的顧問；自管客戶：沒有辦理記錄時整塊不顯示，改為「委託我們辦理」卡和聯絡我們。
+// 托管客戶：委託內容、帳單、月報、辦理記錄、你的顧問；自管客戶：沒有辦理記錄時整塊不顯示，改為「委託我們辦理」卡。
+// 兩種客戶都有線上客服卡（docs/tasks/support-masterbox-plan.md）：托管放在顧問卡下面，自管取代原來的「聯絡我們」卡。
 // 自管與否按 /my/overview 的 serviceMode（載入前當作托管，和現有 App 一樣）。每次顯示（onShow）都重新載入。
 import 'dart:async';
 import 'package:flutter/widgets.dart';
@@ -8,6 +9,7 @@ import '../../business/advisor_card.dart';
 import '../../business/num_text.dart';
 import '../../business/page_show.dart';
 import '../../business/plate_chip.dart';
+import '../../business/support_card.dart';
 import '../../business/welcome_guide.dart';
 import '../../core/api.dart';
 import '../../core/js.dart';
@@ -18,7 +20,6 @@ import '../../ui/base.dart';
 import '../../ui/dialogs.dart';
 import '../../ui/toast.dart';
 import '../../ui/tokens.dart';
-import '../login/contact_card.dart';
 import '../plate_detail/plate_detail_logic.dart' show at, listOf;
 import '../plate_detail/plate_detail_widgets.dart' show Blk, Blocks;
 
@@ -158,7 +159,8 @@ class MePageState extends State<MePage> with PageShow {
                 top: 16,
                 bottom: 12,
               ),
-            if (loaded && selfManaged) Blk(const ContactCard(messages: true, public: false, bare: true), top: 16, bottom: 12),
+            // 線上客服：自管、托管都有（托管在顧問卡下面，自管在「委託我們辦理」卡下面）
+            if (loaded) Blk(const SupportCard(), top: 16, bottom: 12),
             Blk(
               _menu([
                 _MenuRow('使用導覽', onTap: () => _set(() => guide = true)),

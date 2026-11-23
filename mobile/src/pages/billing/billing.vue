@@ -23,7 +23,7 @@
       </view>
     </view>
     <view v-if="loaded && !shown.length" class="card empty">{{ filter === 'open' ? '沒有其他未付款項' : '還沒有帳單記錄' }}</view>
-    <text class="subtle tip">{{ forMode('付款方式與收據請向你的顧問查詢。','付款方式與收據請在「我的 › 聯絡我們」查詢。') }}</text>
+    <text class="subtle tip">{{ forMode('付款方式與收據請向你的顧問查詢。','付款方式與收據請按「我的 › 線上客服」查詢。') }}</text>
   </view>
 </template>
 <script setup>

@@ -19,7 +19,8 @@
         <view class="card blocked">
           <text class="blocked-title">{{ info.error }}</text>
           <view v-for="item in info.openRequests" :key="item.id" class="line" @click="openRequest(item.id)"><text class="line-title">{{ item.title }}</text><text class="chev">›</text></view>
-          <button class="btn-line contact" @click="goMessages">聯絡我們</button>
+          <!-- 問客服：打開線上客服並預填第一句，客戶自己按送出（docs/tasks/support-masterbox-plan.md） -->
+          <button v-if="supportAvailable" class="btn-line contact" @click="goSupport">問客服</button>
         </view>
       </template>
       <template v-else>
@@ -41,6 +42,7 @@
   </view>
 </template>
 <script setup>
+import { supportAvailable, openSupport as askSupport } from '../../lib/support'
 import { useBackClose } from '../../lib/back-close'
 // 安卓返回鍵先關本頁的彈窗（lib/back-close.js）
 useBackClose()
@@ -61,7 +63,7 @@ async function load() {
 }
 onLoad(options => { plateId = options.id || ''; load() })
 function openRequest(id) { uni.navigateTo({ url: '/pages/request-detail/request-detail?id=' + id }) }
-function goMessages() { uni.navigateTo({ url: '/pages/messages/messages' }) }
+function goSupport() { askSupport(info.value.openRequests?.length ? `我想刪除牌照 ${info.value.label}，但它還有未完成的委託。` : `我想刪除牌照 ${info.value.label}，請幫我處理。`) }
 async function submit() {
   error.value = ''
   const companyIds = info.value.companies.filter(company => picked.value[company.id]).map(company => company.id)

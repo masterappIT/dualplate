@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>現有「委託我們辦理」和「聯絡我們」樣式</title>
+<style>
+/* 樣式照抄 mobile/src/App.vue、pages/me/me.vue、components/ContactCard.vue、pages/messages/messages.vue；Flutter 版照抄同一份 */
+:root{--jade:#0F5C4A;--jade-deep:#0B3B30;--jade-soft:#E3EFEA;--plate-yellow:#F2C230;--paper:#F7F6F1;--card:#FFFFFF;--ink:#14201B;--ink-2:#4E5D55;--ink-3:#85918A;--rule:#E2E1D8;--overdue:#C2362A;--overdue-bg:#FBE9E7;
+  --fs-h:16px;--fs-body:14px;--fs-meta:13px;--fs-cap:12px;--r-control:4px;--r-card:8px;--r-panel:12px}
+*{box-sizing:border-box}
+body{margin:0;background:#D9DCD6;font-family:-apple-system,"PingFang HK","Noto Sans TC",sans-serif;color:var(--ink)}
+header{max-width:1300px;margin:0 auto;padding:24px 24px 8px}
+header h1{margin:0 0 6px;font-size:22px;color:var(--jade-deep)}
+header p{margin:4px 0;font-size:14px;color:var(--ink-2);line-height:1.6}
+.wrap{max-width:1300px;margin:0 auto;padding:16px 24px 24px;display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}
+.col{width:390px}
+.col h2{font-size:15px;margin:0 0 4px;color:var(--jade-deep)}
+.col p{font-size:13px;color:var(--ink-2);margin:0 0 10px;line-height:1.55;min-height:40px}
+.fate{display:inline-block;font-size:12px;font-weight:700;border-radius:99px;padding:2px 10px;margin-bottom:8px}
+.keep{background:#E5F2EA;color:#2E7D52}.swap{background:#FFF4C2;color:#7A5B00}.gone{background:var(--overdue-bg);color:var(--overdue)}
+.screen{background:var(--paper);border-radius:12px;padding:16px}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:var(--r-card);padding:16px;margin-bottom:12px}
+.title{display:block;font-size:var(--fs-h);font-weight:800;color:var(--jade-deep)}
+.subtle{display:block;color:var(--ink-2);font-size:var(--fs-meta);line-height:1.6}
+.btn{display:flex;align-items:center;justify-content:center;width:100%;border-radius:var(--r-control);font-weight:700;font-size:var(--fs-body);font-family:inherit;margin-top:12px}
+.btn-line{background:#fff;color:var(--jade);border:1px solid var(--rule);height:44px}
+.btn-sm{background:var(--jade-soft);color:var(--jade);border:0;height:40px;margin-top:8px}
+.primary{background:var(--jade);color:#fff;border:0;height:48px;font-size:var(--fs-h)}
+.logo{width:20px;height:20px;margin-right:8px;flex:none}
+.qr-row{display:flex;align-items:center;gap:12px;margin-top:12px}
+.qr{width:96px;height:96px;flex:none;background:repeating-linear-gradient(45deg,#14201B 0 4px,#fff 4px 8px);border:6px solid #fff;outline:1px solid var(--rule)}
+.list-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--rule)}
+.list-row:last-child{border-bottom:0}
+.list-title{font-size:var(--fs-h);font-weight:700}
+.list-sub{display:block;font-size:var(--fs-body);color:var(--ink-2)}
+.link{color:var(--jade);font-size:var(--fs-body);font-weight:700}
+.navbar{text-align:center;font-weight:800;font-size:16px;padding:4px 0 12px;border-bottom:1px solid var(--rule);margin:-4px -16px 12px}
+.bubble{display:flex;flex-direction:column;max-width:85%;margin-top:12px;padding:10px 12px;border-radius:var(--r-panel);background:var(--card);border:1px solid var(--rule)}
+.from-you{margin-left:auto;background:var(--jade-soft)}
+.sender{font-size:var(--fs-cap);color:var(--ink-3);font-weight:700}
+.body{margin-top:4px;font-size:var(--fs-body);line-height:1.6}
+.field{height:96px;border:1px solid var(--rule);border-radius:var(--r-control);padding:10px 12px;color:var(--ink-3);font-size:var(--fs-body)}
+section.texts{max-width:1300px;margin:0 auto;padding:0 24px 48px}
+section.texts h2{font-size:16px;color:var(--jade-deep);margin:8px 0}
+table{border-collapse:collapse;width:100%;background:#fff;border-radius:8px;overflow:hidden;font-size:13px}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--rule);vertical-align:top;line-height:1.55}
+th{background:#F0F1EC;color:var(--ink-2)}
+td.new{color:#7A5B00}
+</style>
+</head>
+<body>
+<header>
+  <h1>現有「委託我們辦理」和「聯絡我們」樣式</h1>
+  <p>綠色「保留」＝不改；黃色「換成線上客服」＝按草稿改；紅色「拿走」＝不再有。WhatsApp、微信只顯示後台「聯絡方式」設定了的項目，這裏兩樣都畫出來。</p>
+</header>
+<div class="wrap">
+
+  <section class="col">
+    <span class="fate keep">保留</span>
+    <h2>① 「委託我們辦理」卡｜自管客戶「我的」頁</h2>
+    <p>自管客戶沒有顧問卡，這張卡取代它。兩個按鈕都進「申請辦理」頁，不經訊息頁，所以不受客服改動影響。</p>
+    <div class="screen"><div class="card">
+      <span class="title">委託我們辦理</span>
+      <span class="subtle">不想自己跑？交給我們辦，省時省心。</span>
+      <button class="btn btn-line">委託我們辦一項</button>
+      <button class="btn btn-line">長期委託（談代理方案）</button>
+    </div></div>
+  </section>
+
+  <section class="col">
+    <span class="fate keep">保留</span>
+    <h2>② 「委託我們辦 ›」連結｜到期提醒、牌照詳情</h2>
+    <p>自管客戶每一項到期事項下面都有這條連結，按了進「申請辦理」頁並帶上那一項。也不受影響。</p>
+    <div class="screen"><div class="card" style="padding:4px 16px">
+      <div class="list-row"><div><span class="list-title">批文卡續期</span><span class="list-sub">粵Z·A123港 · 2027-03-15 到期</span><span class="link">委託我們辦 ›</span></div></div>
+      <div class="list-row"><div><span class="list-title">香港周年申報 NAR1</span><span class="list-sub">香港公司 · 2027-05-02 到期</span><span class="link">委託我們辦 ›</span></div></div>
+    </div></div>
+  </section>
+
+  <section class="col">
+    <span class="fate swap">換成線上客服</span>
+    <h2>③ 「聯絡我們」卡｜自管客戶「我的」頁</h2>
+    <p>現在有三樣：在 app 內發訊息（進訊息頁）、WhatsApp、微信（複製微信號或二維碼）。改後整張換成「線上客服」卡（草稿 ②）。</p>
+    <div class="screen"><div class="card">
+      <span class="title">聯絡我們</span>
+      <span class="subtle">有問題可以在 app 內發訊息，或用 WhatsApp、微信找我們。</span>
+      <button class="btn btn-line">在 app 內發訊息</button>
+      <div style="margin-top:4px">
+        <button class="btn btn-sm"><svg class="logo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#25D366"/></svg>WhatsApp +853 6671 4829</button>
+        <button class="btn btn-sm"><svg class="logo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#07C160"/></svg>複製微信號（示例）</button>
+      </div>
+      <div class="qr-row"><div class="qr"></div><span class="subtle">掃描或長按二維碼添加微信客服</span></div>
+    </div></div>
+  </section>
+
+  <section class="col">
+    <span class="fate gone">拿走</span>
+    <h2>④ 「聯絡我們」訊息頁｜在 app 內發訊息</h2>
+    <p>自管客戶在這裏留言，後台收件匣回覆；托管客戶只能看我們發的訊息。改後由 MasterBox 取代，這頁不再有入口。</p>
+    <div class="screen">
+      <div class="navbar">聯絡我們</div>
+      <span class="subtle">在這裏留言，我們會在辦公時間內回覆；回覆時會通知你。</span>
+      <div class="bubble from-you"><span class="sender">你 · 11/20 10:03</span><span class="body">想問批文卡續期要準備甚麼？</span></div>
+      <div class="bubble"><span class="sender">李小姐 · 11/20 10:20</span><span class="body">要批文卡正本、車輛登記文件和司機證件，我稍後發清單給你。</span></div>
+      <div class="card" style="margin-top:16px"><div class="field">輸入訊息，最多 1000 字</div><button class="btn primary">發送</button></div>
+      <div class="card"><span class="title">其他聯絡方式</span><span class="subtle">也可以用 WhatsApp、微信找我們。</span>
+        <button class="btn btn-sm"><svg class="logo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#25D366"/></svg>WhatsApp +853 6671 4829</button></div>
+    </div>
+  </section>
+
+  <section class="col">
+    <span class="fate swap">換成線上客服</span>
+    <h2>⑤ 「忘記密碼？」卡｜登入頁（申請頁、審批中同一張）</h2>
+    <p>未登入的畫面只有 WhatsApp、微信。改後換成「聯絡客服」（草稿 ⑤）。</p>
+    <div class="screen"><div class="card">
+      <span class="title">忘記密碼？</span>
+      <span class="subtle">可以用 WhatsApp、微信找我們。</span>
+      <button class="btn btn-sm" style="margin-top:12px"><svg class="logo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#25D366"/></svg>WhatsApp +853 6671 4829</button>
+      <button class="btn btn-sm"><svg class="logo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#07C160"/></svg>複製微信號（示例）</button>
+    </div></div>
+  </section>
+
+</div>
+
+<section class="texts">
+  <h2>⑥ 其他寫著「聯絡我們」的句子（也要跟著改）</h2>
+  <table>
+    <tr><th>位置</th><th>現在的字</th><th>改成（建議）</th></tr>
+    <tr><td>牌照詳情、改資料頁：已標記不再續期（自管）</td><td>如要恢復，請在「我的 › 聯絡我們」發訊息給我們。</td><td class="new">如要恢復，請按「我的 › 線上客服」問我們。</td></tr>
+    <tr><td>帳單頁（自管）</td><td>付款方式與收據請在「我的 › 聯絡我們」查詢。</td><td class="new">付款方式與收據請按「我的 › 線上客服」查詢。</td></tr>
+    <tr><td>申請使用頁</td><td>請用 WhatsApp 或微信聯絡我們，我們會為你開通帳戶。</td><td class="new">請按下面「聯絡客服」找我們，我們會為你開通帳戶。</td></tr>
+    <tr><td>刪除牌照、註銷帳號頁</td><td>按鈕「聯絡我們」（進訊息頁）</td><td class="new">按鈕「問客服」，預先填好第一句（草稿 ④）</td></tr>
+    <tr><td>登入頁說明</td><td>托管客戶的帳戶由顧問開通。忘記密碼請聯絡我們。</td><td class="new">托管客戶的帳戶由顧問開通。（忘記密碼看下面那張卡）</td></tr>
+    <tr><td>我的資料（自管）、取消委託被擋時</td><td>請聯絡我們核實身份後代為更改／已開始的委託請聯絡我們</td><td>不用改：沒有指明渠道，客服卡就在「我的」頁</td></tr>
+    <tr><td>托管客戶的同類句子</td><td>請聯絡你的顧問</td><td>不改：托管客戶照舊找顧問，也可以用線上客服</td></tr>
+  </table>
+</section>
+</body>
+</html>

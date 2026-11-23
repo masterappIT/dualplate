@@ -76,6 +76,14 @@ http://{$MOBILE_DOMAIN}:80 {
         header Vary User-Agent
         file_server
     }
+    # 線上客服頁（靜態網頁，deploy/web/support/）：App 用內嵌網頁打開，全屏顯示 MasterBox 對話（docs/tasks/support-masterbox-plan.md 第 2 部分）
+    redir /support /support/ 308
+    handle /support/* {
+        root * /srv
+        header Cache-Control "no-cache"
+        header X-Robots-Tag "noindex, nofollow"
+        file_server
+    }
     handle /assets/* {
         root * /srv/mobile
         header Cache-Control "public, max-age=31536000, immutable"

@@ -3,7 +3,7 @@
     <!-- 客戶自行辦理後更新資料（docs/tasks/self-handled-changes-design.md）：資料立即生效，顧問整件核對 -->
     <text class="intro">{{ intro }}</text>
     <view v-if="loaded && pendingHere" class="list-card warn-card"><text class="list-title">已提交「{{ kindName }}」，顧問核對中</text><text class="list-sub">核對完成前不能再提交同一類更新；如需修改請聯絡你的顧問。</text></view>
-    <view v-else-if="loaded && form.stoppedOn && kind!=='stop_renewal'" class="list-card warn-card"><text class="list-title">這個牌照已標記為不再續期</text><text class="list-sub">如要恢復，{{ forMode('請聯絡你的顧問','請在「我的 › 聯絡我們」發訊息給我們') }}。</text></view>
+    <view v-else-if="loaded && form.stoppedOn && kind!=='stop_renewal'" class="list-card warn-card"><text class="list-title">這個牌照已標記為不再續期</text><text class="list-sub">如要恢復，{{ forMode('請聯絡你的顧問','請按「我的 › 線上客服」問我們') }}。</text></view>
     <template v-else-if="loaded">
       <!-- 新批文卡：換車、續期、換司機都會換一張新卡 -->
       <view v-if="kind!=='stop_renewal'&&!marking" class="card">

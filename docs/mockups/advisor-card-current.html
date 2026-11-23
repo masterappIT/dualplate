@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>現有顧問卡樣式</title>
+<style>
+/* 樣式照抄 mobile/src/components/AdvisorCard.vue 和 mobile/src/App.vue；Flutter 版 app/lib/business/advisor_card.dart 照抄同一份 */
+:root{--jade:#0F5C4A;--jade-deep:#0B3B30;--jade-soft:#E3EFEA;--plate-yellow:#F2C230;--paper:#F7F6F1;--card:#FFFFFF;--ink:#14201B;--ink-2:#4E5D55;--ink-3:#85918A;--rule:#E2E1D8;
+  --fs-h:16px;--fs-body:14px;--fs-meta:13px;--fs-cap:12px;--r-control:4px;--r-card:8px}
+*{box-sizing:border-box}
+body{margin:0;background:#D9DCD6;font-family:-apple-system,"PingFang HK","Noto Sans TC",sans-serif;color:var(--ink)}
+header{max-width:1300px;margin:0 auto;padding:24px 24px 8px}
+header h1{margin:0 0 6px;font-size:22px;color:var(--jade-deep)}
+header p{margin:4px 0;font-size:14px;color:var(--ink-2);line-height:1.6}
+.wrap{max-width:1300px;margin:0 auto;padding:16px 24px 48px;display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}
+.col{width:390px}
+.col h2{font-size:15px;margin:0 0 4px;color:var(--jade-deep)}
+.col p{font-size:13px;color:var(--ink-2);margin:0 0 10px;line-height:1.55;min-height:40px}
+.screen{background:var(--paper);border-radius:12px;padding:16px}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:var(--r-card);padding:16px;margin-bottom:12px}
+.who-row{display:flex;align-items:center;gap:12px}.grow{flex:1;min-width:0}
+.badge{width:44px;height:44px;flex:none;border-radius:50%;background:var(--jade-deep);border:2px solid var(--plate-yellow);display:flex;align-items:center;justify-content:center;color:#fff;font-size:var(--fs-h);font-weight:800}
+.caption{display:block;color:var(--ink-3);font-size:var(--fs-cap);font-weight:700}
+.name{display:block;font-size:var(--fs-h);font-weight:800;color:var(--ink);line-height:1.4}
+.meta{display:block;color:var(--ink-2);font-size:var(--fs-body);line-height:1.5}
+.num{font-variant-numeric:tabular-nums;letter-spacing:.04em}
+.actions{display:flex;gap:8px;margin-top:16px}
+.btn-sm{flex:1;display:flex;align-items:center;justify-content:center;height:40px;border:0;border-radius:var(--r-control);background:var(--jade-soft);color:var(--jade);font-size:var(--fs-body);font-weight:700;font-family:inherit}
+</style>
+</head>
+<body>
+<header>
+  <h1>現有顧問卡樣式（不改）</h1>
+  <p>只給托管客戶看：「我的」頁和「委託內容」頁。自管客戶沒有顧問卡。資料取自後台給客戶指派的顧問（名字、電話、微信）。</p>
+  <p>按鈕只顯示已填的項目：有電話才有「致電」，有微信才有「複製微信號」。</p>
+</header>
+<div class="wrap">
+  <section class="col">
+    <h2>① 電話和微信都有</h2>
+    <p>最常見的樣子。「致電」直接撥號；「複製微信號」複製顧問的微信號。</p>
+    <div class="screen"><div class="card">
+      <div class="who-row"><div class="badge">李</div><div class="grow"><span class="caption">你的顧問</span><span class="name">李小姐</span><span class="meta num">+853 6600 1234</span><span class="meta">微信 lee_plate</span></div></div>
+      <div class="actions"><button class="btn-sm">致電</button><button class="btn-sm">複製微信號</button></div>
+    </div></div>
+  </section>
+  <section class="col">
+    <h2>② 只有電話</h2>
+    <p>顧問沒有填微信時，只有一個「致電」按鈕，佔滿整行。</p>
+    <div class="screen"><div class="card">
+      <div class="who-row"><div class="badge">陳</div><div class="grow"><span class="caption">你的顧問</span><span class="name">陳先生</span><span class="meta num">+852 9123 4567</span></div></div>
+      <div class="actions"><button class="btn-sm">致電</button></div>
+    </div></div>
+  </section>
+  <section class="col">
+    <h2>③ 還沒指派顧問</h2>
+    <p>「我的」頁顯示這句；「委託內容」頁整張不顯示。</p>
+    <div class="screen"><div class="card">
+      <span class="caption">你的顧問</span><span class="meta">顧問資料整理中，稍後會在這裏顯示聯絡方式。</span>
+    </div></div>
+  </section>
+</div>
+</body>
+</html>

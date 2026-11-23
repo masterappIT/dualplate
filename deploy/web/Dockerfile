@@ -23,3 +23,5 @@ COPY --from=mobile-build /work/mobile/dist/build/h5 /srv/mobile
 COPY deploy/web/download /srv/download
 COPY mobile/src/static/launch /srv/download/launch
 COPY mobile/src/static/web/favicon.ico mobile/src/static/web/apple-touch-icon.png /srv/download/
+# 線上客服頁：App 用內嵌網頁打開（docs/tasks/support-masterbox-plan.md 第 2 部分）
+COPY deploy/web/support /srv/support

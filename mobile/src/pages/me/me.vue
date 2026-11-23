@@ -25,7 +25,8 @@
       <button class="btn-line entrust-btn" @click="entrustOne">委託我們辦一項</button>
       <button class="btn-line entrust-btn" @click="startLongTerm">長期委託（談代理方案）</button>
     </view>
-    <ContactCard v-if="loaded && selfManaged" />
+    <!-- 線上客服（docs/tasks/support-masterbox-plan.md）：自管、托管都有；托管放在顧問卡下面 -->
+    <SupportCard v-if="loaded" />
     <view class="card menu">
       <view class="menu-row" @click="guide=true"><text class="menu-name">使用導覽</text><text class="chev">›</text></view>
       <view class="menu-row" @click="goTerms"><text class="menu-name">服務條款及私隱聲明</text><text class="chev">›</text></view>
@@ -46,7 +47,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { api, getUser, clearSession, startRequest, requestTone, clientStage, rememberMode, startLongTerm } from '../../lib/api'
 import PlateChip from '../../components/PlateChip.vue'
 import AdvisorCard from '../../components/AdvisorCard.vue'
-import ContactCard from '../../components/ContactCard.vue'
+import SupportCard from '../../components/SupportCard.vue'
 import WelcomeGuide from '../../components/WelcomeGuide.vue'
 const user=ref(getUser()),requests=ref([]),plates=ref([]),loaded=ref(false),advisor=ref(null),unread=ref(0),unpaid=ref(false),guide=ref(false),selfManaged=ref(false),hasBills=ref(false)
 // 只用手機號碼開通的帳戶，電郵是系統佔位，不顯示

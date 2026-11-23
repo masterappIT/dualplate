@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>線上客服（MasterBox 小視窗）畫面草稿</title>
+<style>
+/* 顏色、字號、圓角照 mobile/src/App.vue 的設計變數；這只是給管理者確認的草稿，不是正式代碼 */
+:root{
+  --jade:#0F5C4A;--jade-deep:#0B3B30;--jade-soft:#E3EFEA;--plate-yellow:#F2C230;
+  --paper:#F7F6F1;--card:#FFFFFF;--ink:#14201B;--ink-2:#4E5D55;--ink-3:#85918A;--rule:#E2E1D8;
+  --overdue:#C2362A;--overdue-bg:#FBE9E7;--due:#C47A00;--due-bg:#FDF1DC;--ok:#2E7D52;--ok-bg:#E5F2EA;--muted-bg:#EEEEE9;
+  --fs-title:22px;--fs-h:16px;--fs-body:14px;--fs-meta:13px;--fs-cap:12px;
+  --r-control:4px;--r-card:8px;--r-panel:12px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#D9DCD6;font-family:-apple-system,"PingFang HK","Noto Sans TC",sans-serif;color:var(--ink)}
+header.doc{max-width:1500px;margin:0 auto;padding:24px 24px 8px}
+header.doc h1{margin:0 0 6px;font-size:22px;color:var(--jade-deep)}
+header.doc p{margin:4px 0;font-size:14px;color:var(--ink-2);line-height:1.6}
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.legend span{font-size:12px;font-weight:700;padding:3px 10px;border-radius:99px}
+.l-new{background:#FFF4C2;color:#7A5B00;border:1px dashed #C9A100}
+.l-gone{background:var(--overdue-bg);color:var(--overdue)}
+.l-ask{background:#E6EEF8;color:#2D63A6}
+.frames{max-width:1500px;margin:0 auto;padding:16px 24px 48px;display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}
+.frame{width:390px;flex:none}
+.frame h2{font-size:15px;margin:0 0 4px;color:var(--jade-deep)}
+.frame .note{font-size:13px;color:var(--ink-2);line-height:1.55;margin:0 0 10px;min-height:40px}
+.phone{width:390px;min-height:780px;border-radius:28px;border:8px solid #1B1F1D;background:var(--paper);overflow:hidden;position:relative;display:flex;flex-direction:column}
+.status{height:28px;flex:none;font-size:12px;font-weight:700;display:flex;justify-content:space-between;padding:6px 20px 0;color:var(--ink)}
+.scroll{flex:1;padding:12px 16px 90px}
+.tabbar{position:absolute;left:0;right:0;bottom:0;height:62px;background:#fff;border-top:1px solid var(--rule);display:flex;justify-content:space-around;align-items:center;font-size:12px;color:var(--ink-3);font-weight:700}
+.tabbar .on{color:var(--jade)}
+.navbar{height:44px;flex:none;display:flex;align-items:center;justify-content:center;position:relative;font-size:16px;font-weight:800;background:#fff;border-bottom:1px solid var(--rule)}
+.navbar .back{position:absolute;left:14px;color:var(--jade);font-weight:700;font-size:15px}
+.navbar .right{position:absolute;right:14px;color:var(--jade);font-weight:700;font-size:15px}
+
+.page-title{display:block;margin:0 0 4px;font-size:var(--fs-title);font-weight:800;line-height:1.3;color:var(--jade-deep)}
+.subtle{display:block;color:var(--ink-2);font-size:var(--fs-meta);line-height:1.6}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:var(--r-card);padding:16px;margin-bottom:12px}
+.section-head{display:flex;align-items:center;justify-content:space-between;margin:22px 0 10px}
+.section-title{font-size:var(--fs-h);font-weight:800;color:var(--jade-deep)}
+.link{color:var(--jade);font-size:var(--fs-body);font-weight:700}
+.menu{padding:0 16px}
+.menu-row{display:flex;align-items:center;gap:8px;min-height:50px;border-bottom:1px solid var(--rule)}
+.menu-row:last-child{border-bottom:0}
+.menu-name{flex:1;font-size:var(--fs-h);font-weight:700}
+.chev{color:var(--ink-3)}
+.pill{display:inline-flex;border-radius:99px;padding:2px 8px;font-size:var(--fs-cap);font-weight:700;background:var(--ok-bg);color:var(--ok)}
+.pill.amber{background:var(--due-bg);color:var(--due)}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:var(--r-control);font-weight:700;font-size:var(--fs-body);width:100%;font-family:inherit}
+.btn-line{background:#fff;color:var(--jade);border:1px solid var(--rule);height:44px}
+.btn-sm{background:var(--jade-soft);color:var(--jade);height:40px}
+.primary{background:var(--jade);color:#fff;height:48px;font-size:var(--fs-h)}
+.profile-head{display:flex;align-items:center;gap:12px}
+.profile-head .grow{flex:1}
+.line{padding:10px 0;border-bottom:1px solid var(--rule)}.line:last-child{border-bottom:0}
+.line-title{font-size:var(--fs-h);font-weight:700}
+.line-sub{font-size:var(--fs-body);color:var(--ink-2)}
+
+/* 顧問卡（照 AdvisorCard.vue） */
+.who-row{display:flex;align-items:center;gap:12px}
+.badge{width:44px;height:44px;border-radius:50%;background:var(--jade-deep);border:2px solid var(--plate-yellow);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800}
+.caption{display:block;color:var(--ink-3);font-size:var(--fs-cap);font-weight:700}
+.name{display:block;font-size:var(--fs-h);font-weight:800}
+.meta{display:block;color:var(--ink-2);font-size:var(--fs-body)}
+.actions{display:flex;gap:8px;margin-top:14px}
+
+/* 新的「線上客服」卡 */
+.new{outline:2px dashed #C9A100;outline-offset:3px}
+.support-head{display:flex;align-items:center;gap:12px}
+.support-icon{width:40px;height:40px;border-radius:50%;background:var(--jade-soft);display:flex;align-items:center;justify-content:center;flex:none}
+.support-title{display:block;font-size:var(--fs-h);font-weight:800;color:var(--jade-deep)}
+.online{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-cap);font-weight:700;color:var(--ok)}
+.online::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.support .btn{margin-top:14px}
+.dot{min-width:20px;height:20px;border-radius:10px;background:var(--overdue);color:#fff;font-size:12px;line-height:20px;padding:0 6px}
+.wechat-row{display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid var(--rule)}
+.wechat-row .grow{flex:1;font-size:var(--fs-body);color:var(--ink-2)}
+.ask{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:99px;background:#E6EEF8;color:#2D63A6;margin-left:6px;vertical-align:1px}
+.wa-gone{margin-top:10px;font-size:12px;color:var(--overdue);background:var(--overdue-bg);border-radius:var(--r-control);padding:6px 10px;text-decoration:line-through}
+
+/* MasterBox 對話畫面（示意） */
+.mb{flex:1;display:flex;flex-direction:column;background:#F4F5F3}
+.mb-head{background:var(--jade);color:#fff;padding:14px 16px}
+.mb-head b{display:block;font-size:16px}
+.mb-head span{font-size:12px;opacity:.85}
+.mb-body{flex:1;padding:14px 12px;overflow:auto}
+.bub{max-width:80%;padding:9px 12px;border-radius:14px;font-size:14px;line-height:1.55;margin-bottom:10px}
+.bub.them{background:#fff;border:1px solid var(--rule);border-top-left-radius:4px}
+.bub.me{background:var(--jade);color:#fff;margin-left:auto;border-top-right-radius:4px}
+.bub small{display:block;font-size:11px;opacity:.7;margin-top:3px}
+.sysnote{text-align:center;font-size:11px;color:var(--ink-3);margin:6px 0 12px}
+.mb-input{display:flex;gap:8px;align-items:center;padding:10px 12px 22px;background:#fff;border-top:1px solid var(--rule)}
+.mb-input .box{flex:1;border:1px solid var(--rule);border-radius:20px;height:38px;padding:0 14px;display:flex;align-items:center;font-size:14px;color:var(--ink)}
+.mb-input .box.ph{color:var(--ink-3)}
+.mb-input .clip,.mb-input .send{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none}
+.mb-input .clip{background:var(--muted-bg);color:var(--ink-2);font-size:18px}
+.mb-input .send{background:var(--jade);color:#fff;font-size:15px}
+.mb-tag{position:absolute;top:80px;right:12px;font-size:11px;font-weight:700;background:#FFF4C2;color:#7A5B00;border-radius:4px;padding:2px 6px}
+
+/* 刪除牌照頁（照 plate-delete.vue） */
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:var(--fs-body)}
+.kv .k{color:var(--ink-3);font-weight:700}
+.blocked-title{display:block;font-weight:800;color:var(--overdue);margin-bottom:6px}
+.prefill{margin-top:10px;font-size:12px;color:#7A5B00;background:#FFF4C2;border-radius:var(--r-control);padding:8px 10px;line-height:1.5}
+
+/* 登入頁 */
+.field-label{display:block;font-size:var(--fs-meta);font-weight:700;color:var(--ink-2);margin:12px 0 6px}
+.field{height:44px;border:1px solid var(--rule);border-radius:var(--r-control);background:#fff;padding:0 12px;display:flex;align-items:center;color:var(--ink-3);font-size:var(--fs-body)}
+.help{display:block;text-align:center;font-size:var(--fs-meta);color:var(--ink-2);margin:14px 0}
+.brand{display:flex;flex-direction:column;align-items:center;margin:26px 0 18px}
+.brand .logo{width:60px;height:60px;border-radius:14px;background:var(--jade);border:2px solid var(--plate-yellow)}
+.brand b{margin-top:10px;font-size:20px;color:var(--jade-deep)}
+
+/* 客服看到的側欄 */
+.staff{width:390px;background:#fff;border:1px solid var(--rule);border-radius:12px;padding:16px;font-size:14px}
+.staff h3{margin:0 0 10px;font-size:15px}
+.staff .row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--rule)}
+.staff .row:last-child{border-bottom:0}
+.staff .k{color:var(--ink-3)}
+.staff .src{font-size:11px;font-weight:700;background:var(--muted-bg);color:var(--ink-2);border-radius:99px;padding:1px 8px;margin-left:6px}
+.staff .track{margin-top:12px;font-size:13px;color:var(--ink-2);line-height:1.8}
+</style>
+</head>
+<body>
+<header class="doc">
+  <h1>線上客服（MasterBox 小視窗）畫面草稿</h1>
+  <p>按 11-23 決定畫的：先只用小視窗腳本；不再放 WhatsApp、微信；托管客戶也可以直接用客服；顧問卡照舊；舊的 App 內訊息頁和後台收件匣由 MasterBox 取代。</p>
+  <p>H5 網頁版和 App（Flutter）畫面一樣，只是「打開客服」的方式不同：網頁版在本頁打開小視窗，App 用內嵌網頁全屏打開。微信小程序暫時用不了（網域未備案）。</p>
+  <div class="legend"><span class="l-new">黃色虛線框＝新加</span><span class="l-gone">紅色刪除線＝拿走</span></div>
+</header>
+
+<div class="frames">
+
+  <!-- 1. 我的（托管） -->
+  <section class="frame">
+    <h2>① 「我的」頁｜托管客戶</h2>
+    <p class="note">顧問卡照舊。下面加一張「線上客服」卡，托管客戶也可以直接發訊息。</p>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="scroll">
+        <div class="profile-head"><div class="grow"><span class="page-title">陳大文</span><span class="subtle">以手機號碼登入</span></div><span class="link">我的資料 ›</span></div>
+        <div class="card menu" style="margin-top:14px">
+          <div class="menu-row"><span class="menu-name">到期提醒</span><span class="chev">›</span></div>
+          <div class="menu-row"><span class="menu-name">委託內容</span><span class="chev">›</span></div>
+          <div class="menu-row"><span class="menu-name">通知</span><span class="pill amber">2 則未讀</span><span class="chev">›</span></div>
+          <div class="menu-row"><span class="menu-name">帳單</span><span class="chev">›</span></div>
+        </div>
+        <div class="section-head"><span class="section-title">辦理記錄</span><span class="link">申請辦理 ›</span></div>
+        <div class="card" style="padding:4px 16px"><div class="line"><div class="line-title">批文卡續期</div><div class="line-sub">辦理中</div></div></div>
+        <div class="card">
+          <div class="who-row"><div class="badge">李</div><div><span class="caption">你的顧問</span><span class="name">李小姐</span><span class="meta">+853 6600 1234</span></div></div>
+          <div class="actions"><button class="btn btn-sm">致電</button><button class="btn btn-sm">複製微信號</button></div>
+        </div>
+        <div class="card support new">
+          <div class="support-head">
+            <div class="support-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0F5C4A" stroke-width="2"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></div>
+            <div style="flex:1"><span class="support-title">線上客服</span><span class="online">辦公時間，現在有人回覆</span></div>
+          </div>
+          <span class="subtle" style="margin-top:8px">有問題直接發訊息，可以傳相片和文件。下班後也可以留言，我們上班後回覆。</span>
+          <button class="btn primary">聯絡客服 <span class="dot">1</span></button>
+        </div>
+      </div>
+      <div class="tabbar"><span>首頁</span><span>牌照</span><span class="on">我的</span></div>
+    </div>
+  </section>
+
+  <!-- 2. 我的（自管） -->
+  <section class="frame">
+    <h2>② 「我的」頁｜自管客戶</h2>
+    <p class="note">原來的「聯絡我們」卡（WhatsApp、微信、在 app 內發訊息）換成同一張「線上客服」卡；舊的訊息頁不再有入口。</p>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="scroll">
+        <div class="profile-head"><div class="grow"><span class="page-title">黃先生</span><span class="subtle">wong@example.com</span></div><span class="link">我的資料 ›</span></div>
+        <div class="card menu" style="margin-top:14px">
+          <div class="menu-row"><span class="menu-name">到期提醒</span><span class="chev">›</span></div>
+          <div class="menu-row"><span class="menu-name">通知</span><span class="chev">›</span></div>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <span class="support-title">委託我們辦理</span>
+          <span class="subtle">不想自己跑？交給我們辦，省時省心。</span>
+          <button class="btn btn-line" style="margin-top:12px">委託我們辦一項</button>
+          <button class="btn btn-line" style="margin-top:12px">長期委託（談代理方案）</button>
+        </div>
+        <div class="card support new">
+          <div class="support-head">
+            <div class="support-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0F5C4A" stroke-width="2"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></div>
+            <div style="flex:1"><span class="support-title">線上客服</span><span class="online" style="color:var(--ink-3)">下班時間，可以留言</span></div>
+          </div>
+          <span class="subtle" style="margin-top:8px">有問題直接發訊息，可以傳相片和文件。下班後也可以留言，我們上班後回覆。</span>
+          <button class="btn primary">聯絡客服</button>
+          <div class="wa-gone">WhatsApp、微信</div>
+        </div>
+      </div>
+      <div class="tabbar"><span>首頁</span><span>牌照</span><span class="on">我的</span></div>
+    </div>
+  </section>
+
+  <!-- 3. 打開客服 -->
+  <section class="frame">
+    <h2>③ 按「聯絡客服」之後</h2>
+    <p class="note">這是 MasterBox 自己的對話畫面（示意，實際樣子以 MasterBox 為準，顏色已在後台設成本產品的綠色）。App 全屏打開，右上角「完成」回到原頁。</p>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="navbar">線上客服<span class="right">完成</span></div>
+      <div class="mb">
+        <div class="mb-head"><b>跨境車牌管家</b><span>通常幾分鐘內回覆</span></div>
+        <div class="mb-body">
+          <div class="sysnote">今天</div>
+          <div class="bub them">你好，陳先生！有甚麼可以幫你？<small>客服 · 10:02</small></div>
+          <div class="bub me">我的批文卡續期辦到哪一步？<small>10:03</small></div>
+          <div class="bub them">已經交了資料，預計下星期三出結果，出了會通知你。<small>客服 Amy · 10:05</small></div>
+        </div>
+        <div class="mb-input"><span class="clip">＋</span><span class="box ph">輸入訊息</span><span class="send">➤</span></div>
+      </div>
+      <span class="mb-tag">MasterBox 畫面</span>
+    </div>
+  </section>
+
+  <!-- 4. 刪除牌照不能刪時 -->
+  <section class="frame">
+    <h2>④ 不能刪除牌照時｜「問客服」</h2>
+    <p class="note">「刪除牌照」「註銷帳號」頁原來的「聯絡我們」改成「問客服」，打開時已經幫客戶寫好第一句，客戶按發送就可以。</p>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="navbar"><span class="back">‹ 返回</span>刪除牌照</div>
+      <div class="scroll">
+        <span class="subtle">批文卡輸入有錯、建錯了牌照，可以在這裏刪除。刪除後不能復原。</span>
+        <div class="section-head"><span class="section-title">會刪除的資料</span></div>
+        <div class="card"><div class="kv"><span class="k">牌照</span><span>粵Z·A123港</span><span class="k">司機登記</span><span>2 位</span></div></div>
+        <div class="card">
+          <span class="blocked-title">這個牌照還有未完成的委託，不能刪除。</span>
+          <div class="line"><span class="line-title">換司機</span></div>
+          <button class="btn btn-line new" style="margin-top:12px">問客服</button>
+          <div class="prefill">打開客服時已填好：「我想刪除牌照 粵Z·A123港，但它還有未完成的委託。」</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. 登入頁 -->
+  <section class="frame">
+    <h2>⑤ 登入頁｜忘記密碼、申請審批中</h2>
+    <p class="note">未登入也可以用客服（和下載頁一樣），只是客服看不到客戶資料，要客戶自己說是誰。</p>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="scroll">
+        <div class="brand"><div class="logo"></div><b>跨境車牌管家</b></div>
+        <span class="field-label">手機號碼</span><div class="field">輸入手機號碼</div>
+        <span class="field-label">密碼</span><div class="field">輸入密碼</div>
+        <button class="btn primary" style="margin-top:18px">登入</button>
+        <button class="btn btn-line" style="margin-top:12px">沒有帳戶？申請使用</button>
+        <span class="help">托管客戶的帳戶由顧問開通。</span>
+        <div class="card support new">
+          <span class="support-title">忘記密碼？</span>
+          <span class="subtle">發訊息給客服，我們幫你重設。</span>
+          <button class="btn btn-line">聯絡客服</button>
+          <div class="wa-gone">WhatsApp、微信</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. 客服看到的 -->
+  <section class="frame">
+    <h2>⑥ 客服在 MasterBox 後台看到的</h2>
+    <p class="note">已登入的客戶打開客服時，App 自動帶入這些資料（標「網站帶入」）。這是客戶裝置傳來的，未經伺服器驗證，只作參考。</p>
+    <div class="staff">
+      <h3>陳大文 <span class="src">網站帶入</span></h3>
+      <div class="row"><span class="k">客戶編號</span><span>C-0042</span></div>
+      <div class="row"><span class="k">名稱</span><span>陳大文</span></div>
+      <div class="row"><span class="k">電話</span><span>+853 6611 2233</span></div>
+      <div class="row"><span class="k">管理方式</span><span>托管</span></div>
+      <div class="row"><span class="k">顧問</span><span>李小姐</span></div>
+      <div class="row"><span class="k">牌照</span><span>粵Z·A123港、粵Z·B456澳</span></div>
+      <div class="row"><span class="k">來自</span><span>iPhone App 1.1.0</span></div>
+      <div class="track"><b>最近做過</b><br>10:01 打開「我的」頁<br>09:58 看了牌照 粵Z·A123港<br>09:55 登入</div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

@@ -47,7 +47,7 @@
       <view v-if="application" class="application">
         <text class="application-title">{{ application.text }}</text>
         <text v-if="application.pending" class="subtle">我們會先聯絡你核實手機號碼。</text>
-        <ContactCard public :messages="false" />
+        <SupportCard public />
       </view>
       <button class="primary login-button" :class="{ busy: loading }" :disabled="loading" @click="login">{{ loading ? '登入中' : '登入' }}</button>
       <!-- #ifdef MP-WEIXIN -->
@@ -59,9 +59,9 @@
       </view>
       <!-- #endif -->
       <button class="btn-line signup-button" @click="goSignup">沒有帳戶？申請使用</button>
-      <text class="help">托管客戶的帳戶由顧問開通。忘記密碼請聯絡我們。</text>
-      <!-- 忘記密碼：列出已設定的 WhatsApp／微信（docs/tasks/self-managed-fixes-plan.md 第 7 步）；都沒有設定時不顯示 -->
-      <ContactCard v-if="!application" public :messages="false" title="忘記密碼？" />
+      <text class="help">托管客戶的帳戶由顧問開通。</text>
+      <!-- 忘記密碼：線上客服（docs/tasks/support-masterbox-plan.md），未登入不帶客戶資料 -->
+      <SupportCard v-if="!application" public title="忘記密碼？" intro="發訊息給客服，我們幫你重設。" />
       <view class="terms-links"><text class="link" @click="openTerms('terms')">服務條款</text><text class="terms-dot">·</text><text class="link" @click="openTerms('privacy')">私隱聲明</text></view>
       <view v-if="done" class="done"><StampMark text="已登入" tone="jade" play /></view>
     </view>
@@ -87,7 +87,7 @@ function goSignup(){uni.navigateTo({url:'/pages/signup/signup'})}
 import MainlandPlate from '../../components/MainlandPlate.vue'
 import HongKongPlate from '../../components/HongKongPlate.vue'
 import MacauPlate from '../../components/MacauPlate.vue'
-import ContactCard from '../../components/ContactCard.vue'
+import SupportCard from '../../components/SupportCard.vue'
 import StampMark from '../../components/StampMark.vue'
 import { startPorts } from '../../lib/ports-canvas'
 

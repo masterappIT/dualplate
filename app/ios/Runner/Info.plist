@@ -31,7 +31,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>用於拍攝批文卡等證件，讀取和保存你的牌照資料。</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>本 App 不錄音；系統相機的錄影功能需要此權限，拍批文卡不會使用。</string>
+	<string>用於在線上客服錄製語音訊息；拍批文卡不會使用。</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>只在你選擇保存相片時，才會把相片存入相冊。</string>
 	<key>NSPhotoLibraryUsageDescription</key>

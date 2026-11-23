@@ -13,3 +13,6 @@ String countText(Object? counts, String key, String unit) {
   final v = counts is Map ? counts[key] : null;
   return '${v == null ? '' : v is double && v == v.truncateToDouble() ? v.toInt() : v} $unit';
 }
+
+// 「問客服」預填的第一句（和 H5 的 close-account.vue 一樣）
+String closeAccountAsk(bool openRequests) => openRequests ? '我想註銷帳號，但還有未完成的委託。' : '我想註銷帳號，請幫我處理。';

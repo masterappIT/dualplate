@@ -8,10 +8,12 @@ import 'system_bars.dart';
 import '../ui/tokens.dart';
 
 class NavBar extends StatelessWidget {
-  const NavBar(this.title, {super.key, this.back});
+  const NavBar(this.title, {super.key, this.back, this.action});
   final String title;
   // null：按所在頁面能否返回自動決定（分頁頁面沒有返回箭頭，和 uni-app 的 isQuit 頁面一樣）
   final bool? back;
+  // 右上角的文字按鈕（線上客服頁的「完成」）；沒有時不放
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +44,7 @@ class NavBar extends StatelessWidget {
             ),
           ),
           if (showBack) Positioned(left: 0, top: 0, bottom: 0, child: BackArrow(onTap: () => Navigator.of(context).maybePop())),
+          if (action != null) Positioned(right: 0, top: 0, bottom: 0, child: action!),
         ]),
       ),
     );
@@ -108,15 +111,16 @@ class _BackPainter extends CustomPainter {
 // 有導航列的頁面：紙色底，導航列在上，內容填滿其餘位置（manifest safearea.background #F7F6F1，底部安全區也是紙色）。
 // 內容區就是現有 App 的 WebView：確認框、選單只蓋這一塊（DialogArea，見 dialogs.dart），狀態列和導航列不變暗。
 class AppPage extends StatelessWidget {
-  const AppPage({super.key, required this.title, this.back, this.child});
+  const AppPage({super.key, required this.title, this.back, this.action, this.child});
   final String title;
   final bool? back;
+  final Widget? action;
   final Widget? child;
   @override
   Widget build(BuildContext context) => ColoredBox(
         color: C.paper,
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          NavBar(title, back: back),
+          NavBar(title, back: back, action: action),
           // 安卓：底部導航列那一條畫紙色，在彈窗區之內，遮罩蓋得到（system_bars.dart BottomStrip，nav-bar.js）
           Expanded(child: MediaQuery.removePadding(context: context, removeTop: true, child: DialogArea(child: BottomStrip(color: C.paper, child: child ?? const SizedBox.shrink())))),
         ]),

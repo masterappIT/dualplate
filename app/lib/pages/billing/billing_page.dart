@@ -175,7 +175,7 @@ class BillingPageState extends State<BillingPage> with PageShow {
       Blk(
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Text(forMode('付款方式與收據請向你的顧問查詢。', '付款方式與收據請在「我的 › 聯絡我們」查詢。'), textAlign: TextAlign.center, style: ts(Fs.meta, color: C.ink2, height: 1.6)),
+          child: Text(forMode('付款方式與收據請向你的顧問查詢。', '付款方式與收據請按「我的 › 線上客服」查詢。'), textAlign: TextAlign.center, style: ts(Fs.meta, color: C.ink2, height: 1.6)),
         ),
       ),
     ];

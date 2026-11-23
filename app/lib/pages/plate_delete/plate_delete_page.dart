@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
+import '../../business/support.dart';
 import '../../core/api.dart';
 import '../../core/js.dart';
 import '../../core/session.dart';
@@ -15,6 +16,9 @@ import '../../ui/toast.dart';
 import '../../ui/tokens.dart';
 import '../plate_detail/plate_detail_logic.dart' show at, listOf, str;
 import '../plate_detail/plate_detail_widgets.dart';
+
+// 「問客服」預填的第一句（和 H5 的 plate-delete.vue 一樣）
+String plateDeleteAsk(String label, bool openRequests) => openRequests ? '我想刪除牌照 $label，但它還有未完成的委託。' : '我想刪除牌照 $label，請幫我處理。';
 
 // 確認框的內文：牌照 粵Z… 和 2 間公司 會即時刪除，不能復原。
 String deleteMessage(String label, int companies) => '牌照 $label${companies > 0 ? ' 和 $companies 間公司' : ''} 會即時刪除，不能復原。';
@@ -162,7 +166,8 @@ class PlateDeletePageState extends State<PlateDeletePage> {
             ),
           ),
         const SizedBox(height: 12),
-        Btn('聯絡我們', kind: BtnKind.line, expand: true, onTap: () => context.push('/messages')),
+        // 問客服：打開線上客服並預填第一句，客戶自己按送出（草稿 ④）
+        Btn('問客服', kind: BtnKind.line, expand: true, onTap: () => openSupport(context, text: plateDeleteAsk(str(i['label']), reqs.isNotEmpty))),
       ]),
     );
   }

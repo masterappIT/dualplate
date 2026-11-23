@@ -713,23 +713,24 @@ void main() {
       expect(dialed, '+85291234567');
     });
 
-    testWidgets('自管客戶：委託我們辦理卡和聯絡我們（App 內訊息）', (tester) async {
+    // 客服改用 MasterBox（docs/tasks/support-masterbox-plan.md，管理者 2026-11-23）：「聯絡我們」卡換成線上客服卡；更多情況見 support_test.dart
+    testWidgets('自管客戶：委託我們辦理卡和線上客服卡（取代聯絡我們、App 內訊息）', (tester) async {
       overview = emptySelfOverview();
       await open(tester, '/me', mode: '自管');
-      expect(['委託我們辦理', '委託我們辦一項', '長期委託（談代理方案）', '聯絡我們', '有問題可以在 app 內發訊息給我們。', '在 app 內發訊息'].map((t) => find.text(t).evaluate().length).toList(), [1, 1, 1, 1, 1, 1]);
+      expect(['委託我們辦理', '委託我們辦一項', '長期委託（談代理方案）', '線上客服', '聯絡客服', '聯絡我們', '在 app 內發訊息'].map((t) => find.text(t).evaluate().length).toList(), [1, 1, 1, 1, 1, 0, 0]);
     });
 
-    testWidgets('聯絡我們：有設定 WhatsApp 時說明提到 WhatsApp', (tester) async {
+    testWidgets('線上客服卡：後台設定了 WhatsApp 也不再顯示', (tester) async {
       overview = emptySelfOverview();
       contact = {'whatsapp': '+85366714829', 'whatsappLink': 'https://wa.me/85366714829', 'wechatId': '', 'wechatQr': '', 'wecomLink': ''};
       await open(tester, '/me', mode: '自管');
-      expect([find.text('有問題可以在 app 內發訊息，或用 WhatsApp 找我們。').evaluate().length, find.text('WhatsApp +853 6671 4829').evaluate().length], [1, 1]);
+      expect([find.text('有問題直接發訊息，可以傳相片和文件。下班後也可以留言，我們上班後回覆。').evaluate().length, find.text('WhatsApp +853 6671 4829').evaluate().length], [1, 0]);
     });
 
-    testWidgets('聯絡我們讀登入後的接口 /my/contact', (tester) async {
+    testWidgets('線上客服卡不再讀 /my/contact', (tester) async {
       overview = emptySelfOverview();
       await open(tester, '/me', mode: '自管');
-      expect(calls('GET', '/my/contact').length, 1);
+      expect(calls('GET', '/my/contact').length, 0);
     });
 
     testWidgets('「使用導覽」重看導覽（即使已看過）', (tester) async {

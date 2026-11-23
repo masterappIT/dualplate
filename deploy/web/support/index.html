@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>線上客服</title>
+<!--
+  線上客服（docs/tasks/support-masterbox-plan.md 第 2 部分）：App 的「線上客服」頁用內嵌網頁打開這一頁，全屏顯示 MasterBox 對話。
+  網址 # 後面是 App 傳來的 base64url JSON：{ data, text }
+    data：已登入客戶的資料（欄位見計劃的表），寫 setData；沒有 data（未登入的畫面）時 clearData()
+    text：預先放進輸入框的第一句（「問客服」），客戶自己按送出
+  對話被關上（close 事件）時經 App 的 DualplateSupport 通道通知 App 回到原頁。
+  # 後面的內容不會送到伺服器；讀完即從網址拿掉，不留在瀏覽記錄。
+-->
+<style>
+html,body{margin:0;height:100%;background:#F7F6F1;font-family:-apple-system,"PingFang HK","Noto Sans TC",sans-serif}
+#support-chat{position:fixed;inset:0}
+.again{display:none;position:fixed;left:50%;top:40%;transform:translateX(-50%);height:44px;padding:0 24px;border:1px solid #E2E1D8;border-radius:4px;background:#fff;color:#0F5C4A;font:700 14px/1 inherit}
+</style>
+</head>
+<body>
+<div id="support-chat"></div>
+<button class="again" id="again" type="button">聯絡客服</button>
+<script>
+(function () {
+  // App 帶入的欄位：寫入前先把這幾項都列出來，沒有值的寫 null，免得換了帳戶還留著上一位的顧問、牌照
+  var KEYS = ['name', 'email', 'phone', '客戶編號', '後台連結', '管理方式', '顧問', '牌照', '來自']
+  var payload = {}
+  try {
+    var b64 = location.hash.slice(1).replace(/-/g, '+').replace(/_/g, '/')
+    while (b64.length % 4) b64 += '='
+    if (b64) {
+      var bytes = Uint8Array.from(atob(b64), function (c) { return c.charCodeAt(0) })
+      var value = JSON.parse(new TextDecoder().decode(bytes))
+      if (value && typeof value === 'object' && !Array.isArray(value)) payload = value
+    }
+  } catch (e) { payload = {} }
+  if (location.hash) history.replaceState(null, '', location.pathname + location.search)
+
+  var data = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data) ? payload.data : null
+  var text = typeof payload.text === 'string' ? payload.text : ''
+  var inApp = !!window.DualplateSupport
+
+  function tellApp(message) {
+    if (window.DualplateSupport && window.DualplateSupport.postMessage) window.DualplateSupport.postMessage(message)
+  }
+
+  var chat = window.MasterBoxChat = window.MasterBoxChat || []
+  if (data) {
+    var fields = {}
+    KEYS.forEach(function (key) { fields[key] = typeof data[key] === 'string' && data[key] ? data[key].slice(0, 200) : null })
+    chat.push(['setData', fields])
+  } else {
+    chat.push(['clearData'])
+  }
+  chat.push(text ? ['open', { text: text }] : ['open'])
+  chat.push(['on', 'close', function () {
+    if (inApp) return tellApp('close')
+    // 不是在 App 裏打開（例如直接在瀏覽器打開這個網址）：留一個按鈕可以再打開
+    document.getElementById('again').style.display = 'block'
+  }])
+  chat.push(['on', 'open', function () { document.getElementById('again').style.display = 'none' }])
+  chat.push(['on', 'ready', function () { tellApp('ready') }])
+  document.getElementById('again').addEventListener('click', function () { window.MasterBoxChat.push(['open']) })
+})()
+</script>
+<script src="https://masterboxapp.masterappinc.com/c/widget.js" data-link="DaZ-K0ltDZ--4uZd9hNXXYI_" data-src="app" data-button="none" data-container="#support-chat" async></script>
+</body>
+</html>

@@ -756,7 +756,7 @@ class PlateDetailPageState extends State<PlateDetailPage> {
           warn: true,
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             const ListTitle('已標記不再續期'),
-            ListSub('${jsString(p['stopped_on'])} · ${jsString(p['stop_reason'])}。這個牌照不再提醒到期；如要恢復，${forMode('請聯絡你的顧問', '請在「我的 › 聯絡我們」發訊息給我們')}。'),
+            ListSub('${jsString(p['stopped_on'])} · ${jsString(p['stop_reason'])}。這個牌照不再提醒到期；如要恢復，${forMode('請聯絡你的顧問', '請按「我的 › 線上客服」問我們')}。'),
           ]),
         ),
         bottom: 12,

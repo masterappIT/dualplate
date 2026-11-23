@@ -14,7 +14,7 @@
       <view v-if="summary.companyGaps?.length" class="list-card warn-card" @click="fillCompany(summary.companyGaps[0].id)"><text class="list-title">請補上公司資料</text><text v-for="c in summary.companyGaps" :key="c.id" class="list-sub">{{ c.name }}：缺{{ c.missing.join('、') }}</text><text class="link fill-link">前往補充 ›</text></view>
 
       <!-- 客戶自行辦理：不再續期、已提交待核對、被顧問退回 -->
-      <view v-if="p.stopped_on" class="list-card warn-card"><text class="list-title">已標記不再續期</text><text class="list-sub">{{ p.stopped_on }} · {{ p.stop_reason }}。這個牌照不再提醒到期；如要恢復，{{ forMode('請聯絡你的顧問','請在「我的 › 聯絡我們」發訊息給我們') }}。</text></view>
+      <view v-if="p.stopped_on" class="list-card warn-card"><text class="list-title">已標記不再續期</text><text class="list-sub">{{ p.stopped_on }} · {{ p.stop_reason }}。這個牌照不再提醒到期；如要恢復，{{ forMode('請聯絡你的顧問','請按「我的 › 線上客服」問我們') }}。</text></view>
       <view v-for="r in selfNotes" :key="r.id" class="list-card" :class="r.status==='已退回'?'warn-card':''"><text class="list-title">{{ r.status==='已退回' ? '顧問未能確認你的「'+r.kindName+'」更新' : '你提交的「'+r.kindName+'」顧問核對中' }}</text><text class="list-sub">{{ r.status==='已退回' ? r.reviewNote : '資料已更新；顧問核對後如有問題會聯絡你。' }}</text></view>
 
       <!-- 下一件要做的事：只放一件最急、要客戶動手的事 -->

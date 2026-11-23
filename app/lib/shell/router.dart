@@ -32,6 +32,7 @@ import '../pages/requests/requests_page.dart';
 import '../pages/scope/scope_page.dart';
 import '../pages/self_change/self_change_page.dart';
 import '../pages/signup/signup_page.dart';
+import '../pages/support/support_page.dart';
 import '../pages/terms/terms_page.dart';
 import '../pages/vehicles/vehicles_page.dart';
 import '../ui/tokens.dart';
@@ -76,6 +77,8 @@ final Map<String, Widget Function(Map<String, String> q)> _pageBuilders = {
   '/signup': (q) => SignupPage(query: q),
   '/terms': (q) => TermsPage(query: q),
   '/close-account': (q) => CloseAccountPage(query: q),
+  // 線上客服（docs/tasks/support-masterbox-plan.md）：內嵌網頁打開 MasterBox 對話
+  '/support': (q) => SupportPage(query: q),
 };
 
 // 外殼示範：分頁顯示空頁，首頁放進入示範子頁的入口（只在開發時用：樣板頁「打開外殼」和 shell_test）。

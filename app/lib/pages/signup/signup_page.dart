@@ -13,7 +13,7 @@ import '../../ui/choices.dart';
 import '../../ui/keyboard_bar.dart';
 import '../../ui/tokens.dart';
 import '../login/area_picker.dart';
-import '../login/contact_card.dart';
+import '../../business/support_card.dart';
 import '../login/login_page.dart' show areaCodes, areaIndexOf;
 import '../plate_detail/plate_detail_widgets.dart' show Blk, Blocks, DBtn;
 import 'signup_logic.dart';
@@ -31,9 +31,6 @@ class SignupPageState extends State<SignupPage> {
   final phone = TextEditingController(), name = TextEditingController(), password = TextEditingController(), again = TextEditingController();
   final scroll = ScrollController();
   bool agree = false, busy = false, sent = false, loaded = false;
-  // 聯絡方式卡有沒有內容：沒有設定任何渠道時整張卡不顯示（Vue 的 v-if 根節點不佔位置，也沒有外距）。
-  // ContactCard 自己另讀一次 /public/contact；這裏只用來決定要不要留卡的上下外距
-  bool hasContact = false;
   String error = '';
   Map? terms;
 
@@ -41,7 +38,6 @@ class SignupPageState extends State<SignupPage> {
   void initState() {
     super.initState();
     unawaited(loadTerms().whenComplete(() => _set(() => loaded = true)));
-    publicApi('/public/contact').then((c) => _set(() => hasContact = c is Map && hasChannel(c)), onError: (Object _) {});
   }
 
   @override
@@ -158,13 +154,13 @@ class SignupPageState extends State<SignupPage> {
       if (!sent) ...[
         Blk(Text('免費使用，自己管理牌照、公司和到期日。提交後我們會先聯絡你核實手機號碼，批准後即可登入。', style: ts(Fs.body, color: C.ink2, height: 1.6)), bottom: 16),
         if (loaded && terms == null)
-          card(Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [noticeTitle('暫時不能在網上申請'), const Subtle('請用 WhatsApp 或微信聯絡我們，我們會為你開通帳戶。')]))
+          card(Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [noticeTitle('暫時不能在網上申請'), const Subtle('請按下面「聯絡客服」找我們，我們會為你開通帳戶。')]))
         else if (terms != null)
           card(form()),
       ] else
         card(sentCard()),
-      // .card.contact：上距 16（和上一張卡的下距 12 合併）
-      if ((sent || (loaded && terms == null)) && hasContact) Blk(const ContactCard(bare: true), top: 16, bottom: 12),
+      // 線上客服（未登入版，不帶客戶資料）：上距 16（和上一張卡的下距 12 合併）
+      if (sent || (loaded && terms == null)) Blk(const SupportCard(public: true), top: 16, bottom: 12),
       // .help：上距 16、置中、13 號淺字；連結也是 13 號
       if (!sent && loaded)
         Blk(
