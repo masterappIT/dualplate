@@ -20,7 +20,7 @@ const label = computed(() => ({ mainland: '內地車牌', hk: '香港車牌', mo
 </script>
 <style scoped>
 .plate-chip{display:inline-flex;align-items:center;justify-content:center;flex:none;border-radius:3px;padding:2px 8px;font-weight:800;line-height:1.3;white-space:nowrap;box-shadow:inset 0 0 0 1px rgba(0,0,0,.18)}
-.plate-chip text{letter-spacing:.06em;line-height:1.4}
+.plate-chip .num{letter-spacing:.06em;line-height:1.4}
 .md{font-size:var(--fs-body)}.sm{font-size:var(--fs-cap);padding:1px 6px}.lg{font-size:var(--fs-h);padding:4px 10px}
 .mainland{background:#141414;color:#fff;box-shadow:inset 0 0 0 1px #141414,inset 0 0 0 2px #fff}
 .hk{background:#F2C230;color:#111}

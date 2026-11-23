@@ -2,7 +2,7 @@
   <!-- 你的顧問：一鍵致電或複製微信號；沒有設定時首頁不顯示，「我的」頁顯示整理中 -->
   <view v-if="advisor && (advisor.name || advisor.phone || advisor.wechat)" class="card advisor">
     <view class="who-row">
-      <view class="badge"><text>{{ (advisor.name || '顧').slice(0, 1) }}</text></view>
+      <view class="badge"><text class="initial">{{ (advisor.name || '顧').slice(0, 1) }}</text></view>
       <view class="grow">
         <text class="caption">你的顧問</text>
         <text class="name">{{ advisor.name || '顧問' }}</text>
@@ -24,7 +24,7 @@ defineProps({ advisor: { type: Object, default: null }, placeholder: Boolean })
 <style scoped>
 .advisor{margin-top:12px}.who-row{display:flex;align-items:center;gap:12px}.grow{flex:1;min-width:0}
 .badge{width:44px;height:44px;flex:none;border-radius:50%;background:var(--jade-deep);border:2px solid var(--plate-yellow);display:flex;align-items:center;justify-content:center}
-.badge text{color:#fff;font-size:var(--fs-h);font-weight:800}
+.badge .initial{color:#fff;font-size:var(--fs-h);font-weight:800}
 .caption{display:block;color:var(--ink-3);font-size:var(--fs-cap);font-weight:700}
 .name{display:block;font-size:var(--fs-h);font-weight:800;color:var(--ink);line-height:1.4}
 .meta{display:block;color:var(--ink-2);font-size:var(--fs-body);line-height:1.5}

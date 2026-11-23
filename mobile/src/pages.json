@@ -3,79 +3,118 @@
     {
       "path": "pages/index/index",
       "style": {
-        "navigationBarTitleText": "車牌管家"
+        "navigationBarTitleText": "車牌管家",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     },
     {
       "path": "pages/vehicles/vehicles",
       "style": {
-        "navigationBarTitleText": "我的牌照"
+        "navigationBarTitleText": "我的牌照",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     },
     {
       "path": "pages/companies/companies",
       "style": {
-        "navigationBarTitleText": "我的公司"
+        "navigationBarTitleText": "我的公司",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     },
     {
       "path": "pages/me/me",
       "style": {
-        "navigationBarTitleText": "我的"
+        "navigationBarTitleText": "我的",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     },
     {
       "path": "pages/deadlines/deadlines",
       "style": {
-        "navigationBarTitleText": "到期提醒"
+        "navigationBarTitleText": "到期提醒",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     },
     {
       "path": "pages/plate-detail/plate-detail",
       "style": {
-        "navigationBarTitleText": "牌照詳情"
+        "navigationBarTitleText": "牌照詳情",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     },
     {
       "path": "pages/plate-create/plate-create",
       "style": {
-        "navigationBarTitleText": "新增牌照"
+        "navigationBarTitleText": "新增牌照",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     },
     {
       "path": "pages/self-change/self-change",
       "style": {
-        "navigationBarTitleText": "自行辦理更新"
+        "navigationBarTitleText": "自行辦理更新",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     },
     {
       "path": "pages/requests/requests",
       "style": {
-        "navigationBarTitleText": "申請辦理"
+        "navigationBarTitleText": "申請辦理",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     },
     {
       "path": "pages/request-detail/request-detail",
       "style": {
-        "navigationBarTitleText": "辦理進度"
+        "navigationBarTitleText": "辦理進度",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     },
     {
       "path": "pages/notifications/notifications",
       "style": {
-        "navigationBarTitleText": "通知"
+        "navigationBarTitleText": "通知",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     },
     {
       "path": "pages/billing/billing",
       "style": {
-        "navigationBarTitleText": "帳單"
+        "navigationBarTitleText": "帳單",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     },
     {
       "path": "pages/reports/reports",
       "style": {
-        "navigationBarTitleText": "月報"
+        "navigationBarTitleText": "月報",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     },
     {
@@ -89,61 +128,91 @@
     {
       "path": "pages/terms/terms",
       "style": {
-        "navigationBarTitleText": "服務條款及私隱聲明"
+        "navigationBarTitleText": "服務條款及私隱聲明",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     },
     {
       "path": "pages/close-account/close-account",
       "style": {
-        "navigationBarTitleText": "註銷帳號"
+        "navigationBarTitleText": "註銷帳號",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     },
     {
       "path": "pages/company-new/company-new",
       "style": {
-        "navigationBarTitleText": "新增公司"
+        "navigationBarTitleText": "新增公司",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     },
     {
       "path": "pages/plate-delete/plate-delete",
       "style": {
-        "navigationBarTitleText": "刪除牌照"
+        "navigationBarTitleText": "刪除牌照",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     },
     {
       "path": "pages/signup/signup",
       "style": {
-        "navigationBarTitleText": "申請使用"
+        "navigationBarTitleText": "申請使用",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     },
     {
       "path": "pages/messages/messages",
       "style": {
-        "navigationBarTitleText": "聯絡我們"
+        "navigationBarTitleText": "聯絡我們",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     },
     {
       "path": "pages/profile/profile",
       "style": {
-        "navigationBarTitleText": "我的資料"
+        "navigationBarTitleText": "我的資料",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     },
     {
       "path": "pages/rental-new/rental-new",
       "style": {
-        "navigationBarTitleText": "新增出租"
+        "navigationBarTitleText": "新增出租",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     },
     {
       "path": "pages/rental/rental",
       "style": {
-        "navigationBarTitleText": "出租"
+        "navigationBarTitleText": "出租",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     },
     {
       "path": "pages/scope/scope",
       "style": {
-        "navigationBarTitleText": "委託內容"
+        "navigationBarTitleText": "委託內容",
+        "navigationBarBackgroundColor": "#F7F6F1",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#F7F6F1"
       }
     }
   ],

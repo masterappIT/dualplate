@@ -4,7 +4,7 @@
     <view v-if="relief" class="sheen"></view>
     <view v-for="(hole, index) in holes" :key="index" class="rivet" :style="hole"></view>
     <template v-if="chars.length === 7">
-      <view v-for="(char, index) in chars" :key="index" class="slot" :style="slotStyle(index)"><text :style="isHan(char) ? han : latin">{{ char }}</text></view>
+      <view v-for="(char, index) in chars" :key="index" class="slot" :style="slotStyle(index)"><text class="ch" :style="isHan(char) ? han : latin">{{ char }}</text></view>
       <view class="dot" :style="dot"></view>
     </template>
     <text v-else class="fallback" :style="{ fontSize: px(0.1) }">{{ text }}</text>
@@ -38,7 +38,7 @@ const holes = computed(() => [['18.2%', 'top'], ['79.6%', 'top'], ['18.2%', 'bot
 .rim{position:absolute;border-style:solid;border-color:#f2f2f2}
 .rivet{position:absolute;border-radius:50%;background:radial-gradient(circle at 35% 35%,#d9d9d9,#7a7a7a 70%);box-shadow:0 0 0 1rpx #3a3a3a}
 .slot{position:absolute;top:17.9%;height:64.3%;display:flex;align-items:center;justify-content:center;overflow:visible}
-.slot text{color:#f5f5f5;line-height:1;white-space:nowrap;font-weight:700;text-shadow:0 1rpx 0 rgba(255,255,255,.2)}
+.slot .ch{color:#f5f5f5;line-height:1;white-space:nowrap;font-weight:700;text-shadow:0 1rpx 0 rgba(255,255,255,.2)}
 .sheen{position:absolute;top:0;right:0;bottom:0;left:0;background:linear-gradient(160deg,rgba(255,255,255,.2) 0%,rgba(255,255,255,.06) 34%,rgba(255,255,255,0) 36%);pointer-events:none}
 .dot{position:absolute;left:30.57%;top:50%;border-radius:50%;background:#f5f5f5}
 .fallback{position:absolute;top:0;right:0;bottom:0;left:0;display:flex;align-items:center;justify-content:center;color:#f5f5f5;font-weight:700}

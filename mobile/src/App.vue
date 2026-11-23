@@ -93,7 +93,13 @@ button::after{border:0}
 .guilloche{position:relative;overflow:hidden}
 .guilloche::before{content:'';position:absolute;inset:-40%;pointer-events:none;opacity:.07;
   background:repeating-radial-gradient(circle at 30% 40%,currentColor 0 1px,transparent 1px 7px),repeating-radial-gradient(circle at 70% 60%,currentColor 0 1px,transparent 1px 7px)}
+/* 小程序樣式不支援 *：直接子元素只有 view、text（登入頁畫布本身已是絕對定位） */
+/* #ifdef MP */
+.guilloche>view,.guilloche>text{position:relative}
+/* #endif */
+/* #ifndef MP */
 .guilloche>*{position:relative}
+/* #endif */
 /* 票根分隔：兩側半圓缺口＋虛線 */
 .ticket-rule{position:relative;height:1px;margin:16px -16px;border-top:1px dashed var(--rule)}
 .ticket-rule::before,.ticket-rule::after{content:'';position:absolute;top:-8px;width:16px;height:16px;border-radius:50%;background:var(--paper);border:1px solid var(--rule)}

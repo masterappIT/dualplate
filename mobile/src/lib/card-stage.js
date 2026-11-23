@@ -1,7 +1,16 @@
 // 批文卡對準框的畫面部分（鏡頭預覽、相片拖動縮放、截取框內卡面），只用瀏覽器 DOM。
-// 網頁版由 CardCapture.vue 直接使用。
+// 網頁版由 CardCapture.vue 直接使用；小程序只用 cropPlan（截取範圍），畫面在 CardCapture.vue 用 camera、image、canvas 組件做。
 // 只上傳框內卡面連框外一圈（每邊 6%，固定 2274×1445 JPEG），伺服器再找卡的真正邊界（api/src/card-face.js）。
 export const OUT_W = 2030, OUT_H = 1290, MARGIN = 0.06, FULL_W = Math.round(OUT_W * (1 + 2 * MARGIN)), FULL_H = Math.round(OUT_H * (1 + 2 * MARGIN))
+
+// 原圖座標的框（每邊外擴 6%）→ drawImage 的 8 個參數，畫到 FULL_W×FULL_H 的截圖上。
+// 只畫和原圖重疊的部分（部分瀏覽器遇到超出原圖的來源範圍會整張不畫），超出的部分由呼叫方先填白色；完全不重疊時回傳 null。
+export function cropPlan(width, height, sx, sy, sw, sh) {
+  const mx = sw * MARGIN, my = sh * MARGIN
+  sx -= mx; sy -= my; sw += mx * 2; sh += my * 2
+  const x0 = Math.max(0, sx), y0 = Math.max(0, sy), x1 = Math.min(width, sx + sw), y1 = Math.min(height, sy + sh), kx = FULL_W / sw, ky = FULL_H / sh
+  return x1 > x0 && y1 > y0 ? [x0, y0, x1 - x0, y1 - y0, (x0 - sx) * kx, (y0 - sy) * ky, (x1 - x0) * kx, (y1 - y0) * ky] : null
+}
 
 // host：鋪滿畫面的容器；getFrame()：回傳畫面座標的框 { left, top, width, height }
 export function createCardStage(host, getFrame) {
@@ -23,16 +32,12 @@ export function createCardStage(host, getFrame) {
     host.appendChild(video)
     await video.play()
   }
-  // 畫面座標的框（每邊外擴 6%）→ 原圖座標，畫到固定尺寸的截圖上（超出原圖的部分填白色）
+  // 原圖座標的框 → 固定尺寸的截圖（超出原圖的部分填白色）
   function crop(source, sx, sy, sw, sh) {
-    const mx = sw * MARGIN, my = sh * MARGIN
-    sx -= mx; sy -= my; sw += mx * 2; sh += my * 2
     const canvas = Object.assign(document.createElement('canvas'), { width: FULL_W, height: FULL_H }), ctx = canvas.getContext('2d')
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, FULL_W, FULL_H)
-    // 只畫和原圖重疊的部分（部分瀏覽器遇到超出原圖的來源範圍會整張不畫）
-    const width = source.videoWidth || source.naturalWidth, height = source.videoHeight || source.naturalHeight
-    const x0 = Math.max(0, sx), y0 = Math.max(0, sy), x1 = Math.min(width, sx + sw), y1 = Math.min(height, sy + sh), kx = FULL_W / sw, ky = FULL_H / sh
-    if (x1 > x0 && y1 > y0) ctx.drawImage(source, x0, y0, x1 - x0, y1 - y0, (x0 - sx) * kx, (y0 - sy) * ky, (x1 - x0) * kx, (y1 - y0) * ky)
+    const plan = cropPlan(source.videoWidth || source.naturalWidth, source.videoHeight || source.naturalHeight, sx, sy, sw, sh)
+    if (plan) ctx.drawImage(source, ...plan)
     const data = canvas.toDataURL('image/jpeg', 0.9)
     return { data, path: data }
   }

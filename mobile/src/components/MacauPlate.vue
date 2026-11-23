@@ -3,7 +3,7 @@
     <view class="edge" :style="edge"></view>
     <view v-if="relief" class="sheen"></view>
     <view class="screw" :style="screw('left')"></view><view class="screw" :style="screw('right')"></view>
-    <view v-for="(slot, index) in slots" :key="index" class="slot" :style="{ left: slot.left, width: slot.width }"><view v-if="slot.dash" class="dash" :style="dash"></view><text v-else :style="glyph">{{ slot.char }}</text></view>
+    <view v-for="(slot, index) in slots" :key="index" class="slot" :style="{ left: slot.left, width: slot.width }"><view v-if="slot.dash" class="dash" :style="dash"></view><text v-else class="ch" :style="glyph">{{ slot.char }}</text></view>
   </view>
 </template>
 <script setup>
@@ -39,6 +39,6 @@ const screw = side => ({ [side]: '4%', top: '12%', width: px(0.016), height: px(
 .sheen{position:absolute;top:0;right:0;bottom:0;left:0;background:linear-gradient(160deg,rgba(255,255,255,.2) 0%,rgba(255,255,255,.06) 34%,rgba(255,255,255,0) 36%);pointer-events:none}
 .screw{position:absolute;border-radius:50%;background:radial-gradient(circle at 35% 35%,#d9d9d9,#7a7a7a 70%);box-shadow:0 0 0 1rpx #3a3a3a}
 .slot{position:absolute;top:10%;height:80%;display:flex;align-items:center;justify-content:center;overflow:visible}
-.slot text{font-family:Arial,'Helvetica Neue',sans-serif;font-weight:700;line-height:1;color:#f5f5f5;transform:scaleX(.86);white-space:nowrap}
+.slot .ch{font-family:Arial,'Helvetica Neue',sans-serif;font-weight:700;line-height:1;color:#f5f5f5;transform:scaleX(.86);white-space:nowrap}
 .dash{width:100%;border-radius:1rpx;background:#f5f5f5}
 </style>

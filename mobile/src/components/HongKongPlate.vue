@@ -3,7 +3,7 @@
     <view class="edge" :style="{ borderRadius: px(0.013) }"></view>
     <view v-if="relief" class="sheen"></view>
     <view class="screw" :style="screw('left')"></view><view class="screw" :style="screw('right')"></view>
-    <view v-for="(slot, index) in slots" :key="index" class="slot" :style="{ left: slot.left, width: slot.width }"><text :style="glyph">{{ slot.char }}</text></view>
+    <view v-for="(slot, index) in slots" :key="index" class="slot" :style="{ left: slot.left, width: slot.width }"><text class="ch" :style="glyph">{{ slot.char }}</text></view>
   </view>
 </template>
 <script setup>
@@ -36,5 +36,5 @@ const screw = side => ({ [side]: '5%', top: '9%', width: px(0.018), height: px(0
 .screw{position:absolute;border-radius:50%;background:radial-gradient(circle at 35% 35%,#f4f4f4,#9a9a9a 70%);box-shadow:0 0 0 1rpx rgba(0,0,0,.35)}
 .sheen{position:absolute;top:0;right:0;bottom:0;left:0;background:linear-gradient(160deg,rgba(255,255,255,.4) 0%,rgba(255,255,255,.12) 34%,rgba(255,255,255,0) 36%);pointer-events:none}
 .slot{position:absolute;top:10%;height:80%;display:flex;align-items:center;justify-content:center;overflow:visible}
-.slot text{font-family:Arial,'Helvetica Neue',sans-serif;font-weight:700;line-height:1;color:#111;transform:scaleX(.86);white-space:nowrap}
+.slot .ch{font-family:Arial,'Helvetica Neue',sans-serif;font-weight:700;line-height:1;color:#111;transform:scaleX(.86);white-space:nowrap}
 </style>
