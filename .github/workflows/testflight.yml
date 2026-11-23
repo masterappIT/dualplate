@@ -1,5 +1,6 @@
 name: TestFlight
-# 推送到 main、正式部署成功後才發佈（App 連正式 API，要等 API 先上線）；只有 mobile/ 或 ios/ 改過才打包
+# 推送到 main、正式部署成功後才發佈（App 連正式 API，要等 API 先上線）；只有 app/（Flutter 版）改過才打包
+# 2026-11-23 起 iOS App 改用 Flutter（docs/tasks/flutter-app-plan.md 階段 5）；舊的 DCloud 版（mobile/、ios/）不再上傳
 # 不放進 deploy-production.yml：打包要約半小時，同一條隊列會擋住網頁部署
 on:
   workflow_run:
@@ -31,10 +32,10 @@ jobs:
           EVENT: ${{ github.event_name }}
         run: |
           last="$(git tag --list 'testflight/*' --sort=-version:refname | head -n1)"
-          if [ "$EVENT" = workflow_dispatch ] || [ -z "$last" ] || ! git diff --quiet "$last" "$SHA" -- mobile ios; then
+          if [ "$EVENT" = workflow_dispatch ] || [ -z "$last" ] || ! git diff --quiet "$last" "$SHA" -- app; then
             echo build=true >> "$GITHUB_OUTPUT"
           else
-            echo "$last 之後 mobile/、ios/ 沒有改動，不打包"
+            echo "$last 之後 app/ 沒有改動，不打包"
             echo build=false >> "$GITHUB_OUTPUT"
           fi
   upload:
@@ -52,31 +53,21 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.SHA }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - run: cd mobile && npm ci
-      # SDK 不入庫；倉庫公開，所以加密後放在 Release（見 ios/README.md）
-      - name: Restore DCloud SDK
+      # Flutter 從官方倉庫取固定版本（和本機 flutter --version 一致），不用第三方 action
+      - name: Install Flutter
         env:
-          GH_TOKEN: ${{ github.token }}
-          PASSPHRASE: ${{ secrets.IOS_SDK_PASSPHRASE }}
-          SDK_SHA256: ${{ vars.IOS_SDK_ENC_SHA256 }}
+          FLUTTER_VERSION: 3.47.4
         run: |
           set -euo pipefail
-          gh release download ios-sdk-5.34 --pattern SDK.zip.enc --dir "$RUNNER_TEMP"
-          echo "$SDK_SHA256  $RUNNER_TEMP/SDK.zip.enc" | shasum -a 256 -c -
-          openssl enc -d -aes-256-cbc -pbkdf2 -pass env:PASSPHRASE -in "$RUNNER_TEMP/SDK.zip.enc" -out "$RUNNER_TEMP/SDK.zip"
-          unzip -q "$RUNNER_TEMP/SDK.zip" -d "$RUNNER_TEMP/sdk"
-          mv "$RUNNER_TEMP/sdk/SDK" ios/dcloud-sdk-5.34
-          rm -f "$RUNNER_TEMP/SDK.zip" "$RUNNER_TEMP/SDK.zip.enc"
+          git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/flutter/bin/flutter" --version
       - name: Install signing
         env:
           P12_BASE64: ${{ secrets.IOS_DIST_P12_BASE64 }}
           P12_PASSWORD: ${{ secrets.IOS_DIST_P12_PASSWORD }}
           PROFILE_BASE64: ${{ secrets.IOS_PROFILE_BASE64 }}
           ASC_KEY_BASE64: ${{ secrets.ASC_KEY_BASE64 }}
-          DCLOUD_APPKEY: ${{ secrets.DCLOUD_APPKEY }}
         run: |
           set -euo pipefail
           keychain="$RUNNER_TEMP/signing.keychain-db"
@@ -93,18 +84,20 @@ jobs:
           mkdir -p "$profiles"
           printf '%s' "$PROFILE_BASE64" | base64 -d > "$profiles/$PROFILE_NAME.mobileprovision"
           printf '%s' "$ASC_KEY_BASE64" | base64 -d > "$RUNNER_TEMP/AuthKey.p8"
+          # 只給 Runner 用（app/ios/Flutter/Release.xcconfig 以 #include? 引入），不影響套件的簽名
           {
-            echo "DCLOUD_APPKEY = $DCLOUD_APPKEY"
             echo 'CODE_SIGN_STYLE = Manual'
+            echo 'DEVELOPMENT_TEAM = YU6GT6HQJ8'
             echo 'CODE_SIGN_IDENTITY = Apple Distribution'
+            echo 'CODE_SIGN_IDENTITY[sdk=iphoneos*] = Apple Distribution'
             echo "PROVISIONING_PROFILE_SPECIFIER = $PROFILE_NAME"
-          } > ios/app/Config/Secrets.xcconfig
+          } > app/ios/Flutter/Signing.xcconfig
       - name: Archive and upload
         env:
           BUILD_NUMBER: ${{ github.run_number }}.${{ github.run_attempt }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: ASC_KEY_PATH="$RUNNER_TEMP/AuthKey.p8" ios/testflight.sh
+        run: ASC_KEY_PATH="$RUNNER_TEMP/AuthKey.p8" app/tool/testflight.sh
       - name: Mark the uploaded commit
         env:
           TAG: testflight/${{ github.run_number }}.${{ github.run_attempt }}
@@ -115,4 +108,4 @@ jobs:
         if: always()
         run: |
           security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
-          rm -f "$RUNNER_TEMP/AuthKey.p8" ios/app/Config/Secrets.xcconfig
+          rm -f "$RUNNER_TEMP/AuthKey.p8" app/ios/Flutter/Signing.xcconfig

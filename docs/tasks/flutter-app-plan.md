@@ -113,7 +113,7 @@
 | 2 | 掃描批文卡和牌照詳情（關卡） | 同一批實卡，Flutter 版讀對的欄數不低於現有 App；管理者決定繼續 | 約 1 週 | 收尾（管理者 2026-11-17 決定）：2a–2c 已合併；2d 真機讀卡未過，問題見第九節；Flutter 其餘部分全部完成後再回來調整讀卡 |
 | 3 | 其餘頁面（3-0 預備、3a–3d 四批、3e 收尾） | 第八節清單的頁面和組件全部一比一，三種帳號走過 | 2–3 週 | 完成：管理者 2026-11-21 批准，逐批做；3-0 完成（1a49ad9）；3a 已合併（331da7c）；3b 已合併（2c2cabd）；3c 已合併（0d7c356）；3d 已合併（a691b0c）；3e 收尾完成（2026-11-22），22 頁全部搬完；待決定事項見第七節 |
 | 4 | App 專用功能 | 啟動畫面、首頁緩存、App 內更新、條款同意框、返回鍵全部和現在一樣 | 3–4 天 | 完成：flutter-4 一次做完五項並補斷網檢查，已合併 |
-| 5 | 發布 | iOS 1.1.0 通過審核上架；Android 新 APK 放上網站；真機從舊版升級成功 | 約 1 週 | 進行中：5b 讀卡收尾（管理者 2026-11-23「目前可以接受」）；5a、5c、5d 未開始 |
+| 5 | 發布 | iOS 1.1.0 通過審核上架；Android 新 APK 放上網站；真機從舊版升級成功 | 約 1 週 | 進行中：5b 讀卡收尾（管理者 2026-11-23「目前可以接受」）；5a 已推送（TestFlight 打包 Flutter 版；APK 未發佈）；5c、5d 未開始 |
 | 6 | 清理 | `mobile/` 不再有 App 專用代碼；舊 DCloud 專案移除 | 1–2 天（上線穩定約兩週後） | 未開始 |
 
 **甚麼時候算「代替了 uni-app」**：
@@ -503,6 +503,25 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 - 測試：舊測試裏斷言舊行為的改成新行為（車牌徽章、到期徽章、鎖定提示框三個、號碼上限、WhatsApp 複製、澳門牌）；刪了 1 個「選 PDF 錯誤原文照舊」的測試（那段錯誤文字已按決定拿掉），由 `external_test.dart` 和出租頁四個新測試代替。
 - 沒有開模擬器看畫面（按「不在測試和模擬器浪費時間」）。新套件只做了 iOS 模擬器版和 Android 除錯版編譯。真機上打開 WhatsApp、選 PDF、打開 PDF 留到階段 4 真機一起看。
 - 留意：階段 4（flutter-4 分支，從 `57f155e` 開出）合併時，`pubspec.yaml`、`pubspec.lock`、Android 清單、`dialogs.dart`、`tokens.dart` 可能要手動合併；鎖定提示框現在擋返回鍵，「必須更新」可以直接用 `notice(locked: true)`。
+
+### 2026-11-23（5a 準備：已推送，TestFlight 打包 Flutter 版）
+
+- 管理者「可以開始5a」；做完後「提交推送，apk先不發更新版。test fight可以推」：推送後 CI 打包 Flutter 版上傳 TestFlight；正式 APK 不上傳網站，`version.json` 不改。改動：
+  - 版本 `1.1.0+2`（`app/pubspec.yaml`）：Android versionCode 2，大於網站上的 1；iOS Build 號照舊由 CI 給（`run_number.run_attempt`）。
+  - 名稱：iOS、Android 都改為「跨境車牌管家」（原為 Flutter 預設的 Dualplate）。
+  - 圖示：iOS 換成現有 App 的淺色／深色 1024 圖示；Android 換成現有 App 的 mipmap（含自適應和圓形圖示）。
+  - 照現有 App 的設定：只支援 iPhone（原為 iPhone＋iPad，上傳後要補 iPad 截圖）、只用直向、淺色外觀、`UIRequiresFullScreen`、`ITSAppUsesNonExemptEncryption = false`；Android 直向。
+  - iOS 團隊改為 YU6GT6HQJ8（原為個人團隊）。本機照常自動簽名；CI 寫入 `app/ios/Flutter/Signing.xcconfig`（不入庫，`Release.xcconfig` 以 `#include?` 引入）改為手動簽名。
+  - Android 正式版用 `android/signing/` 同一把金鑰（`build.gradle.kts`）；沒有金鑰時退回除錯金鑰。除錯版照舊用除錯金鑰。
+  - **補上網絡權限**：Flutter 範本只在 debug、profile 加 INTERNET，正式 APK 原本缺，裝上會連不到伺服器（模擬器用除錯版，所以之前看不出）。
+  - 新腳本：`app/tool/testflight.sh`（`flutter build ios --config-only` 後照舊用 xcodebuild 打包、上傳）、`app/tool/build_apk.sh`（正式 APK，核對簽名指紋）。計劃原寫改 `ios/testflight.sh`，因階段 6 會刪 `ios/`，新腳本放 `app/tool/`；舊腳本暫留。
+  - `.github/workflows/testflight.yml`：觸發改為 `app/` 有改動；用官方倉庫的 Flutter 3.47.4；不再還原 DCloud SDK、不再用 `DCLOUD_APPKEY`、`IOS_SDK_PASSPHRASE`（secrets 暫留，階段 6 再清）。
+- 本機驗證：
+  - 正式 APK：簽名 SHA1 `0a116b44…711f`（和現有 App 同一把），`1.1.0`／versionCode 2，名稱正確，權限清單含 INTERNET。
+  - iOS 自動簽名試打包成功；另用 `ios/signing/` 的發佈證書和描述檔，在臨時鑰匙圈照 CI 做法手動簽名打包成功，App 和框架都是 Apple Distribution（YU6GT6HQJ8），描述檔 `dualplate-appstore-ci`。上傳一步只能在 CI 驗證。
+  - `flutter analyze` 無問題；`flutter test` 1550 個全部通過。
+- 疑慮：Flutter 版 Android 最低 Android 7.0（minSdk 24），現有 App 是 Android 5.0（21）。Android 5、6 的用戶不能升級。
+- 同日：Android 17 模擬器裝除錯版給管理者測（後鏡頭接 Mac 鏡頭；相冊放了第 9 輪實拍的正反面相片）；模擬器上舊的 `io.dcloud.HBuilder` 已移除。
 
 ### 2026-11-23（5b 讀卡收尾：管理者「目前可以接受」）
 
