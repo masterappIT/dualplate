@@ -429,13 +429,27 @@ function joinCompanySecondLine(chosen, reads) {
   return { value: `${chosen.value}${join}${best[0]}）`, confidence: Math.min(chosen.confidence, 69) }
 }
 
-// 選中的備註沒讀完（沒有「。」）時，若另一次合格的讀法前面一字不差、而且讀到「。」，用那次較完整的讀法
+// 選中的備註沒讀完（沒有「。」）時，從讀到「。」的讀法取最後一段「副司机:姓名(四位號碼)。」接上。前面的司機姓名
+// 各次常讀成不同的字（2026-11-23「王斌」讀成王瀑、王滥、王愤），所以不要求一字不差，改為核對四位號碼：那次讀法在這一段
+// 前面讀到的號碼要和選中的一樣（同一行字），只讀到下一行的讀法則號碼不能已在選中的備註裏。各段按出現次數、再按把握度選
 function completeNotes(chosen, candidates) {
   if (!chosen.value || /。$/.test(chosen.value)) return chosen
-  const longer = candidates.map(candidate => ({ value: normalizeCardField('notes', candidate.raw), confidence: candidate.confidence }))
-    .filter(candidate => candidate.value.length > chosen.value.length && candidate.value.startsWith(chosen.value) && /。$/.test(candidate.value) && validateCardField('notes', candidate.value))
-    .sort((left, right) => right.confidence - left.confidence)
-  return longer[0] ? { value: longer[0].value, confidence: Math.min(chosen.confidence, longer[0].confidence) } : chosen
+  const numbers = value => (value.match(/\d{4}/g) || []).join()
+  const own = numbers(chosen.value)
+  if (!own) return chosen
+  const tails = new Map()
+  for (const candidate of candidates) {
+    const value = normalizeCardField('notes', candidate.raw)
+    const match = value.match(/副司机[:：][\u3400-\u9fff]{2,4}[(（](\d{4})[)）]。$/)
+    if (!match || own.split(',').includes(match[1])) continue
+    const before = numbers(value.slice(0, match.index))
+    if (before && before !== own) continue
+    const tail = tails.get(match[0]) || { value: match[0], count: 0, confidence: 0 }
+    tails.set(match[0], { ...tail, count: tail.count + 1, confidence: Math.max(tail.confidence, candidate.confidence) })
+  }
+  const best = [...tails.values()].sort((left, right) => right.count - left.count || right.confidence - left.confidence)[0]
+  const joined = best ? chosen.value.replace(/[,，]?$/, ',') + best.value : ''
+  return best && validateCardField('notes', joined) ? { value: joined, confidence: Math.min(chosen.confidence, best.confidence) } : chosen
 }
 
 // 內承單位通常是同一品牌的內地公司（例：晶威实业 / 晶威包装制品）。開頭四個字裏某個字每次讀法都不同（選中的字不到一半票），

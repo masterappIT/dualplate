@@ -275,13 +275,26 @@ test('駕駛人：備註裏姓氏讀錯的名字仍佔原位置，第一個字�
   assert.equal(voteCardDriverName(1, [], notes), '王大文')
 })
 
-test('備註：選中的讀法沒讀完時，用前面一字不差而且讀完的讀法', () => {
+test('備註：選中的讀法沒讀完時，接上前面號碼相同而且讀完的讀法的最後一段', () => {
   const chosen = { value: '主司机:李小明(1234),副司机:王大文(4707),', confidence: 85 }
   const full = { raw: '主司机:李小明(1234),副司机:王大文(4707),副司机:梁小龙(6722)。', confidence: 79 }
   assert.deepEqual(completeCardNotes(chosen, [full]), { value: full.raw, confidence: 79 })
-  assert.deepEqual(completeCardNotes(chosen, [{ raw: '主司机:李小朋(1234),副司机:王大文(4707),副司机:梁小龙(6722)。', confidence: 90 }]), chosen, '前面有字不同不用')
   const done = { value: '主司机:李小明(1234)。', confidence: 85 }
   assert.deepEqual(completeCardNotes(done, [full]), done, '已讀完不改')
+})
+
+test('備註：前面司機姓名讀法不同但號碼相同時仍接上第二行，各段按出現次數選', () => {
+  const chosen = { value: '主司机:李业权(9213),副司机:王斌(4707)', confidence: 77 }
+  const reads = [['主司机:李业权(9213),副司机:王滥(4707)副司机:粱类龙(6722)。', 77], ['主司机:李业权(9213),副司机:王愤(4707)副司机:粱类龙(6722)。', 73], ['副司机:染类龙(6722)。', 80]].map(([raw, confidence]) => ({ raw, confidence }))
+  assert.deepEqual(completeCardNotes(chosen, reads), { value: '主司机:李业权(9213),副司机:王斌(4707),副司机:粱类龙(6722)。', confidence: 77 })
+  assert.deepEqual(completeCardNotes(chosen, reads.slice(2)), { value: '主司机:李业权(9213),副司机:王斌(4707),副司机:染类龙(6722)。', confidence: 77 }, '只讀到第二行也可接上')
+})
+
+test('備註：號碼對不上時不接', () => {
+  const chosen = { value: '主司机:李业权(9213),副司机:王斌(4707)', confidence: 77 }
+  assert.deepEqual(completeCardNotes(chosen, [{ raw: '主司机:李业权(9218),副司机:王斌(4707)副司机:梁灿龙(6722)。', confidence: 90 }]), chosen, '前面號碼不同')
+  assert.deepEqual(completeCardNotes(chosen, [{ raw: '副司机:王斌(4707)。', confidence: 90 }]), chosen, '最後一段號碼已在選中的備註裏')
+  assert.deepEqual(completeCardNotes({ value: '主司机:李业权', confidence: 77 }, [{ raw: '主司机:李业权(9213)。', confidence: 90 }]), { value: '主司机:李业权', confidence: 77 }, '選中的沒有號碼')
 })
 
 test('內承單位：品牌字每次讀法都不同時用商號的字，標為待核對', () => {
