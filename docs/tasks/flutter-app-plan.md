@@ -398,7 +398,7 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 | 首次打開條款同意框 | `androidPrivacy.json` | 4 | 未做 |
 | Android 底部導航條顏色 | `lib/nav-bar.js` | 4 | 未做 |
 | iOS TestFlight 自動上傳 | `.github/workflows/testflight.yml` | 5 | 未做 |
-| Android 簽名、APK 下載、`version.json` | `android/`、`deploy/web/download` | 5 | 未做 |
+| Android 簽名、APK 下載、`version.json` | `android/`、`deploy/web/download` | 5 | 完成（2026-11-23 發佈 1.1.0） |
 
 不搬：微信登入和綁定（只在小程序）、網頁版專用處理（`#ifdef H5`）。
 
@@ -526,6 +526,13 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
   - `flutter analyze` 無問題；`flutter test` 1550 個全部通過。
 - 疑慮：Flutter 版 Android 最低 Android 7.0（minSdk 24），現有 App 是 Android 5.0（21）。Android 5、6 的用戶不能升級。
 - 同日：Android 17 模擬器裝除錯版給管理者測（後鏡頭接 Mac 鏡頭；相冊放了第 9 輪實拍的正反面相片）；模擬器上舊的 `io.dcloud.HBuilder` 已移除。
+
+### 2026-11-23（Android 1.1.0 APK 發佈到網站）
+
+- 管理者「apk 可以發最新版到下載html」；更新說明管理者定為「Bug Fixed」（以後沒有特別說明都只寫這句）；知道升級後要重新登入、Android 5、6 裝不了後「照發」。
+- `app/tool/build_apk.sh` 打包：`1.1.0`／versionCode 2，簽名 SHA1 `0a116b44…711f`，約 70MB（舊版約 30MB）。
+- 模擬器（Android 16）：先裝網站上的 1.0.0，再覆蓋安裝 1.1.0 成功，App 打得開。舊版 App 內「立即更新」的下載安裝沒有重新試。
+- 正式主機 `/srv/dualplate/download/`：先傳 `/tmp`、核對 SHA-256 後改名換上；舊版留作 `dualplate-1.0.0.apk.bak`（網站讀不到）。之後才改 `version.json`（versionCode 2、`Bug Fixed`、`minVersionCode` 仍為 1，不強制）。
 
 ### 2026-11-23（5b 讀卡收尾：管理者「目前可以接受」）
 
