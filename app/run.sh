@@ -1,6 +1,6 @@
 #!/bin/sh
 # 在安卓模擬器上看 Flutter 版 App：打包 → 開模擬器 → 安裝 → 打開 App → 固定等幾秒 → 截圖。
-# 做法照舊的 android/emu-run.sh（docs/tasks/flutter-app-plan.md 第四節）。每次真實改動只跑一次，結果不對就照實報告，不要反覆重跑。
+# 每次真實改動只跑一次，結果不對就照實報告，不要反覆重跑。
 # 用法：app/run.sh [選項]
 #   --avd 名稱      模擬器，預設 Medium_Phone_API_37.0（另有 Dualplate_API_30 即 Android 11）
 #   --skip-build    不重新打包，直接安裝上次的 APK
@@ -10,7 +10,8 @@
 # 另存一張縮小版（檔名加 -small）方便查看。所有記錄在 /private/tmp/dualplate-flutter/android/。
 #
 # 注意：Flutter 版和現有 App 的包名相同（com.masterappinc.dualplate），但除錯版簽名不同。
-# 模擬器上已裝現有 App 時，這個腳本會先把它移除（App 內資料會清空）；要裝回現有 App，用 android/emu-run.sh --skip-build。
+# 每次安裝前都先移除模擬器上的舊 App（App 內資料會清空），連同 HBuilder 基座和 uni-app 舊版（管理者 11-23「HBuilder 我不想再看到」）。
+# 不要再用 android/emu-run.sh：那是 uni-app 舊版，會裝回 HBuilder 的東西。
 set -eu
 
 APP=$(cd "$(dirname "$0")" && pwd)
@@ -42,8 +43,13 @@ fail() { echo "失敗：$*" >&2; exit 1; }
 
 # 1. 打包（除錯版）
 if [ "$BUILD" = 1 ]; then
-  step "打包 APK（flutter build apk --debug）"
-  (cd "$APP" && flutter build apk --debug) > "$WORK/build-apk.log" 2>&1 || fail "APK 打包失敗，見 $WORK/build-apk.log"
+  # 版本照網站 version.json（現在網站上的 Android 版本）：pubspec.yaml 只跟 iOS，比網站舊時一打開就會被強制更新擋住
+  VJ="$APP/../deploy/web/download/version.json"
+  VNAME=$(sed -n 's/.*"versionName": *"\([^"]*\)".*/\1/p' "$VJ")
+  VCODE=$(sed -n 's/.*"versionCode": *\([0-9]*\).*/\1/p' "$VJ")
+  [ -n "$VNAME" ] && [ -n "$VCODE" ] || fail "讀不到 $VJ 的版本"
+  step "打包 APK（flutter build apk --debug，版本 $VNAME／$VCODE）"
+  (cd "$APP" && flutter build apk --debug --build-name "$VNAME" --build-number "$VCODE") > "$WORK/build-apk.log" 2>&1 || fail "APK 打包失敗，見 $WORK/build-apk.log"
 fi
 [ -f "$APK" ] || fail "找不到 $APK，不要用 --skip-build"
 
@@ -72,17 +78,13 @@ until "$ADB" -e shell pm path android 2>/dev/null | grep -q package; do
   [ $i -lt 60 ] || fail "模擬器的安裝服務 1 分鐘內沒準備好"
 done
 
-# 3. 安裝：簽名不同（模擬器上裝的是現有 App）時先移除舊的
+# 3. 安裝：每次都先移除舊的再裝（管理者 11-23「每次打開新版都需要把舊的清除」；App 內資料會清空）
+step "移除舊的 App（連同 HBuilder 基座、uni-app 舊版）"
+for old in "$PACKAGE" io.dcloud.HBuilder $("$ADB" -e shell pm list packages -3 2>/dev/null | tr -d '\r' | sed -n 's/^package:\(uni\.app\..*\)$/\1/p'); do
+  "$ADB" -e uninstall "$old" > /dev/null 2>&1 || true
+done
 step "安裝 APK"
-if ! "$ADB" -e install -r "$APK" > "$WORK/install.log" 2>&1; then
-  if grep -q INSTALL_FAILED_UPDATE_INCOMPATIBLE "$WORK/install.log"; then
-    step "已裝的 App 簽名不同（現有 App），先移除（App 內資料會清空；裝回用 android/emu-run.sh --skip-build）"
-    "$ADB" -e uninstall "$PACKAGE" > /dev/null
-    "$ADB" -e install "$APK" > "$WORK/install.log" 2>&1 || fail "安裝失敗，見 $WORK/install.log"
-  else
-    fail "安裝失敗，見 $WORK/install.log"
-  fi
-fi
+"$ADB" -e install "$APK" > "$WORK/install.log" 2>&1 || fail "安裝失敗，見 $WORK/install.log"
 
 # 4. 重新打開 App
 step "打開 App"

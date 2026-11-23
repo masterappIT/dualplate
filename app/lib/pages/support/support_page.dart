@@ -150,8 +150,20 @@ class SupportPageState extends State<SupportPage> {
   @override
   Widget build(BuildContext context) {
     final c = controller, debug = SupportPage.debugView;
-    // 鍵盤升起時內嵌網頁縮到鍵盤上方，輸入框不被蓋住
-    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    // 鍵盤升起時內嵌網頁縮到鍵盤上方，輸入框不被蓋住。
+    // 鍵盤沒升起時停在 iPhone 底部安全區（主畫面橫條）上面，底下補一條白色（MasterBox 小視窗底部的白底）：
+    // 網頁伸到螢幕最底時，MasterBox 把安全區留在輸入框和「由 MasterBox 提供」之間，空出一大段（管理者 11-23「底部空位怎麼那麼多」）；
+    // 停在上面後網頁裏的安全區是 0，和 Safari 一樣。
+    // 要在 AppPage 的內容區裏面讀（Builder）：安卓的底部那一條已由 BottomStrip 留出，裏面讀到的安全區是 0、鍵盤高度已減去那一條
+    Widget web(Widget view) => Builder(builder: (context) {
+          final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+          final bottom = keyboard > 0 ? keyboard : MediaQuery.viewPaddingOf(context).bottom;
+          return ColoredBox(
+            key: const ValueKey('support-web'),
+            color: C.card,
+            child: Padding(padding: EdgeInsets.only(bottom: bottom), child: view),
+          );
+        });
     return AppPage(
       title: '線上客服',
       back: false,
@@ -167,13 +179,10 @@ class SupportPageState extends State<SupportPage> {
               ),
             )
           : debug != null && url != null
-          ? debug(url!)
+          ? web(debug(url!))
           : c == null
           ? const SizedBox.expand()
-          : Padding(
-              padding: EdgeInsets.only(bottom: keyboard),
-              child: WebViewWidget(controller: c),
-            ),
+          : web(WebViewWidget(controller: c)),
     );
   }
 }

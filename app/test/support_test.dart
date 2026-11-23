@@ -9,6 +9,7 @@ import 'package:dualplate/main.dart';
 import 'package:dualplate/pages/close_account/close_account_logic.dart';
 import 'package:dualplate/pages/plate_delete/plate_delete_page.dart';
 import 'package:dualplate/pages/support/support_page.dart';
+import 'package:dualplate/ui/tokens.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -337,6 +338,38 @@ void main() {
       await settle(tester);
       expect(find.text('聯絡客服'), findsOneWidget);
     });
+
+    // 網頁底下留的高度（主畫面橫條或鍵盤）：管理者 11-23「底部空位怎麼那麼多」
+    double webBottom(WidgetTester tester) => (tester.widget<Padding>(find.descendant(of: find.byKey(const ValueKey('support-web')), matching: find.byType(Padding)).first).padding as EdgeInsets).bottom;
+    void bottomInset(WidgetTester tester, {double safe = 0, double keyboard = 0}) {
+      final dpr = tester.view.devicePixelRatio;
+      tester.view.viewPadding = FakeViewPadding(bottom: safe * dpr);
+      tester.view.padding = FakeViewPadding(bottom: keyboard > 0 ? 0 : safe * dpr);
+      tester.view.viewInsets = FakeViewPadding(bottom: keyboard * dpr);
+      addTearDown(tester.view.reset);
+    }
+
+    testWidgets('iPhone：網頁停在主畫面橫條上面（底下留 34），底下是白色', (tester) async {
+      bottomInset(tester, safe: 34);
+      await open(tester, '/me');
+      await tapText(tester, '聯絡客服');
+      expect([webBottom(tester), tester.widget<ColoredBox>(find.byKey(const ValueKey('support-web'))).color], [34, C.card]);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+    testWidgets('iPhone：鍵盤升起時網頁縮到鍵盤上方，不再另加主畫面橫條', (tester) async {
+      await open(tester, '/me');
+      await tapText(tester, '聯絡客服');
+      bottomInset(tester, safe: 34, keyboard: 300);
+      await tester.pump();
+      expect(webBottom(tester), 300);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+    testWidgets('安卓：底部那一條已由 AppPage 留出，網頁底下不再加', (tester) async {
+      bottomInset(tester, safe: 24);
+      await open(tester, '/me');
+      await tapText(tester, '聯絡客服');
+      expect(webBottom(tester), 0);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.android));
   });
 
   test('SupportCard 預設是已登入版', () => expect(const SupportCard().public, false));
