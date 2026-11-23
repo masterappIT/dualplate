@@ -266,7 +266,7 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 - 刪除 `mobile/` 裏 App 專用的代碼：`#ifdef APP-PLUS` 共 35 處，以及 `lib/launch.js`、`lib/nav-bar.js`、`lib/app-update.js`、`pick-image.js` 的 Android 部分、`pages/launch`、`pages/card-capture`、`androidPrivacy.json`。
 - 刪除 `@dcloudio/uni-app-plus` 依賴。
 - 移除舊的 DCloud 專案 `android/`、`ios/`。簽名檔先搬到 `app/` 用的位置，確認新版能簽名後才刪。
-- 更新 `AGENTS.md`：受保護檔案加入 Flutter 版的批文卡和車牌組件；寫明客戶端改動以後要做兩份（uni-app 一份、Flutter 一份）。
+- 更新 `AGENTS.md`：受保護檔案加入 Flutter 版的批文卡和車牌組件。（「客戶端改動要做兩份」已按管理者 2026-11-23 指示提早寫入。）
 - 這一步要管理者批准才做。
 
 **合計約 6–7 週**（推算，未實測；一比一核對每頁多個狀態和錄影，比原先估計多約 1 週；階段 2 完成後會按實際速度修正）。
@@ -503,6 +503,10 @@ Flutter 版在階段 5 發布之前，不影響現有 App、網頁版和小程�
 - 測試：舊測試裏斷言舊行為的改成新行為（車牌徽章、到期徽章、鎖定提示框三個、號碼上限、WhatsApp 複製、澳門牌）；刪了 1 個「選 PDF 錯誤原文照舊」的測試（那段錯誤文字已按決定拿掉），由 `external_test.dart` 和出租頁四個新測試代替。
 - 沒有開模擬器看畫面（按「不在測試和模擬器浪費時間」）。新套件只做了 iOS 模擬器版和 Android 除錯版編譯。真機上打開 WhatsApp、選 PDF、打開 PDF 留到階段 4 真機一起看。
 - 留意：階段 4（flutter-4 分支，從 `57f155e` 開出）合併時，`pubspec.yaml`、`pubspec.lock`、Android 清單、`dialogs.dart`、`tokens.dart` 可能要手動合併；鎖定提示框現在擋返回鍵，「必須更新」可以直接用 `notice(locked: true)`。
+
+### 2026-11-23（客戶端兩份同步規則提早寫入 AGENTS.md）
+
+- 管理者確定：iOS、Android App 用 Flutter（`app/`），網頁版和微信小程序用 uni-app（`mobile/`），開發時兩邊同步。按負責人建議，原定階段 6 才寫的「客戶端改動要做兩份」提早寫進 `AGENTS.md`（長期限制）；受保護檔案加入 Flutter 版組件一項仍留在階段 6。
 
 ### 2026-11-23（5a 準備：已推送，TestFlight 打包 Flutter 版）
 
