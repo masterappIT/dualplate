@@ -63,10 +63,12 @@ html,body{margin:0;height:100%;background:#F7F6F1;font-family:-apple-system,"Pin
   }
   chat.push(['on', 'unread', function (count) { tellApp('unread:' + (Math.max(0, Math.floor(Number(count))) || 0)) }])
   // unread 只在數字變了時送；準備好時也送一次現在的數字（回來過的訪客一載入就有未讀）
+  // 準備好時是 0 就不送：這時小視窗可能還沒算出未讀數，送 0 會讓 App 的紅點先消失幾秒再出現（管理者 11-23「修好它」）
   chat.push(['on', 'ready', function () {
     tellApp('ready')
     var api = window.MasterBoxChat
-    if (api && typeof api.getUnread === 'function') tellApp('unread:' + (Math.max(0, Math.floor(Number(api.getUnread()))) || 0))
+    var count = api && typeof api.getUnread === 'function' ? Math.max(0, Math.floor(Number(api.getUnread()))) || 0 : 0
+    if (count > 0) tellApp('unread:' + count)
   }])
 
   var script = document.createElement('script')
